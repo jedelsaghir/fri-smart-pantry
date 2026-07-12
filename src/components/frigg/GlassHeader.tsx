@@ -6,9 +6,25 @@ interface Props {
   expiringSoon: number;
   title?: string;
   subtitle?: string;
+  totalLabel?: string;
+  attentionLabel?: string;
+  attentionTone?: "calm" | "warn";
 }
 
-export function GlassHeader({ household, totalItems, expiringSoon, title = "Your Friġġ", subtitle = "Good morning, Elena" }: Props) {
+export function GlassHeader({
+  household,
+  totalItems,
+  expiringSoon,
+  title = "Your Friġġ",
+  subtitle = "Good morning, Elena",
+  totalLabel,
+  attentionLabel,
+  attentionTone,
+}: Props) {
+  const showAttentionDot = expiringSoon > 0;
+  const resolvedLabel = attentionLabel ?? "need attention";
+  const resolvedTone = attentionTone ?? (expiringSoon > 0 ? "warn" : "calm");
+
   return (
     <header className="sticky top-0 z-40 glass">
       <div className="px-5 pb-4 pt-[max(1.35rem,env(safe-area-inset-top))]">
@@ -24,7 +40,7 @@ export function GlassHeader({ household, totalItems, expiringSoon, title = "Your
             className="relative grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
           >
             <Bell className="size-4" />
-            {expiringSoon > 0 && (
+            {showAttentionDot && (
               <span className="absolute top-2 right-2 size-2.5 rounded-full ring-2 ring-[var(--color-card)] bg-[var(--color-expiring)]" />
             )}
           </button>
@@ -42,12 +58,8 @@ export function GlassHeader({ household, totalItems, expiringSoon, title = "Your
 
         {/* Elegant summary stats */}
         <div className="mt-4 flex gap-2 text-xs">
-          <Stat label="items" value={totalItems} />
-          <Stat
-            label="need attention"
-            value={expiringSoon}
-            tone={expiringSoon > 0 ? "warn" : "calm"}
-          />
+          <Stat label={totalLabel ?? "items"} value={totalItems} />
+          <Stat label={resolvedLabel} value={expiringSoon} tone={resolvedTone} />
         </div>
       </div>
     </header>

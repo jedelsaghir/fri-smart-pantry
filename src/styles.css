@@ -162,8 +162,8 @@
 
   html, body {
     background:
-      radial-gradient(1200px 600px at 100% -10%, oklch(0.95 0.04 95 / 0.6), transparent 60%),
-      radial-gradient(900px 500px at -10% 20%, oklch(0.94 0.05 155 / 0.35), transparent 60%),
+      radial-gradient(1100px 520px at 108% -8%, oklch(0.96 0.035 92 / 0.55), transparent 58%),
+      radial-gradient(820px 460px at -8% 18%, oklch(0.955 0.045 152 / 0.32), transparent 58%),
       var(--color-background);
   }
 }
@@ -175,16 +175,55 @@
 }
 
 @utility glass {
-  background: color-mix(in oklab, var(--color-background) 65%, transparent);
-  backdrop-filter: saturate(180%) blur(20px);
-  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
+  background: color-mix(in oklab, var(--color-background) 58%, transparent);
+  backdrop-filter: saturate(200%) blur(28px);
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 55%, transparent);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.45) inset,
+    0 8px 32px -12px oklch(0.2 0.02 150 / 0.08);
 }
 
+/* Premium elevated card with true depth and soft lift — Apple Health / Things 3 inspired */
 @utility elevated-card {
   background: var(--color-card);
-  border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-border) 55%, transparent);
   box-shadow:
-    0 1px 0 oklch(1 0 0 / 0.6) inset,
-    0 1px 2px oklch(0.2 0.02 150 / 0.04),
-    0 8px 24px -12px oklch(0.2 0.02 150 / 0.12);
+    /* crisp top highlight for glass-like edge */
+    0 1px 0 0 oklch(1 0 0 / 0.85) inset,
+    /* subtle inner contour */
+    0 -1px 0 0 oklch(0 0 0 / 0.015) inset,
+    /* close soft lift */
+    0 2px 4px -1px oklch(0.2 0.02 150 / 0.06),
+    /* primary elevation */
+    0 10px 20px -6px oklch(0.2 0.02 150 / 0.10),
+    /* distant soft bloom for floating depth */
+    0 24px 48px -16px oklch(0.2 0.02 150 / 0.09);
+  transition: transform 0.15s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.2s ease;
+}
+
+.elevated-card:active {
+  transform: scale(0.985);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.7) inset,
+    0 1px 3px -1px oklch(0.2 0.02 150 / 0.08),
+    0 6px 14px -4px oklch(0.2 0.02 150 / 0.11);
+}
+
+/* Elegant status pill — calm, refined, high-end */
+@utility status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border: 1px solid color-mix(in oklab, currentColor 18%, transparent);
+}
+
+/* Large thumb-friendly touch target helper */
+@utility touch-target {
+  min-height: 44px;
+  min-width: 44px;
 }

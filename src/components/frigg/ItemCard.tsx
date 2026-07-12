@@ -21,50 +21,61 @@ export function ItemCard({
   const status = getStatus(item.daysLeft);
 
   return (
-    <li className="elevated-card flex items-center gap-4 rounded-2xl p-3.5">
-      <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-secondary text-2xl">
+    <li className="elevated-card flex items-center gap-4 rounded-3xl px-4 py-4">
+      {/* Emoji / visual anchor — generous, softly elevated */}
+      <div className="grid size-14 shrink-0 place-items-center rounded-2xl bg-secondary text-[26px] shadow-[inset_0_1px_0_oklch(1_0_0_/_0.6)]">
         {item.emoji}
       </div>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-semibold text-foreground">{item.name}</p>
-        <div className="mt-1 flex items-center gap-2">
+      {/* Content block with refined hierarchy */}
+      <div className="min-w-0 flex-1 py-0.5">
+        <p className="truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
+          {item.name}
+        </p>
+
+        <div className="mt-2 flex items-center gap-2.5">
+          {/* Elegant status pill */}
           <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+            className="status-pill"
             style={{
-              backgroundColor: `color-mix(in oklab, ${status.color} 14%, transparent)`,
+              backgroundColor: `color-mix(in oklab, ${status.color} 13%, var(--color-card))`,
               color: status.color,
             }}
           >
             <span
-              className="size-1.5 rounded-full"
+              className="size-1.5 rounded-full shrink-0"
               style={{ backgroundColor: status.color }}
             />
             {status.label}
           </span>
-          <span className="text-[11px] text-muted-foreground">
+
+          {/* Quantity + unit — quiet but clear */}
+          <span className="text-[12px] font-medium text-muted-foreground tabular-nums">
             {item.qty} {item.unit}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      {/* Premium grouped quantity stepper — large thumb targets, clear separation */}
+      <div className="flex items-center rounded-full bg-secondary/80 p-0.5 shadow-inner">
         <button
-          aria-label="Decrease"
+          aria-label={`Decrease ${item.name}`}
           onClick={onDec}
-          className="grid size-9 place-items-center rounded-full bg-secondary text-foreground/70 active:scale-95 transition"
+          className="touch-target grid size-11 place-items-center rounded-full text-foreground/70 active:scale-[0.96] active:bg-background/60 transition-all active:duration-75"
         >
-          <Minus className="size-4" />
+          <Minus className="size-[17px]" strokeWidth={2.5} />
         </button>
-        <span className="w-6 text-center text-sm font-semibold tabular-nums">
+
+        <span className="w-8 text-center text-[15px] font-semibold tabular-nums text-foreground/90">
           {item.qty}
         </span>
+
         <button
-          aria-label="Increase"
+          aria-label={`Increase ${item.name}`}
           onClick={onInc}
-          className="grid size-9 place-items-center rounded-full bg-brand text-brand-foreground active:scale-95 transition"
+          className="touch-target grid size-11 place-items-center rounded-full bg-brand text-brand-foreground active:scale-[0.96] shadow-sm active:brightness-105 transition-all active:duration-75"
         >
-          <Plus className="size-4" />
+          <Plus className="size-[17px]" strokeWidth={2.5} />
         </button>
       </div>
     </li>

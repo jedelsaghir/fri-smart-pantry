@@ -9,9 +9,9 @@ const ITEMS = [
 
 export function BottomNav() {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+    <nav className="fixed inset-x-0 bottom-0 z-40 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-2">
       <div className="mx-auto max-w-md px-4">
-        <div className="glass rounded-full border border-border/60 px-2 py-1.5 shadow-[0_10px_40px_-10px_oklch(0.2_0.02_150_/_0.18)]">
+        <div className="glass rounded-[22px] border border-border/40 px-1.5 py-1.5 shadow-[0_10px_40px_-12px_oklch(0.2_0.02_150_/_0.22)]">
           <ul className="flex items-center justify-around">
             {ITEMS.map((it) => {
               const Icon = it.icon;
@@ -19,13 +19,13 @@ export function BottomNav() {
                 <li key={it.key}>
                   <button
                     className={
-                      "flex flex-col items-center gap-0.5 rounded-full px-4 py-2 text-[10px] font-medium transition " +
+                      "flex flex-col items-center gap-px rounded-2xl px-5 py-[7px] text-[10px] font-semibold tracking-[0.01em] transition active:scale-[0.96] " +
                       (it.active
                         ? "text-brand"
-                        : "text-muted-foreground hover:text-foreground")
+                        : "text-muted-foreground hover:text-foreground active:bg-white/40 dark:active:bg-white/5")
                     }
                   >
-                    <Icon className="size-5" strokeWidth={it.active ? 2.4 : 1.8} />
+                    <Icon className="size-[21px]" strokeWidth={it.active ? 2.6 : 1.9} />
                     {it.label}
                   </button>
                 </li>

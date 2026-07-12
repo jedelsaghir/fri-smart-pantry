@@ -8,31 +8,37 @@ interface Props {
 
 export function GlassHeader({ household, totalItems, expiringSoon }: Props) {
   return (
-    <header className="sticky top-0 z-30 glass">
-      <div className="px-5 pt-5 pb-4">
+    <header className="sticky top-0 z-40 glass">
+      <div className="px-5 pb-4 pt-[max(1.35rem,env(safe-area-inset-top))]">
+        {/* Top row: household + notifications */}
         <div className="flex items-center justify-between">
-          <button className="flex items-center gap-2 rounded-full bg-secondary/70 px-3 py-1.5 text-xs font-medium text-foreground/80">
+          <button className="flex items-center gap-2 rounded-full bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold text-foreground/85 active:bg-secondary/80 transition">
             <Users className="size-3.5" />
             {household}
           </button>
+
           <button
             aria-label="Notifications"
-            className="relative grid size-9 place-items-center rounded-full bg-secondary/70 text-foreground/70"
+            className="relative grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
           >
             <Bell className="size-4" />
             {expiringSoon > 0 && (
-              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[var(--color-expiring)]" />
+              <span className="absolute top-2 right-2 size-2.5 rounded-full ring-2 ring-[var(--color-card)] bg-[var(--color-expiring)]" />
             )}
           </button>
         </div>
 
-        <div className="mt-4">
-          <p className="text-sm text-muted-foreground">Good morning, Elena</p>
-          <h1 className="mt-1 font-display text-[34px] leading-tight font-medium text-foreground">
+        {/* Hero title area — calm & premium */}
+        <div className="mt-5">
+          <p className="text-[13px] font-medium tracking-[0.01em] text-muted-foreground/90">
+            Good morning, Elena
+          </p>
+          <h1 className="mt-0.5 font-display text-[34px] leading-[0.96] font-medium tracking-[-0.015em] text-foreground">
             Your Friġġ
           </h1>
         </div>
 
+        {/* Elegant summary stats */}
         <div className="mt-4 flex gap-2 text-xs">
           <Stat label="items" value={totalItems} />
           <Stat
@@ -55,17 +61,19 @@ function Stat({
   value: number;
   tone?: "calm" | "warn";
 }) {
+  const warn = tone === "warn";
+
   return (
     <div
       className={
-        "flex items-baseline gap-1.5 rounded-full px-3 py-1.5 " +
-        (tone === "warn"
-          ? "bg-[color-mix(in_oklab,var(--color-expiring)_14%,transparent)] text-[var(--color-expiring)]"
-          : "bg-secondary/80 text-foreground/70")
+        "flex items-baseline gap-1.5 rounded-full px-4 py-1.5 " +
+        (warn
+          ? "bg-[color-mix(in_oklab,var(--color-expiring)_11%,var(--color-card))] text-[var(--color-expiring)] border border-[color-mix(in_oklab,var(--color-expiring)_22%,transparent)]"
+          : "bg-secondary/60 text-foreground/75")
       }
     >
-      <span className="font-semibold tabular-nums">{value}</span>
-      <span className="text-[11px]">{label}</span>
+      <span className="font-semibold tabular-nums text-[13px]">{value}</span>
+      <span className="text-[11px] font-medium tracking-[0.005em]">{label}</span>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { Minus, Plus } from "lucide-react";
+import { useRef } from "react";
 
 export interface PantryItem {
   id: string;
@@ -34,16 +35,57 @@ export function ItemCard({
 }) {
   const status = getStatus(item.daysLeft);
 
+  // Long-press timer ref for opening details
+  const longPressTimer = useRef<number | null>(null);
+  const longPressTriggered = useRef(false);
+
+  const clearLongPress = () => {
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const startLongPress = (e: React.PointerEvent) => {
+    // Don't long-press from controls
+    if ((e.target as HTMLElement).closest("button")) return;
+    longPressTriggered.current = false;
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true;
+      onOpenDetails?.();
+      // Optional light haptic on supported devices
+      if (navigator.vibrate) {
+        navigator.vibrate(10);
+      }
+    }, 520);
+  };
+
+  const endLongPress = () => {
+    clearLongPress();
+  };
+
   // Tap the main content (emoji + info) to open details drawer for expiration / move actions
   const handleContentClick = (e: React.MouseEvent) => {
     // Prevent opening details when tapping the qty stepper or min controls
     if ((e.target as HTMLElement).closest("button")) return;
+    // If a long-press just fired, suppress the click
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false;
+      return;
+    }
     onOpenDetails?.();
   };
 
   return (
-    <li className="elevated-card flex flex-col gap-2 rounded-3xl px-3 py-3 text-sm">
-      {/* Top row: Emoji + Name + tap area */}
+    <li
+      className="elevated-card flex flex-col gap-2 rounded-3xl px-3 py-3 text-sm select-none"
+      onPointerDown={startLongPress}
+      onPointerUp={endLongPress}
+      onPointerLeave={endLongPress}
+      onPointerCancel={endLongPress}
+    >
+      {/* Top row: Emoji + Name + tap area (tap to open details; long-press anywhere on card also opens) */}
       <div className="flex items-start gap-2 cursor-pointer" onClick={handleContentClick}>
         <div
           className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-xl shadow-[inset_0_1px_0_oklch(1_0_0_/_0.6)]"

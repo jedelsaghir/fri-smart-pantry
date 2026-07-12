@@ -8,7 +8,7 @@ import { ReceiptScanFlow, type DetectedItem } from "./ReceiptScanFlow";
 import { toast } from "sonner";
 import { FinancialsScreen } from "./FinancialsScreen";
 import { LoginScreen } from "./LoginScreen";
-import { Snowflake, Calendar, ArrowRight, X, Users } from "lucide-react";
+import { Snowflake, Calendar, Package, Thermometer, ArrowRight, X, Users } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -237,6 +237,42 @@ export function PantryScreen() {
       });
       return next;
     });
+  };
+
+  // Cross-storage qty update used by details drawer (keeps drawer state in sync)
+  const updateItemQty = (id: string, delta: number) => {
+    setItems((prev) => {
+      const next = { ...prev };
+      let changedItem: PantryItem | null = null;
+
+      (Object.keys(next) as StorageKey[]).forEach((storage) => {
+        next[storage] = next[storage]
+          .map((i) => {
+            if (i.id === id) {
+              const newQty = Math.max(0, i.qty + delta);
+              changedItem = { ...i, qty: newQty };
+              return { ...i, qty: newQty };
+            }
+            return i;
+          })
+          .filter((i) => i.qty > 0);
+      });
+      return next;
+    });
+
+    // Sync the open drawer preview (activity is logged via main card steppers)
+    if (detailsItem && detailsItem.item.id === id) {
+      setDetailsItem((prev) => {
+        if (!prev) return prev;
+        const newQty = Math.max(0, prev.item.qty + delta);
+        if (newQty <= 0) {
+          // Item consumed — close drawer shortly
+          setTimeout(() => setDetailsItem(null), 60);
+          return null;
+        }
+        return { ...prev, item: { ...prev.item, qty: newQty } };
+      });
+    }
   };
 
   // Move item to a different storage (e.g. Fridge → Freezer) and extend expiration when freezing
@@ -978,7 +1014,7 @@ export function PantryScreen() {
       {!isListView && !isRecipesView && !isFinancesView && <ScanFab onClick={() => setScanOpen(true)} />}
       <BottomNav 
         active={isListView ? "list" : isRecipesView ? "recipes" : isFinancesView ? "money" : "pantry"} 
-        badges={{ list: suggestedCount > 0 ? suggestedCount : undefined }}
+        badges={suggestedCount > 0 ? { list: suggestedCount } : {}}
         onChange={(key) => {
         if (key === "pantry" || key === "list") {
           setActiveView(key as "pantry" | "list");
@@ -1117,85 +1153,129 @@ export function PantryScreen() {
         </DrawerContent>
       </Drawer>
 
-      {/* Item Details Drawer — full expiration tracking + move to freezer */}
+      {/* Item Details Drawer — premium, useful, with quick actions */}
       <Drawer open={!!detailsItem} onOpenChange={(open) => !open && closeItemDetails()}>
         <DrawerContent className="max-w-md mx-auto">
           {detailsItem && (() => {
             const { item, storage } = detailsItem;
-            const isInFridge = storage === "fridge";
-            const isInFreezer = storage === "freezer";
+            const status = getStatus(item.daysLeft);
+            const isCurrent = (target: StorageKey) => storage === target;
+
+            const quickAction = (to: StorageKey) => {
+              if (isCurrent(to)) return;
+              moveItem(item.id, storage, to);
+            };
 
             return (
               <>
-                <DrawerHeader className="text-left">
-                  <div className="flex items-center gap-4">
-                    <div className="grid size-16 place-items-center rounded-3xl bg-secondary text-4xl shadow-inner">
+                <DrawerHeader className="text-left pb-2">
+                  <div className="flex items-start gap-4">
+                    <div className="grid size-16 shrink-0 place-items-center rounded-3xl bg-secondary text-4xl shadow-inner ring-1 ring-border/40">
                       {item.emoji}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <DrawerTitle className="text-[21px] tracking-[-0.015em]">{item.name}</DrawerTitle>
-                      <DrawerDescription>
-                        In {storage === "fridge" ? "Fridge" : storage === "freezer" ? "Freezer" : "Pantry"} · {item.qty} {item.unit}
-                      </DrawerDescription>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <DrawerTitle className="text-[21px] tracking-[-0.015em] leading-tight">{item.name}</DrawerTitle>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-[12px] text-muted-foreground">
+                        <span className="font-medium text-foreground/80">
+                          {storage === "fridge" ? "Fridge" : storage === "freezer" ? "Freezer" : "Pantry"}
+                        </span>
+                        <span className="opacity-50">·</span>
+                        <span>{item.qty} {item.unit}</span>
+                      </div>
+                      {/* Status pill */}
+                      <div className="mt-2">
+                        <span
+                          className="status-pill text-[10px] px-2.5 py-px inline-flex"
+                          style={{
+                            backgroundColor: `color-mix(in oklab, ${status.color} 13%, var(--color-card))`,
+                            color: status.color,
+                            borderColor: `color-mix(in oklab, ${status.color} 22%, transparent)`,
+                          }}
+                        >
+                          <span className="size-1 rounded-full mr-1.5" style={{ backgroundColor: status.color }} />
+                          {status.label} · {item.daysLeft}d
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </DrawerHeader>
 
-                <div className="px-5 pb-2 space-y-6">
-                  {/* Expiration editor */}
+                <div className="px-5 pb-1 space-y-5">
+                  {/* Quick Quantity — useful premium control */}
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1.5 px-0.5">
+                      <div className="text-sm font-semibold tracking-[-0.01em]">Quantity</div>
+                      <div className="text-sm font-semibold tabular-nums text-foreground/90">{item.qty} {item.unit}</div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-3xl bg-secondary/70 p-1">
+                      <button
+                        onClick={() => {
+                          updateItemQty(item.id, -1);
+                        }}
+                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl text-xl font-medium active:bg-background/70 active:scale-[0.985] transition"
+                        aria-label="Decrease quantity"
+                      >
+                        –
+                      </button>
+                      <div className="w-14 text-center text-2xl font-semibold tabular-nums text-foreground">{item.qty}</div>
+                      <button
+                        onClick={() => updateItemQty(item.id, +1)}
+                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl bg-brand text-brand-foreground text-xl font-medium active:brightness-105 active:scale-[0.985] transition"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expiration editor — refined */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5 px-0.5">
                       <div className="flex items-center gap-2 text-sm font-semibold">
                         <Calendar className="size-4" />
                         Expiration
                       </div>
-                      <span
-                        className="text-sm font-semibold tabular-nums"
-                        style={{ color: "var(--color-foreground)" }}
-                      >
-                        {item.daysLeft} days left
-                      </span>
+                      <span className="text-sm font-semibold tabular-nums">{item.daysLeft} days</span>
                     </div>
 
-                    <div className="flex items-center gap-3 rounded-3xl bg-secondary/70 p-1">
+                    <div className="flex items-center gap-2 rounded-3xl bg-secondary/70 p-1">
                       <button
                         onClick={() => {
                           const newVal = Math.max(0, item.daysLeft - 1);
-                          // live update local + global
                           setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, daysLeft: newVal } } : null);
                           updateDaysLeft(item.id, newVal);
                         }}
-                        className="touch-target flex-1 grid h-12 place-items-center rounded-3xl text-xl font-medium active:bg-background/70"
+                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl text-xl font-medium active:bg-background/70 active:scale-[0.985] transition"
                         aria-label="Decrease days left"
                       >
                         –
                       </button>
-
-                      <div className="w-16 text-center text-3xl font-semibold tabular-nums text-foreground">
-                        {item.daysLeft}
-                      </div>
-
+                      <div className="w-16 text-center text-3xl font-semibold tabular-nums text-foreground">{item.daysLeft}</div>
                       <button
                         onClick={() => {
                           const newVal = item.daysLeft + 1;
                           setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, daysLeft: newVal } } : null);
                           updateDaysLeft(item.id, newVal);
                         }}
-                        className="touch-target flex-1 grid h-12 place-items-center rounded-3xl bg-brand text-brand-foreground text-xl font-medium active:brightness-105"
+                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl bg-brand text-brand-foreground text-xl font-medium active:brightness-105 active:scale-[0.985] transition"
                         aria-label="Increase days left"
                       >
                         +
                       </button>
                     </div>
-
-                    <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      Tap + / – to adjust. Freezer items last much longer.
+                    <p className="mt-1 px-0.5 text-[11px] text-muted-foreground">
+                      Freezer items typically last 3–6× longer.
                     </p>
                   </div>
 
-                  {/* Min stock (also editable here for convenience) */}
+                  {/* Minimum stock */}
                   <div>
-                    <div className="text-sm font-semibold mb-2">Minimum Stock</div>
+                    <div className="flex items-center justify-between mb-1.5 px-0.5">
+                      <div className="text-sm font-semibold">Minimum stock</div>
+                      <div className="text-sm font-semibold tabular-nums">{item.minStock} {item.unit}</div>
+                    </div>
                     <div className="flex items-center rounded-3xl bg-secondary/70 p-1">
                       <button
                         onClick={() => {
@@ -1203,7 +1283,7 @@ export function PantryScreen() {
                           setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, minStock: newMin } } : null);
                           updateMinStock(item.id, newMin);
                         }}
-                        className="touch-target flex-1 h-12 grid place-items-center rounded-3xl text-xl active:bg-background/70"
+                        className="touch-target flex-1 h-11 grid place-items-center rounded-3xl text-xl active:bg-background/70 active:scale-[0.985] transition"
                       >
                         –
                       </button>
@@ -1214,61 +1294,69 @@ export function PantryScreen() {
                           setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, minStock: newMin } } : null);
                           updateMinStock(item.id, newMin);
                         }}
-                        className="touch-target flex-1 h-12 grid place-items-center rounded-3xl bg-brand text-brand-foreground text-xl active:brightness-105"
+                        className="touch-target flex-1 h-11 grid place-items-center rounded-3xl bg-brand text-brand-foreground text-xl active:brightness-105 active:scale-[0.985] transition"
                       >
                         +
                       </button>
                     </div>
                   </div>
 
-                  {/* Move to Freezer action (prominent when applicable) */}
-                  {isInFridge && (
-                    <div className="pt-1">
+                  {/* Quick Actions — clean dedicated section */}
+                  <div className="pt-1">
+                    <div className="px-0.5 mb-1.5 text-sm font-semibold tracking-[-0.01em]">Quick Actions</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Fridge */}
                       <button
-                        onClick={() => moveToFreezer(item.id, storage)}
-                        className="w-full flex items-center justify-center gap-3 rounded-3xl bg-[color-mix(in_oklab,var(--color-fresh)_12%,var(--color-card))] border border-[color-mix(in_oklab,var(--color-fresh)_30%,transparent)] py-4 text-base font-semibold active:scale-[0.985] transition"
+                        onClick={() => quickAction("fridge")}
+                        disabled={isCurrent("fridge")}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-3xl border py-3 text-sm font-medium active:scale-[0.985] transition disabled:opacity-60 disabled:active:scale-100 ${
+                          isCurrent("fridge")
+                            ? "bg-secondary border-border/70 text-foreground/70"
+                            : "bg-card active:bg-secondary/60 border-border/60"
+                        }`}
                       >
-                        <Snowflake className="size-5" />
-                        Move to Freezer
-                        <span className="text-xs font-normal text-muted-foreground ml-1">+{getFreezerExtensionDays(item.name)} days</span>
+                        <Thermometer className="size-4" />
+                        <span>Fridge</span>
+                        {isCurrent("fridge") && <span className="text-[10px] text-muted-foreground">Current</span>}
                       </button>
-                      <p className="text-center text-[11px] text-muted-foreground mt-2">
-                        Automatically extends expiration using standard freezer guidelines.
-                      </p>
-                    </div>
-                  )}
 
-                  {isInFreezer && (
-                    <div className="pt-1">
+                      {/* Freezer */}
                       <button
-                        onClick={() => moveItem(item.id, storage, "fridge")}
-                        className="w-full flex items-center justify-center gap-3 rounded-3xl border py-4 text-base font-semibold active:bg-secondary/60 transition"
+                        onClick={() => quickAction("freezer")}
+                        disabled={isCurrent("freezer")}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-3xl border py-3 text-sm font-medium active:scale-[0.985] transition disabled:opacity-60 disabled:active:scale-100 ${
+                          isCurrent("freezer")
+                            ? "bg-secondary border-border/70 text-foreground/70"
+                            : "bg-[color-mix(in_oklab,var(--color-fresh)_8%,var(--color-card))] border-[color-mix(in_oklab,var(--color-fresh)_25%,transparent)]"
+                        }`}
                       >
-                        Move to Fridge <ArrowRight className="size-4" />
+                        <Snowflake className="size-4" />
+                        <span>Freezer</span>
+                        {!isCurrent("freezer") && (
+                          <span className="text-[10px] text-muted-foreground">+{getFreezerExtensionDays(item.name)}d</span>
+                        )}
+                        {isCurrent("freezer") && <span className="text-[10px] text-muted-foreground">Current</span>}
                       </button>
-                      <p className="text-center text-[11px] text-muted-foreground mt-2">
-                        Moving out of the freezer keeps current days remaining.
-                      </p>
-                    </div>
-                  )}
 
-                  {/* Quick move to other storage for completeness */}
-                  {!isInFreezer && !isInFridge && (
-                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      {/* Pantry */}
                       <button
-                        onClick={() => moveItem(item.id, storage, "fridge")}
-                        className="rounded-3xl border py-3 text-sm font-medium active:bg-secondary/60"
+                        onClick={() => quickAction("pantry")}
+                        disabled={isCurrent("pantry")}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-3xl border py-3 text-sm font-medium active:scale-[0.985] transition disabled:opacity-60 disabled:active:scale-100 ${
+                          isCurrent("pantry")
+                            ? "bg-secondary border-border/70 text-foreground/70"
+                            : "bg-card active:bg-secondary/60 border-border/60"
+                        }`}
                       >
-                        Move to Fridge
-                      </button>
-                      <button
-                        onClick={() => moveItem(item.id, storage, "freezer")}
-                        className="rounded-3xl border py-3 text-sm font-medium active:bg-secondary/60"
-                      >
-                        Move to Freezer
+                        <Package className="size-4" />
+                        <span>Pantry</span>
+                        {isCurrent("pantry") && <span className="text-[10px] text-muted-foreground">Current</span>}
                       </button>
                     </div>
-                  )}
+                    <p className="px-0.5 mt-2 text-[11px] text-muted-foreground">
+                      Moving to freezer automatically extends expiration.
+                    </p>
+                  </div>
                 </div>
 
                 <DrawerFooter className="pt-2 pb-6">

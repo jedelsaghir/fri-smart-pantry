@@ -380,28 +380,49 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
           )}
 
           {step === "prompt" && (
-            <div className="flex flex-col items-center justify-center h-full px-6 text-center">
-              <div className="mb-8">
-                <div className="text-6xl mb-4">📸</div>
-                <p className="text-xl font-semibold tracking-tight">Take photos of items?</p>
-                <p className="mt-2 text-sm text-muted-foreground max-w-[260px]">
-                  For better expiration dates &amp; quantities?
-                </p>
+            <div className="flex flex-col min-h-[320px] px-5 pt-6">
+              {/* Compact success message */}
+              <div className="text-center mb-6">
+                <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-[color-mix(in_oklab,var(--color-fresh)_12%,var(--color-card))] text-3xl">
+                  ✓
+                </div>
+                <p className="font-semibold tracking-tight">Added to your pantry</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{addedCountForPrompt} item{addedCountForPrompt === 1 ? "" : "s"} saved</p>
               </div>
 
-              <div className="w-full max-w-[280px] space-y-3">
-                <button
-                  onClick={handleTakePhotosForExpiration}
-                  className="w-full rounded-3xl bg-brand py-3.5 text-base font-semibold text-brand-foreground active:scale-[0.985] active:brightness-105 transition"
-                >
-                  Take Photos
-                </button>
-                <button
-                  onClick={handleSkipExpirationPrompt}
-                  className="w-full py-3 text-sm font-medium text-muted-foreground active:text-foreground transition"
-                >
-                  Skip for now
-                </button>
+              {/* Less intrusive, smaller, dismissible banner for optional photo */}
+              <div className="mt-auto rounded-3xl border bg-secondary/60 px-4 py-3.5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="text-xl leading-none mt-0.5">📸</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold tracking-[-0.01em]">Add expiration photos?</div>
+                    <div className="text-xs text-muted-foreground mt-0.5 pr-2">
+                      Optional — improves tracking for these items.
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSkipExpirationPrompt}
+                    className="touch-target -mr-1 -mt-1 grid size-8 place-items-center rounded-full text-muted-foreground/70 active:text-foreground active:bg-background/60"
+                    aria-label="Dismiss photo prompt"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={handleTakePhotosForExpiration}
+                    className="flex-1 rounded-2xl bg-brand py-2.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] active:brightness-105 transition"
+                  >
+                    Take photos
+                  </button>
+                  <button
+                    onClick={handleSkipExpirationPrompt}
+                    className="flex-1 rounded-2xl border py-2.5 text-sm font-medium active:bg-background/60 transition"
+                  >
+                    Not now
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -110,13 +110,16 @@ function getFreezerExtensionDays(name: string): number {
 
 export function PantryScreen() {
   const [active, setActive] = useState<StorageKey>("fridge");
-  const [activeView, setActiveView] = useState<"pantry" | "list" | "finances">("pantry");
+  const [activeView, setActiveView] = useState<"pantry" | "list" | "recipes" | "finances">("pantry");
   const [items, setItems] = useState(SEED);
   const [scanOpen, setScanOpen] = useState(false);
   const [addedBanner, setAddedBanner] = useState<{ count: number; message: string } | null>(null);
 
   // Item details drawer state (for expiration editing + move to freezer)
   const [detailsItem, setDetailsItem] = useState<{ item: PantryItem; storage: StorageKey } | null>(null);
+
+  // Recipes state
+  const [recipeFilter, setRecipeFilter] = useState<"all" | "canMake" | "expiring">("all");
 
   // Shopping list state (for the List tab)
   type ShoppingListItem = {
@@ -420,19 +423,184 @@ export function PantryScreen() {
   const dismissBanner = () => setAddedBanner(null);
 
   const isListView = activeView === "list";
+  const isRecipesView = activeView === "recipes";
   const isFinancesView = activeView === "finances";
   const listCount = shoppingList.length;
   const checkedCount = shoppingList.filter((i) => i.checked).length;
 
   // For list view we show different header stats
-  const headerTotal = isListView ? listCount : isFinancesView ? 18 : current.length;
-  const headerAttention = isListView ? checkedCount : isFinancesView ? 5 : expiringSoon;
-  const attentionTone = isListView ? "calm" : (headerAttention > 0 ? "warn" : "calm");
+  const headerTotal = isListView ? listCount : isRecipesView ? 6 : isFinancesView ? 18 : current.length;
+  const headerAttention = isListView ? checkedCount : isRecipesView ? 3 : isFinancesView ? 5 : expiringSoon;
+  const attentionTone = isListView || isRecipesView || isFinancesView ? "calm" : (headerAttention > 0 ? "warn" : "calm");
 
   // Global low stock count (items currently below their minStock)
   const lowStockCount = (["fridge", "freezer", "pantry"] as StorageKey[]).reduce((sum, s) => {
     return sum + items[s].filter((i) => i.qty < (i.minStock ?? 2)).length;
   }, 0);
+
+  // === RECIPES DATA & HELPERS ===
+  type RecipeIngredient = { name: string; qty: number; unit: string };
+  type Recipe = {
+    id: string;
+    name: string;
+    emoji: string;
+    time: string;
+    servings: number;
+    ingredients: RecipeIngredient[];
+    category: string;
+  };
+
+  const allRecipes: Recipe[] = [
+    {
+      id: "r1",
+      name: "Scrambled Eggs",
+      emoji: "🍳",
+      time: "10 min",
+      servings: 2,
+      ingredients: [
+        { name: "Free-range eggs", qty: 3, unit: "pcs" },
+        { name: "Whole milk", qty: 0.1, unit: "L" },
+      ],
+      category: "Breakfast",
+    },
+    {
+      id: "r2",
+      name: "Greek Yogurt Bowl",
+      emoji: "🥣",
+      time: "5 min",
+      servings: 1,
+      ingredients: [
+        { name: "Greek yogurt", qty: 1, unit: "tub" },
+        { name: "Baby spinach", qty: 0.5, unit: "bag" },
+      ],
+      category: "Breakfast",
+    },
+    {
+      id: "r3",
+      name: "Cherry Tomato Salad",
+      emoji: "🥗",
+      time: "8 min",
+      servings: 2,
+      ingredients: [
+        { name: "Cherry tomatoes", qty: 1, unit: "pack" },
+        { name: "Baby spinach", qty: 1, unit: "bag" },
+      ],
+      category: "Lunch",
+    },
+    {
+      id: "r4",
+      name: "Cheesy Omelette",
+      emoji: "🧀",
+      time: "12 min",
+      servings: 2,
+      ingredients: [
+        { name: "Free-range eggs", qty: 4, unit: "pcs" },
+        { name: "Aged cheddar", qty: 50, unit: "g" },
+        { name: "Whole milk", qty: 0.05, unit: "L" },
+      ],
+      category: "Breakfast",
+    },
+    {
+      id: "r5",
+      name: "Spinach Chicken Stir",
+      emoji: "🍗",
+      time: "20 min",
+      servings: 3,
+      ingredients: [
+        { name: "Chicken thighs", qty: 300, unit: "g" },
+        { name: "Baby spinach", qty: 1, unit: "bag" },
+      ],
+      category: "Dinner",
+    },
+    {
+      id: "r6",
+      name: "Tomato Cheese Toast",
+      emoji: "🍞",
+      time: "7 min",
+      servings: 2,
+      ingredients: [
+        { name: "Cherry tomatoes", qty: 0.5, unit: "pack" },
+        { name: "Aged cheddar", qty: 40, unit: "g" },
+      ],
+      category: "Snack",
+    },
+  ];
+
+  // Check how many ingredients you have enough of across all storages
+  const getMatchingCount = (recipe: Recipe): number => {
+    return recipe.ingredients.filter((ing) => {
+      const lower = ing.name.toLowerCase();
+      return (["fridge", "freezer", "pantry"] as StorageKey[]).some((storage) =>
+        items[storage].some(
+          (item) =>
+            item.name.toLowerCase() === lower &&
+            item.qty >= ing.qty
+        )
+      );
+    }).length;
+  };
+
+  const canMakeRecipe = (recipe: Recipe): boolean => getMatchingCount(recipe) === recipe.ingredients.length;
+
+  // Get recipes filtered and sorted by relevance (matching ingredients desc)
+  const getFilteredRecipes = (): Recipe[] => {
+    let filtered = [...allRecipes];
+
+    if (recipeFilter === "canMake") {
+      filtered = filtered.filter(canMakeRecipe);
+    } else if (recipeFilter === "expiring") {
+      // Prioritize recipes using items with low daysLeft
+      const expiringNames = new Set(
+        (["fridge", "freezer", "pantry"] as StorageKey[]).flatMap((s) =>
+          items[s].filter((i) => i.daysLeft <= 3).map((i) => i.name.toLowerCase())
+        )
+      );
+      filtered = filtered.filter((r) =>
+        r.ingredients.some((ing) => expiringNames.has(ing.name.toLowerCase()))
+      );
+    }
+
+    // Sort by how many ingredients you have (most relevant first)
+    return filtered.sort((a, b) => getMatchingCount(b) - getMatchingCount(a));
+  };
+
+  const filteredRecipes = getFilteredRecipes();
+
+  // "Used in Recipe" - deduct ingredients from pantry (any storage)
+  const cookRecipe = (recipe: Recipe) => {
+    const used: string[] = [];
+
+    setItems((prev) => {
+      const next = { ...prev };
+      (Object.keys(next) as StorageKey[]).forEach((storage) => {
+        next[storage] = next[storage]
+          .map((item) => {
+            const match = recipe.ingredients.find(
+              (ing) => ing.name.toLowerCase() === item.name.toLowerCase()
+            );
+            if (match && item.qty >= match.qty) {
+              const newQty = Math.max(0, item.qty - match.qty);
+              if (newQty < item.qty) used.push(item.name);
+              return { ...item, qty: newQty };
+            }
+            return item;
+          })
+          .filter((i) => i.qty > 0);
+      });
+      return next;
+    });
+
+    if (used.length > 0) {
+      toast.success(`Used in ${recipe.name}`, {
+        description: `Deducted: ${used.join(", ")}`,
+      });
+      // Auto switch to pantry to see updated stock
+      setActiveView("pantry");
+      setActive("fridge");
+    } else {
+      toast("Not enough ingredients", { description: "Some items are low." });
+    }
+  };
 
   return (
     <div className="relative min-h-screen pb-32 bg-background">
@@ -440,11 +608,11 @@ export function PantryScreen() {
         household="The Borg family"
         expiringSoon={headerAttention}
         totalItems={headerTotal}
-        title={isListView ? "Shopping List" : isFinancesView ? "Finances" : "Your Friġġ"}
-        subtitle={isListView ? "Restock smart" : isFinancesView ? "July 2026" : "Good morning, Elena"}
-        totalLabel={isFinancesView ? "receipts" : undefined}
-        attentionLabel={isListView ? "checked" : isFinancesView ? "categories" : undefined}
-        attentionTone={isListView || isFinancesView ? "calm" : undefined}
+        title={isListView ? "Shopping List" : isRecipesView ? "Recipes" : isFinancesView ? "Finances" : "Your Friġġ"}
+        subtitle={isListView ? "Restock smart" : isRecipesView ? "Cook with what you have" : isFinancesView ? "July 2026" : "Good morning, Elena"}
+        totalLabel={isFinancesView ? "receipts" : isRecipesView ? "ideas" : undefined}
+        attentionLabel={isListView ? "checked" : isFinancesView ? "categories" : isRecipesView ? "ready" : undefined}
+        attentionTone={isListView || isRecipesView || isFinancesView ? "calm" : undefined}
       />
 
       <main className="px-5 pt-5">
@@ -567,6 +735,98 @@ export function PantryScreen() {
               </>
             )}
           </>
+        ) : isRecipesView ? (
+          // === RECIPES VIEW - suggestions, filters, use ingredients ===
+          <div className="space-y-5">
+            {/* Filter pills - premium segmented */}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {[
+                { key: "all", label: "All ideas" },
+                { key: "canMake", label: "Can make now" },
+                { key: "expiring", label: "Use expiring" },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setRecipeFilter(f.key as "all" | "canMake" | "expiring")}
+                  className={`rounded-2xl px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition active:scale-[0.985] ${
+                    recipeFilter === f.key
+                      ? "bg-brand text-brand-foreground"
+                      : "bg-secondary/70 text-foreground/80 active:bg-secondary"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {filteredRecipes.length === 0 ? (
+              <div className="mt-12 text-center">
+                <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-secondary/70 text-3xl">🍳</div>
+                <p className="mt-4 font-display text-xl text-foreground">No matches yet</p>
+                <p className="mt-1 text-sm text-muted-foreground max-w-[240px] mx-auto">
+                  Add more items to your pantry or switch filters.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredRecipes.map((recipe) => {
+                  const matchCount = getMatchingCount(recipe);
+                  const totalIngs = recipe.ingredients.length;
+                  const canMake = matchCount === totalIngs;
+
+                  return (
+                    <div key={recipe.id} className="elevated-card rounded-3xl px-4 py-4">
+                      <div className="flex items-start gap-3">
+                        <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-secondary text-2xl">
+                          {recipe.emoji}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="font-semibold text-[15px] tracking-[-0.01em]">{recipe.name}</p>
+                            <span className="text-[11px] text-muted-foreground">{recipe.time} · {recipe.servings} serv</span>
+                          </div>
+
+                          <div className="mt-2 text-[12px] text-muted-foreground">
+                            {recipe.ingredients.map((ing, idx) => (
+                              <span key={idx} className="mr-2">
+                                {ing.qty} {ing.unit} {ing.name}
+                                {idx < recipe.ingredients.length - 1 ? " · " : ""}
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="mt-2 flex items-center gap-2">
+                            <span
+                              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                                canMake
+                                  ? "bg-[color-mix(in_oklab,var(--color-fresh)_15%,var(--color-card))] text-[var(--color-fresh)]"
+                                  : "bg-secondary/60 text-foreground/70"
+                              }`}
+                            >
+                              {canMake ? "Ready to cook" : `${matchCount}/${totalIngs} ingredients`}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">{recipe.category}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => cookRecipe(recipe)}
+                        className="mt-3 w-full rounded-3xl border py-2.5 text-sm font-semibold active:bg-secondary/60 transition disabled:opacity-50"
+                        disabled={matchCount === 0}
+                      >
+                        {canMake ? "Cook this recipe" : "Use what I have"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <p className="text-center text-[11px] text-muted-foreground pt-2">
+              Recipes update automatically from your current pantry stock.
+            </p>
+          </div>
         ) : isFinancesView ? (
           // === FINANCIALS / MONEY VIEW - premium charts & insights ===
           <FinancialsScreen />
@@ -636,15 +896,16 @@ export function PantryScreen() {
         )}
       </main>
 
-      {!isListView && !isFinancesView && <ScanFab onClick={() => setScanOpen(true)} />}
-      <BottomNav active={isListView ? "list" : isFinancesView ? "money" : "pantry"} onChange={(key) => {
+      {!isListView && !isRecipesView && !isFinancesView && <ScanFab onClick={() => setScanOpen(true)} />}
+      <BottomNav active={isListView ? "list" : isRecipesView ? "recipes" : isFinancesView ? "money" : "pantry"} onChange={(key) => {
         if (key === "pantry" || key === "list") {
           setActiveView(key as "pantry" | "list");
           if (key === "pantry") setActive("fridge"); // reset to fridge when going back
+        } else if (key === "recipes") {
+          setActiveView("recipes");
         } else if (key === "money") {
           setActiveView("finances");
         } else {
-          // Placeholder for future tabs (recipes etc)
           setAddedBanner({ count: 0, message: "Coming soon" });
           setTimeout(() => setAddedBanner(null), 1500);
         }

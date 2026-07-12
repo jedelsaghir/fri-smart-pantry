@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { OTPInput, OTPInputContext } from "input-otp";
 import { Minus } from "lucide-react";
@@ -33,6 +35,9 @@ const InputOTPSlot = React.forwardRef<
   React.ComponentPropsWithoutRef<"div"> & { index: number }
 >(({ index, className, ...props }, ref) => {
   const inputOTPContext = React.useContext(OTPInputContext);
+  if (!inputOTPContext) {
+    return null;
+  }
   const { char, hasFakeCaret, isActive } = inputOTPContext.slots[index];
 
   return (

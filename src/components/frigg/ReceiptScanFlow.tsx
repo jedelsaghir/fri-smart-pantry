@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { Camera, Image as ImageIcon, X, Loader2, Check, Trash2 } from "lucide-react";
 import { StorageTabs, type StorageKey } from "./StorageTabs";

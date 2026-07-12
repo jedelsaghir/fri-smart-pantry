@@ -7,7 +7,7 @@ import { ScanFab } from "./ScanFab";
 import { ReceiptScanFlow, type DetectedItem } from "./ReceiptScanFlow";
 import { toast } from "sonner";
 import { FinancialsScreen } from "./FinancialsScreen";
-import { Snowflake, Calendar, ArrowRight, X } from "lucide-react";
+import { Snowflake, Calendar, ArrowRight, X, Users } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -121,6 +121,68 @@ export function PantryScreen() {
   // Recipes state
   const [recipeFilter, setRecipeFilter] = useState<"all" | "canMake" | "expiring">("all");
 
+  // Family Sharing state
+  const familyMembers = [
+    { name: "You", emoji: "👤" },
+    { name: "Elena", emoji: "👩‍🍳" },
+    { name: "Alex", emoji: "🧒" },
+  ];
+  const [activityLog, setActivityLog] = useState<Array<{ user: string; action: string; time: string }>>([
+    { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
+    { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
+    { user: "You", action: "moved chicken to freezer", time: "3h ago" },
+  ]);
+  const [showFamilyDrawer, setShowFamilyDrawer] = useState(false);
+
+  const addActivity = (user: string, action: string) => {
+    setActivityLog((prev) => [
+      { user, action, time: "just now" },
+      ...prev.slice(0, 4),
+    ]);
+  };
+
+  const simulateFamilyUpdate = (memberName: string) => {
+    // Simulate a family member adding an item or updating
+    const demoItems = [
+      { name: "Whole milk", qty: 1, unit: "L", emoji: "🥛" },
+      { name: "Free-range eggs", qty: 4, unit: "pcs", emoji: "🥚" },
+      { name: "Cherry tomatoes", qty: 1, unit: "pack", emoji: "🍅" },
+    ];
+    const demo = demoItems[Math.floor(Math.random() * demoItems.length)];
+    const targetStorage: StorageKey = Math.random() > 0.6 ? "fridge" : "pantry";
+
+    setItems((prev) => {
+      const next = { ...prev };
+      const existing = next[targetStorage].find((i) => i.name.toLowerCase() === demo.name.toLowerCase());
+      if (existing) {
+        existing.qty += demo.qty;
+      } else {
+        next[targetStorage] = [
+          ...next[targetStorage],
+          {
+            id: `fam-${Date.now()}`,
+            name: demo.name,
+            qty: demo.qty,
+            unit: demo.unit,
+            emoji: demo.emoji,
+            daysLeft: getDefaultDaysLeft(demo.name, targetStorage),
+            minStock: getDefaultMinStock(demo.name),
+          },
+        ];
+      }
+      return next;
+    });
+
+    addActivity(memberName, `added ${demo.qty}${demo.unit} ${demo.name}`);
+    toast.success(`${memberName} updated the pantry`, {
+      description: `+${demo.qty} ${demo.unit} ${demo.name}`,
+    });
+
+    // Switch to pantry to see the update
+    setActiveView("pantry");
+    setActive(targetStorage);
+  };
+
   // Shopping list state (for the List tab)
   type ShoppingListItem = {
     id: string;
@@ -136,12 +198,17 @@ export function PantryScreen() {
   const current = items[active];
 
   const updateQty = (id: string, delta: number) => {
-    setItems((prev) => ({
-      ...prev,
-      [active]: prev[active]
+    setItems((prev) => {
+      const item = prev[active].find((i) => i.id === id);
+      const newItems = prev[active]
         .map((i) => (i.id === id ? { ...i, qty: Math.max(0, i.qty + delta) } : i))
-        .filter((i) => i.qty > 0),
-    }));
+        .filter((i) => i.qty > 0);
+      if (item) {
+        const verb = delta > 0 ? "added" : "used";
+        addActivity("You", `${verb} ${Math.abs(delta)} ${item.unit} ${item.name}`);
+      }
+      return { ...prev, [active]: newItems };
+    });
   };
 
   const updateMinStock = (id: string, newMin: number) => {
@@ -211,9 +278,11 @@ export function PantryScreen() {
       toast.success(`Moved to Freezer`, {
         description: `Expiration extended by +${extension} days`,
       });
+      addActivity("You", `moved ${sourceItem.name} to freezer`);
     } else {
       const dest = toStorage === "pantry" ? "Pantry" : toStorage === "freezer" ? "Freezer" : "Fridge";
       toast.success(`Moved to ${dest}`);
+      addActivity("You", `moved ${sourceItem.name} to ${dest.toLowerCase()}`);
     }
   };
 
@@ -329,6 +398,7 @@ export function PantryScreen() {
       count: purchased.length,
       message: `Added ${purchased.length} item${purchased.length > 1 ? "s" : ""} to your pantry`,
     });
+    addActivity("You", `purchased ${purchased.length} item${purchased.length > 1 ? "s" : ""}`);
     setTimeout(() => setAddedBanner(null), 3200);
   };
 
@@ -412,6 +482,9 @@ export function PantryScreen() {
     const message = `Added ${count} item${count > 1 ? "s" : ""} to your ${storageLabel.toLowerCase()}`;
 
     setAddedBanner({ count, message });
+
+    // Log family activity
+    addActivity("You", `added ${count} item${count > 1 ? "s" : ""}`);
 
     // Auto-hide banner
     setTimeout(() => setAddedBanner(null), 5200);
@@ -594,6 +667,7 @@ export function PantryScreen() {
       toast.success(`Used in ${recipe.name}`, {
         description: `Deducted: ${used.join(", ")}`,
       });
+      addActivity("You", `cooked ${recipe.name}`);
       // Auto switch to pantry to see updated stock
       setActiveView("pantry");
       setActive("fridge");
@@ -613,6 +687,9 @@ export function PantryScreen() {
         totalLabel={isFinancesView ? "receipts" : isRecipesView ? "ideas" : undefined}
         attentionLabel={isListView ? "checked" : isFinancesView ? "categories" : isRecipesView ? "ready" : undefined}
         attentionTone={isListView || isRecipesView || isFinancesView ? "calm" : undefined}
+        familyMembers={familyMembers}
+        isShared={true}
+        onShowFamily={() => setShowFamilyDrawer(true)}
       />
 
       <main className="px-5 pt-5">
@@ -836,6 +913,11 @@ export function PantryScreen() {
             <div className="flex items-center justify-between mb-1">
               <StorageTabs active={active} onChange={setActive} />
             </div>
+            {/* Shared family indicator */}
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1 px-1">
+              <Users className="size-3" />
+              Shared with family • 3 members
+            </div>
 
             {/* Prominent Generate Shopping List button - premium one-tap */}
             <button
@@ -916,6 +998,69 @@ export function PantryScreen() {
         onClose={() => setScanOpen(false)}
         onItemsAdded={addScannedItems}
       />
+
+      {/* Family / Activity Drawer */}
+      <Drawer open={showFamilyDrawer} onOpenChange={setShowFamilyDrawer}>
+        <DrawerContent className="max-w-md mx-auto">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Household</DrawerTitle>
+            <DrawerDescription>The Borg family • Shared pantry</DrawerDescription>
+          </DrawerHeader>
+
+          <div className="px-5 pb-4 space-y-6">
+            {/* Members list */}
+            <div>
+              <div className="text-sm font-semibold mb-2">Members</div>
+              <div className="space-y-2">
+                {familyMembers.map((m, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      simulateFamilyUpdate(m.name);
+                      setShowFamilyDrawer(false);
+                    }}
+                    className="w-full flex items-center gap-3 rounded-2xl bg-secondary/60 px-4 py-3 text-left active:bg-secondary/80 transition"
+                  >
+                    <div className="text-2xl">{m.emoji}</div>
+                    <div className="flex-1">
+                      <div className="font-medium">{m.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {m.name === "You" ? "Online now" : "Active recently"}
+                      </div>
+                    </div>
+                    <div className="text-xs text-[var(--color-fresh)]">Tap to simulate</div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">Tap a member to simulate them updating the shared pantry.</p>
+            </div>
+
+            {/* Activity log */}
+            <div>
+              <div className="text-sm font-semibold mb-2">Recent activity</div>
+              <div className="space-y-2 text-sm">
+                {activityLog.length === 0 ? (
+                  <div className="text-muted-foreground">No activity yet.</div>
+                ) : (
+                  activityLog.map((entry, i) => (
+                    <div key={i} className="flex gap-2 rounded-xl bg-secondary/50 px-3 py-2">
+                      <span className="font-medium shrink-0">{entry.user}</span>
+                      <span className="text-foreground/80">{entry.action}</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{entry.time}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DrawerFooter>
+            <button onClick={() => setShowFamilyDrawer(false)} className="w-full rounded-3xl py-3 text-sm font-semibold border active:bg-secondary/60">
+              Done
+            </button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Item Details Drawer — full expiration tracking + move to freezer */}
       <Drawer open={!!detailsItem} onOpenChange={(open) => !open && closeItemDetails()}>
@@ -1097,7 +1242,7 @@ function EmptyState({ label }: { label: StorageKey }) {
         Nothing here yet
       </p>
       <p className="mt-1.5 max-w-[220px] text-[13px] leading-snug text-muted-foreground">
-        Tap the scan button to add items from a receipt.
+        Tap the scan button to add items. Your family can update the shared pantry too.
       </p>
     </div>
   );

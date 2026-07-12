@@ -9,6 +9,10 @@ interface Props {
   totalLabel?: string;
   attentionLabel?: string;
   attentionTone?: "calm" | "warn";
+  // Family sharing
+  familyMembers?: Array<{ name: string; emoji: string }>;
+  isShared?: boolean;
+  onShowFamily?: () => void;
 }
 
 export function GlassHeader({
@@ -20,6 +24,9 @@ export function GlassHeader({
   totalLabel,
   attentionLabel,
   attentionTone,
+  familyMembers,
+  isShared,
+  onShowFamily,
 }: Props) {
   const showAttentionDot = expiringSoon > 0;
   const resolvedLabel = attentionLabel ?? "need attention";
@@ -28,16 +35,45 @@ export function GlassHeader({
   return (
     <header className="sticky top-0 z-40 glass">
       <div className="px-5 pb-4 pt-[max(1.35rem,env(safe-area-inset-top))]">
-        {/* Top row: household + notifications */}
+        {/* Top row: household + shared indicator + avatars + notifications */}
         <div className="flex items-center justify-between">
-          <button className="flex items-center gap-2 rounded-full bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold text-foreground/85 active:bg-secondary/80 transition">
-            <Users className="size-3.5" />
-            {household}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onShowFamily}
+              className="flex items-center gap-2 rounded-full bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold text-foreground/85 active:bg-secondary/80 transition"
+            >
+              <Users className="size-3.5" />
+              {household}
+            </button>
+            {isShared && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[color-mix(in_oklab,var(--color-fresh)_15%,var(--color-card))] text-[var(--color-fresh)] font-medium">
+                Shared
+              </span>
+            )}
+            {familyMembers && familyMembers.length > 0 && (
+              <div className="flex items-center -space-x-1 ml-1" onClick={onShowFamily}>
+                {familyMembers.slice(0, 3).map((m, i) => (
+                  <div
+                    key={i}
+                    className="grid size-5 place-items-center rounded-full bg-secondary text-[10px] ring-1 ring-background"
+                    title={m.name}
+                  >
+                    {m.emoji}
+                  </div>
+                ))}
+                {familyMembers.length > 3 && (
+                  <div className="grid size-5 place-items-center rounded-full bg-secondary/70 text-[8px] ring-1 ring-background">
+                    +{familyMembers.length - 3}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <button
             aria-label="Notifications"
             className="relative grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
+            onClick={onShowFamily}
           >
             <Bell className="size-4" />
             {showAttentionDot && (

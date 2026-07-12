@@ -441,7 +441,7 @@ export function PantryScreen() {
   };
 
   // Core: add scanned items (can target any storage)
-  const addScannedItems = (scanned: Array<Omit<DetectedItem, "id" | "confidence">>) => {
+  const addScannedItems = (scanned: Array<Omit<DetectedItem, "id" | "confidence">>, options: { silent?: boolean } = {}) => {
     if (scanned.length === 0) return;
 
     const newItemsByStorage: Partial<Record<StorageKey, PantryItem[]>> = {};
@@ -470,27 +470,30 @@ export function PantryScreen() {
       return next;
     });
 
-    // Show premium silent success feedback
-    const storages = Array.from(new Set(scanned.map((s) => s.storage)));
-    const storageLabel =
-      storages.length === 1
-        ? storages[0] === "fridge"
-          ? "Fridge"
-          : storages[0] === "freezer"
-          ? "Freezer"
-          : "Pantry"
-        : "pantry";
+    // Show premium silent success feedback (unless silent from scan flow)
+    if (!options.silent) {
+      const storages = Array.from(new Set(scanned.map((s) => s.storage)));
+      const storageLabel =
+        storages.length === 1
+          ? storages[0] === "fridge"
+            ? "Fridge"
+            : storages[0] === "freezer"
+            ? "Freezer"
+            : "Pantry"
+          : "pantry";
 
-    const count = scanned.length;
-    const message = `Added ${count} item${count > 1 ? "s" : ""} to your ${storageLabel.toLowerCase()}`;
+      const count = scanned.length;
+      const message = `Added ${count} item${count > 1 ? "s" : ""} to your ${storageLabel.toLowerCase()}`;
 
-    setAddedBanner({ count, message });
+      setAddedBanner({ count, message });
+
+      // Auto-hide banner
+      setTimeout(() => setAddedBanner(null), 5200);
+    }
 
     // Log family activity
+    const count = scanned.length;
     addActivity("You", `added ${count} item${count > 1 ? "s" : ""}`);
-
-    // Auto-hide banner
-    setTimeout(() => setAddedBanner(null), 5200);
   };
 
   const expiringSoon = current.filter((i) => i.daysLeft <= 3).length;

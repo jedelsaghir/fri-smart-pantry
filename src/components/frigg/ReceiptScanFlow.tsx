@@ -16,7 +16,7 @@ export interface DetectedItem {
 interface ReceiptScanFlowProps {
   open: boolean;
   onClose: () => void;
-  onItemsAdded: (items: Array<Omit<DetectedItem, "confidence" | "id">>) => void;
+  onItemsAdded: (items: Array<Omit<DetectedItem, "confidence" | "id">>, options?: { silent?: boolean }) => void;
 }
 
 // Realistic mock receipt results
@@ -80,10 +80,11 @@ function formatStorageLabel(storage: StorageKey) {
 }
 
 export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlowProps) {
-  const [step, setStep] = useState<"capture" | "processing" | "review">("capture");
+  const [step, setStep] = useState<"capture" | "processing" | "review" | "prompt">("capture");
   const [detected, setDetected] = useState<DetectedItem[]>([]);
   const [reviewItems, setReviewItems] = useState<DetectedItem[]>([]);
   const [previewReceipt, setPreviewReceipt] = useState(false);
+  const [addedCountForPrompt, setAddedCountForPrompt] = useState(0);
 
   if (!open) return null;
 
@@ -92,6 +93,7 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
     setDetected([]);
     setReviewItems([]);
     setPreviewReceipt(false);
+    setAddedCountForPrompt(0);
   };
 
   const handleClose = () => {
@@ -114,10 +116,11 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
       const autoItems = results.filter((i) => i.confidence >= 0.8);
       const ambiguous = results.filter((i) => i.confidence < 0.8);
 
-      // Immediately add the clear ones
+      // Immediately add the clear ones (silently for new flow)
       if (autoItems.length > 0) {
         onItemsAdded(
-          autoItems.map(({ id, confidence, ...rest }) => rest)
+          autoItems.map(({ id, confidence, ...rest }) => rest),
+          { silent: true }
         );
       }
 
@@ -125,13 +128,11 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
         setReviewItems(ambiguous);
         setStep("review");
       } else {
-        // Everything was clear — silent success
+        // High confidence — silently added, show clean toast then optional prompt
         const count = autoItems.length;
-        toast.success(`${count} item${count === 1 ? "" : "s"} added`, {
-          description: "Your pantry is up to date.",
-          duration: 3200,
-        });
-        handleClose();
+        toast.success("Pantry Updated");
+        setAddedCountForPrompt(count);
+        setStep("prompt");
       }
     }, delay);
   };
@@ -168,14 +169,27 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
     }
 
     const toAdd = reviewItems.map(({ id, confidence, ...rest }) => rest);
-    onItemsAdded(toAdd);
+    onItemsAdded(toAdd, { silent: true });
 
     const count = toAdd.length;
-    toast.success(`${count} item${count === 1 ? "" : "s"} confirmed`, {
-      description: "Added to your pantry.",
-      duration: 2800,
-    });
+    toast.success("Pantry Updated");
 
+    setAddedCountForPrompt(count);
+    setStep("prompt");
+  };
+
+  // ---- Post-add expiration photo prompt handlers (optional) ----
+  const handleSkipExpirationPrompt = () => {
+    setAddedCountForPrompt(0);
+    handleClose();
+  };
+
+  const handleTakePhotosForExpiration = () => {
+    setAddedCountForPrompt(0);
+    toast.success("Photos captured", {
+      description: "Expiration dates & quantities improved.",
+      duration: 2500,
+    });
     handleClose();
   };
 
@@ -185,7 +199,9 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
       <div className="flex-1 flex flex-col bg-background rounded-t-3xl mt-auto max-h-[94dvh] overflow-hidden shadow-2xl">
         {/* Top bar */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border/60">
-          <div className="font-semibold text-lg tracking-tight">Scan receipt</div>
+          <div className="font-semibold text-lg tracking-tight">
+            {step === "prompt" ? "Update complete" : "Scan receipt"}
+          </div>
           <button
             onClick={handleClose}
             className="touch-target grid size-10 place-items-center rounded-full bg-secondary/70 text-foreground/70 active:bg-secondary"
@@ -359,6 +375,33 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {step === "prompt" && (
+            <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+              <div className="mb-8">
+                <div className="text-6xl mb-4">📸</div>
+                <p className="text-xl font-semibold tracking-tight">Take photos of items?</p>
+                <p className="mt-2 text-sm text-muted-foreground max-w-[260px]">
+                  For better expiration dates &amp; quantities?
+                </p>
+              </div>
+
+              <div className="w-full max-w-[280px] space-y-3">
+                <button
+                  onClick={handleTakePhotosForExpiration}
+                  className="w-full rounded-3xl bg-brand py-3.5 text-base font-semibold text-brand-foreground active:scale-[0.985] active:brightness-105 transition"
+                >
+                  Take Photos
+                </button>
+                <button
+                  onClick={handleSkipExpirationPrompt}
+                  className="w-full py-3 text-sm font-medium text-muted-foreground active:text-foreground transition"
+                >
+                  Skip for now
+                </button>
               </div>
             </div>
           )}

@@ -7,16 +7,19 @@ export interface PantryItem {
   unit: string;
   emoji: string;
   daysLeft: number;
+  minStock: number;
 }
 
 export function ItemCard({
   item,
   onInc,
   onDec,
+  onUpdateMinStock,
 }: {
   item: PantryItem;
   onInc: () => void;
   onDec: () => void;
+  onUpdateMinStock?: (newMin: number) => void;
 }) {
   const status = getStatus(item.daysLeft);
 
@@ -53,6 +56,33 @@ export function ItemCard({
           <span className="text-[12px] font-medium text-muted-foreground tabular-nums">
             {item.qty} {item.unit}
           </span>
+        </div>
+
+        {/* Minimum stock level — editable, premium inline controls */}
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">Min stock</span>
+          <div className="flex items-center rounded-full bg-secondary/70 p-0.5">
+            <button
+              aria-label="Decrease min stock"
+              onClick={() => onUpdateMinStock?.(Math.max(0, item.minStock - 1))}
+              className="touch-target grid size-7 place-items-center rounded-full text-foreground/70 active:bg-background/60 transition text-sm"
+            >
+              –
+            </button>
+            <span className="w-6 text-center text-xs font-semibold tabular-nums text-foreground/90">
+              {item.minStock}
+            </span>
+            <button
+              aria-label="Increase min stock"
+              onClick={() => onUpdateMinStock?.(item.minStock + 1)}
+              className="touch-target grid size-7 place-items-center rounded-full text-foreground/70 active:bg-background/60 transition text-sm"
+            >
+              +
+            </button>
+          </div>
+          {item.qty < item.minStock && (
+            <span className="text-[10px] font-medium text-[var(--color-soon)]">Low</span>
+          )}
         </div>
       </div>
 

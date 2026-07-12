@@ -4,9 +4,11 @@ interface Props {
   household: string;
   totalItems: number;
   expiringSoon: number;
+  title?: string;
+  subtitle?: string;
 }
 
-export function GlassHeader({ household, totalItems, expiringSoon }: Props) {
+export function GlassHeader({ household, totalItems, expiringSoon, title = "Your Friġġ", subtitle = "Good morning, Elena" }: Props) {
   return (
     <header className="sticky top-0 z-40 glass">
       <div className="px-5 pb-4 pt-[max(1.35rem,env(safe-area-inset-top))]">
@@ -31,10 +33,10 @@ export function GlassHeader({ household, totalItems, expiringSoon }: Props) {
         {/* Hero title area — calm & premium */}
         <div className="mt-5">
           <p className="text-[13px] font-medium tracking-[0.01em] text-muted-foreground/90">
-            Good morning, Elena
+            {subtitle}
           </p>
-          <h1 className="mt-0.5 font-display text-[34px] leading-[0.96] font-medium tracking-[-0.015em] text-foreground">
-            Your Friġġ
+          <h1 className="mt-0.5 font-display text-[36px] leading-[0.96] font-medium tracking-[-0.015em] text-foreground/90">
+            {title}
           </h1>
         </div>
 

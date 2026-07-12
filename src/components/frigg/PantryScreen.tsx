@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GlassHeader } from "./GlassHeader";
 import { StorageTabs, type StorageKey } from "./StorageTabs";
 import { ItemCard, type PantryItem, getStatus } from "./ItemCard";
@@ -112,14 +112,97 @@ function getFreezerExtensionDays(name: string): number {
 export function PantryScreen() {
   const [active, setActive] = useState<StorageKey>("fridge");
   const [activeView, setActiveView] = useState<"pantry" | "list" | "recipes" | "finances">("pantry");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem("friggg-logged-in") === "true"; } catch { return false; }
+  });
   const [showSettings, setShowSettings] = useState(false);
-  const [items, setItems] = useState(SEED);
   const [scanOpen, setScanOpen] = useState(false);
+
+  // Simple profile from onboarding (demo)
+  const [userName, setUserName] = useState("Elena");
+  const [householdName, setHouseholdName] = useState("The Borg family");
+  useEffect(() => {
+    try {
+      const p = localStorage.getItem("friggg-profile");
+      if (p) {
+        const parsed = JSON.parse(p);
+        if (parsed?.name) setUserName(parsed.name.split(" ")[0] || "Elena");
+      }
+      const h = localStorage.getItem("friggg-household");
+      if (h) setHouseholdName(h);
+    } catch {}
+  }, []);
   const [addedBanner, setAddedBanner] = useState<{ count: number; message: string } | null>(null);
 
   // Item details drawer state (for expiration editing + move to freezer)
   const [detailsItem, setDetailsItem] = useState<{ item: PantryItem; storage: StorageKey } | null>(null);
+
+  // Persist pantry to localStorage so the app works offline and shows cached data on reload
+  const [items, setItems] = useState<Record<StorageKey, PantryItem[]>>(() => {
+    if (typeof window === "undefined") return SEED;
+    try {
+      const saved = localStorage.getItem("friggg-items");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Basic validation / merge with seed shape if needed
+        if (parsed && typeof parsed === "object" && parsed.fridge) return parsed;
+      }
+    } catch {}
+    return SEED;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("friggg-items", JSON.stringify(items));
+    } catch {}
+  }, [items]);
+
+  // Persist auth for seamless PWA / reload / offline experience
+  const doLogin = () => {
+    try { localStorage.setItem("friggg-logged-in", "true"); } catch {}
+    setIsAuthenticated(true);
+  };
+  const doLogout = () => {
+    try { localStorage.removeItem("friggg-logged-in"); } catch {}
+    setIsAuthenticated(false);
+  };
+
+  // PWA install prompt (beforeinstallprompt) — native feel "Add to Home Screen"
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+      const dismissed = localStorage.getItem("friggg-install-dismissed");
+      if (!dismissed) {
+        // small delay so not jarring on first load
+        setTimeout(() => setShowInstallBanner(true), 1200);
+      }
+    };
+    window.addEventListener("beforeinstallprompt", handler as any);
+    return () => window.removeEventListener("beforeinstallprompt", handler as any);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPromptEvent) return;
+    installPromptEvent.prompt();
+    try {
+      const { outcome } = await installPromptEvent.userChoice;
+      if (outcome === "accepted") {
+        toast.success("Installed!", { description: "Friġġ is now on your home screen." });
+      }
+    } catch {}
+    setInstallPromptEvent(null);
+    setShowInstallBanner(false);
+  };
+
+  const dismissInstall = () => {
+    setShowInstallBanner(false);
+    localStorage.setItem("friggg-install-dismissed", String(Date.now()));
+  };
 
   // Recipes state
   const [recipeFilter, setRecipeFilter] = useState<"all" | "canMake" | "expiring">("all");
@@ -719,17 +802,17 @@ export function PantryScreen() {
   };
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+    return <LoginScreen onLogin={doLogin} />;
   }
 
   return (
     <div className="relative min-h-screen pb-32 bg-background">
       <GlassHeader
-        household="The Borg family"
+        household={householdName}
         expiringSoon={headerAttention}
         totalItems={headerTotal}
         title={isListView ? "Shopping List" : isRecipesView ? "Recipes" : isFinancesView ? "Finances" : "Your Friġġ"}
-        subtitle={isListView ? "Restock smart" : isRecipesView ? "Cook with what you have" : isFinancesView ? "July 2026" : "Good morning, Elena"}
+        subtitle={isListView ? "Restock smart" : isRecipesView ? "Cook with what you have" : isFinancesView ? "July 2026" : `Good morning, ${userName}`}
         totalLabel={isFinancesView ? "receipts" : isRecipesView ? "ideas" : undefined}
         attentionLabel={isListView ? "checked" : isFinancesView ? "categories" : isRecipesView ? "ready" : undefined}
         attentionTone={isListView || isRecipesView || isFinancesView ? "calm" : undefined}
@@ -989,6 +1072,30 @@ export function PantryScreen() {
               </div>
             )}
 
+            {/* PWA Install banner — calm, native-feel, dismissible */}
+            {showInstallBanner && installPromptEvent && (
+              <div className="mt-3 flex items-center gap-3 rounded-3xl border border-border/60 bg-card px-4 py-2.5 text-sm">
+                <div className="text-xl">📱</div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold">Add Friġġ to Home Screen</span>
+                  <span className="ml-1 text-muted-foreground text-xs">for the full app experience.</span>
+                </div>
+                <button
+                  onClick={handleInstall}
+                  className="rounded-2xl bg-brand px-3.5 py-1.5 text-xs font-semibold text-brand-foreground active:scale-[0.985] transition"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={dismissInstall}
+                  className="text-muted-foreground/70 px-1 active:text-foreground"
+                  aria-label="Dismiss install prompt"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
@@ -1035,56 +1142,110 @@ export function PantryScreen() {
         onItemsAdded={addScannedItems}
       />
 
-      {/* Settings Drawer */}
+      {/* Settings Drawer — premium polished */}
       <Drawer open={showSettings} onOpenChange={setShowSettings}>
         <DrawerContent className="max-w-md mx-auto">
-          <DrawerHeader className="text-left">
+          <DrawerHeader className="text-left pb-1">
             <DrawerTitle>Settings</DrawerTitle>
-            <DrawerDescription>Manage your account and preferences</DrawerDescription>
+            <DrawerDescription>Account, household &amp; preferences</DrawerDescription>
           </DrawerHeader>
 
-          <div className="px-5 pb-4 space-y-4 text-sm">
-            <div className="elevated-card rounded-3xl p-4 space-y-3">
-              <div className="font-semibold">Profile</div>
-              <div className="flex justify-between"><span>Elena Borg</span><span className="text-muted-foreground">Edit</span></div>
-              <div className="text-muted-foreground text-xs">elena@borg.family</div>
-            </div>
-
-            <div className="elevated-card rounded-3xl p-4 space-y-3">
-              <div className="font-semibold">Household</div>
-              <div>The Borg family • 3 members</div>
-              <div className="text-xs text-muted-foreground">Manage members and sharing</div>
-            </div>
-
+          <div className="px-5 pb-3 space-y-4 text-sm">
+            {/* Profile */}
             <div className="elevated-card rounded-3xl p-4">
-              <div className="flex justify-between items-center">
-                <span>Notifications</span>
-                <span className="text-[var(--color-fresh)]">On</span>
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">👩‍🍳</div>
+                <div className="flex-1">
+                  <div className="font-semibold">Elena Borg</div>
+                  <div className="text-xs text-muted-foreground">elena@borg.family</div>
+                </div>
+                <button className="text-xs px-3 py-1 rounded-full border active:bg-secondary">Edit</button>
               </div>
             </div>
 
-            <div className="elevated-card rounded-3xl p-4">
-              <div className="flex justify-between items-center">
-                <span>Dark mode</span>
-                <span className="text-muted-foreground">System</span>
+            {/* Household */}
+            <div className="elevated-card rounded-3xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold">Household</div>
+                  <div className="text-sm">The Borg family • 3 members</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowSettings(false);
+                    setShowFamilyDrawer(true);
+                  }}
+                  className="text-xs px-3 py-1 rounded-full border active:bg-secondary"
+                >
+                  Manage
+                </button>
               </div>
+              <div className="text-[11px] text-muted-foreground pt-1">Shared pantry • activity visible to family</div>
+            </div>
+
+            {/* Notifications */}
+            <div className="elevated-card rounded-3xl p-4 flex items-center justify-between">
+              <div>
+                <div className="font-semibold">Notifications</div>
+                <div className="text-xs text-muted-foreground">Expiration alerts &amp; family updates</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" className="sr-only peer" defaultChecked />
+                <div className="w-9 h-5 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--color-fresh)]" />
+              </label>
+            </div>
+
+            {/* PWA Install */}
+            <div className="elevated-card rounded-3xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold">Install app</div>
+                  <div className="text-xs text-muted-foreground">Add Friġġ to your home screen</div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (installPromptEvent) {
+                      handleInstall();
+                      setShowSettings(false);
+                    } else {
+                      setShowSettings(false);
+                      setShowInstallBanner(true);
+                      toast("Look for the prompt", { description: "Or use your browser menu → Add to Home Screen" });
+                    }
+                  }}
+                  className="text-xs px-3.5 py-1.5 rounded-2xl bg-brand text-brand-foreground font-semibold active:scale-[0.985]"
+                >
+                  Install
+                </button>
+              </div>
+            </div>
+
+            {/* Appearance */}
+            <div className="elevated-card rounded-3xl p-4 flex items-center justify-between">
+              <div className="font-semibold">Appearance</div>
+              <div className="text-xs text-muted-foreground">System</div>
+            </div>
+
+            {/* About + misc */}
+            <div className="text-[11px] text-muted-foreground px-1 pt-1">
+              Friġġ v1 • Calm pantry for families. Data stays on your device.
             </div>
 
             <button
               onClick={() => {
                 setShowSettings(false);
-                setIsAuthenticated(false);
-                toast("Logged out");
+                doLogout();
+                toast("Signed out", { description: "See you soon." });
               }}
-              className="w-full rounded-3xl border py-3 text-sm font-semibold text-destructive active:bg-secondary/60"
+              className="mt-1 w-full rounded-3xl border py-3 text-sm font-semibold text-destructive active:bg-secondary/60"
             >
               Log out
             </button>
           </div>
 
-          <DrawerFooter>
+          <DrawerFooter className="pt-1 pb-6">
             <DrawerClose asChild>
-              <button className="w-full rounded-3xl py-3 text-sm font-semibold border active:bg-secondary/60">Done</button>
+              <button className="w-full rounded-3xl py-3.5 text-sm font-semibold border active:bg-secondary/60">Done</button>
             </DrawerClose>
           </DrawerFooter>
         </DrawerContent>

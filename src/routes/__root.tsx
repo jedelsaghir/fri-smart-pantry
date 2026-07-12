@@ -136,6 +136,15 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
+  // Apply saved or system theme as early as possible (prevents flash)
+  if (typeof document !== "undefined") {
+    const saved = localStorage.getItem("friggg-theme");
+    const prefers = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+    if (saved === "dark" || (!saved && prefers)) {
+      document.documentElement.classList.add("dark");
+    }
+  }
+
   // Register service worker for PWA + basic offline support
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Switch } from "@/components/ui/switch";
 import { GlassHeader } from "./GlassHeader";
 import { StorageTabs, type StorageKey } from "./StorageTabs";
 import { ItemCard, type PantryItem, getStatus } from "./ItemCard";
@@ -119,6 +120,13 @@ export function PantryScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
 
+  // Premium calm splash / loading screen on initial mount (PWA friendly)
+  const [showSplash, setShowSplash] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 720);
+    return () => clearTimeout(t);
+  }, []);
+
   // Simple profile from onboarding (demo)
   const [userName, setUserName] = useState("Elena");
   const [householdName, setHouseholdName] = useState("The Borg family");
@@ -133,6 +141,32 @@ export function PantryScreen() {
       if (h) setHouseholdName(h);
     } catch {}
   }, []);
+
+  // Dark mode (respects system + persisted, clean calm dark theme)
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const saved = localStorage.getItem("friggg-theme");
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const shouldBeDark = saved ? saved === "dark" : prefersDark;
+    setIsDark(shouldBeDark);
+    if (shouldBeDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  const toggleDarkMode = (checked?: boolean) => {
+    const next = typeof checked === "boolean" ? checked : !isDark;
+    setIsDark(next);
+    if (next) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("friggg-theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("friggg-theme", "light");
+    }
+  };
   const [addedBanner, setAddedBanner] = useState<{ count: number; message: string } | null>(null);
 
   // Item details drawer state (for expiration editing + move to freezer)
@@ -801,6 +835,31 @@ export function PantryScreen() {
     }
   };
 
+  if (showSplash) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background">
+        <div className="text-center select-none">
+          <div className="text-[78px] mb-3">🥛</div>
+          <div className="font-display text-[44px] tracking-[-0.035em] text-foreground">Friġġ</div>
+          <p className="mt-1.5 text-[15px] text-muted-foreground tracking-[-0.01em]">Your calm family pantry</p>
+          <div className="mt-10 flex items-center justify-center gap-2 opacity-50">
+            <div className="h-px w-6 bg-foreground/50" />
+            <div className="flex gap-1.5">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="size-1 rounded-full bg-foreground animate-pulse"
+                  style={{ animationDelay: `${i * 140}ms` }}
+                />
+              ))}
+            </div>
+            <div className="h-px w-6 bg-foreground/50" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return <LoginScreen onLogin={doLogin} />;
   }
@@ -1220,10 +1279,13 @@ export function PantryScreen() {
               </div>
             </div>
 
-            {/* Appearance */}
+            {/* Dark Mode toggle - premium calm dark */}
             <div className="elevated-card rounded-3xl p-4 flex items-center justify-between">
-              <div className="font-semibold">Appearance</div>
-              <div className="text-xs text-muted-foreground">System</div>
+              <div>
+                <div className="font-semibold">Dark mode</div>
+                <div className="text-xs text-muted-foreground">Calm evening palette</div>
+              </div>
+              <Switch checked={isDark} onCheckedChange={toggleDarkMode} aria-label="Toggle dark mode" />
             </div>
 
             {/* About + misc */}

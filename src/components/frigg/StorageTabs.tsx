@@ -14,7 +14,7 @@ export function StorageTabs({
   onChange: (k: StorageKey) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-3xl bg-secondary/65 p-1 backdrop-blur-sm">
+    <div className="grid grid-cols-3 gap-1 rounded-3xl bg-secondary/50 p-1 backdrop-blur-md border border-border/30">
       {TABS.map((t) => {
         const isActive = t.key === active;
         return (
@@ -22,13 +22,13 @@ export function StorageTabs({
             key={t.key}
             onClick={() => onChange(t.key)}
             className={
-              "flex items-center justify-center gap-1.5 rounded-[14px] py-2.5 text-sm font-semibold transition-all active:scale-[0.985] " +
+              "flex items-center justify-center gap-1.5 rounded-2xl py-2.5 text-sm font-semibold tracking-[-0.01em] transition-all active:scale-[0.985] " +
               (isActive
-                ? "bg-card text-foreground shadow-[0_1px_2px_oklch(0.2_0.02_150_/_0.06),0_4px_10px_-2px_oklch(0.2_0.02_150_/_0.08)]"
-                : "text-muted-foreground hover:text-foreground active:bg-card/60")
+                ? "bg-card text-foreground shadow-[0_1px_0_0_oklch(1_0_0_/_0.6)_inset,0_2px_4px_-1px_oklch(0.2_0.02_150_/_0.1),0_8px_16px_-4px_oklch(0.2_0.02_150_/_0.08)] border border-border/20"
+                : "text-muted-foreground hover:text-foreground active:bg-card/50")
             }
           >
-            <span className="text-[13px] opacity-75">{t.emoji}</span>
+            <span className="text-[13px] opacity-80">{t.emoji}</span>
             {t.label}
           </button>
         );

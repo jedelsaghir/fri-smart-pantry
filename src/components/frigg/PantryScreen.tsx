@@ -7,6 +7,7 @@ import { ScanFab } from "./ScanFab";
 import { ReceiptScanFlow, type DetectedItem } from "./ReceiptScanFlow";
 import { toast } from "sonner";
 import { FinancialsScreen } from "./FinancialsScreen";
+import { LoginScreen } from "./LoginScreen";
 import { Snowflake, Calendar, ArrowRight, X, Users } from "lucide-react";
 import {
   Drawer,
@@ -111,6 +112,8 @@ function getFreezerExtensionDays(name: string): number {
 export function PantryScreen() {
   const [active, setActive] = useState<StorageKey>("fridge");
   const [activeView, setActiveView] = useState<"pantry" | "list" | "recipes" | "finances">("pantry");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [items, setItems] = useState(SEED);
   const [scanOpen, setScanOpen] = useState(false);
   const [addedBanner, setAddedBanner] = useState<{ count: number; message: string } | null>(null);
@@ -676,6 +679,10 @@ export function PantryScreen() {
     }
   };
 
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="relative min-h-screen pb-32 bg-background">
       <GlassHeader
@@ -690,6 +697,7 @@ export function PantryScreen() {
         familyMembers={familyMembers}
         isShared={true}
         onShowFamily={() => setShowFamilyDrawer(true)}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <main className="px-5 pt-5">
@@ -724,13 +732,18 @@ export function PantryScreen() {
                 <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-secondary/70 text-3xl">🛒</div>
                 <p className="mt-4 font-display text-xl text-foreground">Your list is empty</p>
                 <p className="mt-1 text-sm text-muted-foreground max-w-[240px] mx-auto">
-                  Tap “Generate Shopping List” on the Pantry tab to intelligently fill it.
+                  Tap the button below to intelligently fill it.
                 </p>
                 <button
-                  onClick={() => setActiveView("pantry")}
-                  className="mt-6 rounded-2xl border px-5 py-2 text-sm font-medium active:bg-secondary/60"
+                  onClick={generateShoppingList}
+                  className="mt-6 w-full flex items-center justify-center gap-2 rounded-3xl bg-[color-mix(in_oklab,var(--color-brand)_8%,var(--color-card))] border border-[color-mix(in_oklab,var(--color-brand)_25%,transparent)] py-3 text-sm font-semibold text-foreground active:scale-[0.985] transition"
                 >
-                  Go to Pantry
+                  🛒 Generate Shopping List
+                  {suggestedCount > 0 && (
+                    <span className="ml-1 rounded-full bg-[color-mix(in_oklab,var(--color-brand)_18%,transparent)] px-2 py-px text-[11px] font-bold tabular-nums">
+                      {suggestedCount}
+                    </span>
+                  )}
                 </button>
               </div>
             ) : (
@@ -913,25 +926,6 @@ export function PantryScreen() {
             <div className="flex items-center justify-between mb-1">
               <StorageTabs active={active} onChange={setActive} />
             </div>
-            {/* Shared family indicator */}
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1 px-1">
-              <Users className="size-3" />
-              Shared with family • 3 members
-            </div>
-
-            {/* Prominent Generate Shopping List button - premium one-tap */}
-            <button
-              onClick={generateShoppingList}
-              className="mt-4 w-full flex items-center justify-center gap-2 rounded-3xl bg-[color-mix(in_oklab,var(--color-brand)_8%,var(--color-card))] border border-[color-mix(in_oklab,var(--color-brand)_25%,transparent)] py-3 text-sm font-semibold text-foreground active:scale-[0.985] active:bg-[color-mix(in_oklab,var(--color-brand)_12%,var(--color-card))] transition"
-            >
-              🛒 Generate Shopping List
-              {suggestedCount > 0 && (
-                <span className="ml-1 rounded-full bg-[color-mix(in_oklab,var(--color-brand)_18%,transparent)] px-2 py-px text-[11px] font-bold tabular-nums">
-                  {suggestedCount}
-                </span>
-              )}
-            </button>
-
             {/* Silent success + motivational banner */}
             {addedBanner && (
               <div
@@ -959,7 +953,7 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              <ul className="mt-6 space-y-4">
+              <div className="mt-6 grid grid-cols-2 gap-3">
                 {current.map((item) => (
                   <ItemCard
                     key={item.id}
@@ -972,14 +966,17 @@ export function PantryScreen() {
                     onOpenDetails={() => openItemDetails(item, active)}
                   />
                 ))}
-              </ul>
+              </div>
             )}
           </>
         )}
       </main>
 
       {!isListView && !isRecipesView && !isFinancesView && <ScanFab onClick={() => setScanOpen(true)} />}
-      <BottomNav active={isListView ? "list" : isRecipesView ? "recipes" : isFinancesView ? "money" : "pantry"} onChange={(key) => {
+      <BottomNav 
+        active={isListView ? "list" : isRecipesView ? "recipes" : isFinancesView ? "money" : "pantry"} 
+        badges={{ list: suggestedCount > 0 ? suggestedCount : undefined }}
+        onChange={(key) => {
         if (key === "pantry" || key === "list") {
           setActiveView(key as "pantry" | "list");
           if (key === "pantry") setActive("fridge"); // reset to fridge when going back
@@ -998,6 +995,61 @@ export function PantryScreen() {
         onClose={() => setScanOpen(false)}
         onItemsAdded={addScannedItems}
       />
+
+      {/* Settings Drawer */}
+      <Drawer open={showSettings} onOpenChange={setShowSettings}>
+        <DrawerContent className="max-w-md mx-auto">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Settings</DrawerTitle>
+            <DrawerDescription>Manage your account and preferences</DrawerDescription>
+          </DrawerHeader>
+
+          <div className="px-5 pb-4 space-y-4 text-sm">
+            <div className="elevated-card rounded-3xl p-4 space-y-3">
+              <div className="font-semibold">Profile</div>
+              <div className="flex justify-between"><span>Elena Borg</span><span className="text-muted-foreground">Edit</span></div>
+              <div className="text-muted-foreground text-xs">elena@borg.family</div>
+            </div>
+
+            <div className="elevated-card rounded-3xl p-4 space-y-3">
+              <div className="font-semibold">Household</div>
+              <div>The Borg family • 3 members</div>
+              <div className="text-xs text-muted-foreground">Manage members and sharing</div>
+            </div>
+
+            <div className="elevated-card rounded-3xl p-4">
+              <div className="flex justify-between items-center">
+                <span>Notifications</span>
+                <span className="text-[var(--color-fresh)]">On</span>
+              </div>
+            </div>
+
+            <div className="elevated-card rounded-3xl p-4">
+              <div className="flex justify-between items-center">
+                <span>Dark mode</span>
+                <span className="text-muted-foreground">System</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowSettings(false);
+                setIsAuthenticated(false);
+                toast("Logged out");
+              }}
+              className="w-full rounded-3xl border py-3 text-sm font-semibold text-destructive active:bg-secondary/60"
+            >
+              Log out
+            </button>
+          </div>
+
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <button className="w-full rounded-3xl py-3 text-sm font-semibold border active:bg-secondary/60">Done</button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* Family / Activity Drawer */}
       <Drawer open={showFamilyDrawer} onOpenChange={setShowFamilyDrawer}>

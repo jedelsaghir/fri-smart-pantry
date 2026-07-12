@@ -1,4 +1,4 @@
-import { Bell, Users } from "lucide-react";
+import { Bell, Users, User } from "lucide-react";
 
 interface Props {
   household: string;
@@ -13,6 +13,7 @@ interface Props {
   familyMembers?: Array<{ name: string; emoji: string }>;
   isShared?: boolean;
   onShowFamily?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export function GlassHeader({
@@ -27,6 +28,7 @@ export function GlassHeader({
   familyMembers,
   isShared,
   onShowFamily,
+  onOpenSettings,
 }: Props) {
   const showAttentionDot = expiringSoon > 0;
   const resolvedLabel = attentionLabel ?? "need attention";
@@ -70,16 +72,25 @@ export function GlassHeader({
             )}
           </div>
 
-          <button
-            aria-label="Notifications"
-            className="relative grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
-            onClick={onShowFamily}
-          >
-            <Bell className="size-4" />
-            {showAttentionDot && (
-              <span className="absolute top-2 right-2 size-2.5 rounded-full ring-2 ring-[var(--color-card)] bg-[var(--color-expiring)]" />
-            )}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              aria-label="Account"
+              onClick={onOpenSettings}
+              className="grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
+            >
+              <User className="size-4" />
+            </button>
+            <button
+              aria-label="Notifications"
+              className="relative grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
+              onClick={onShowFamily}
+            >
+              <Bell className="size-4" />
+              {showAttentionDot && (
+                <span className="absolute top-2 right-2 size-2.5 rounded-full ring-2 ring-[var(--color-card)] bg-[var(--color-expiring)]" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Hero title area — calm & premium */}

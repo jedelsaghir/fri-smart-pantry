@@ -10,9 +10,11 @@ const ITEMS = [
 export function BottomNav({
   active,
   onChange,
+  badges = {},
 }: {
   active: string;
   onChange: (key: string) => void;
+  badges?: Record<string, number | string>;
 }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-2">
@@ -33,7 +35,14 @@ export function BottomNav({
                         : "text-muted-foreground hover:text-foreground active:bg-white/40 dark:active:bg-white/5")
                     }
                   >
+                    <div className="relative">
                     <Icon className="size-[21px]" strokeWidth={isActive ? 2.6 : 1.9} />
+                    {badges[it.key] && (
+                      <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-brand text-[9px] font-bold text-brand-foreground flex items-center justify-center tabular-nums">
+                        {badges[it.key]}
+                      </span>
+                    )}
+                  </div>
                     {it.label}
                   </button>
                 </li>

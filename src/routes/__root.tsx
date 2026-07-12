@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -146,6 +146,24 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Early theme script: sets dark class synchronously on client before React hydrates.
+            This avoids flash, hydration mismatches, and keeps all client-only logic out of
+            component render (prevents useContext null in HeadContent / router contexts during SSR). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('friggg-theme');
+                  var prefers = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  if (saved === 'dark' || (!saved && prefers)) {
+                    document.documentElement.classList.add('dark');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         <HeadContent />
       </head>
       <body>
@@ -169,17 +187,6 @@ function RootComponent() {
     }
     return new QueryClient();
   }, [routeCtx]);
-
-  // Apply saved or system theme early on client (useLayoutEffect to reduce flash, avoids SSR issues)
-  useLayoutEffect(() => {
-    const saved = localStorage.getItem("friggg-theme");
-    const prefers = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-    if (saved === "dark" || (!saved && prefers)) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
 
   // Register service worker for PWA + basic offline support
   useEffect(() => {

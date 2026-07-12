@@ -1,5 +1,3 @@
-"use client";
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -9,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -39,6 +37,29 @@ function NotFoundComponent() {
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
+
+  // Render a static fallback on server/ initial to avoid calling router hooks (which use internal context)
+  // before providers are ready. This prevents "useContext on null" during SSR/hydration for error cases.
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            This page didn't load
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Something went wrong on our end. You can try refreshing or head back home.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
@@ -136,16 +157,29 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
+  // Safe access with null check / default (prevents useContext errors if router context not yet provided)
+  const routeCtx = Route.useRouteContext() ?? {};
+  const queryClient = useMemo(() => {
+    const fromCtx = (routeCtx as { queryClient?: QueryClient }).queryClient;
+    if (fromCtx) return fromCtx;
+    // fallback (shouldn't normally be needed)
+    if (typeof window !== 'undefined') {
+      (window as any).__qc = (window as any).__qc || new QueryClient();
+      return (window as any).__qc;
+    }
+    return new QueryClient();
+  }, [routeCtx]);
 
-  // Apply saved or system theme as early as possible (prevents flash)
-  if (typeof document !== "undefined") {
+  // Apply saved or system theme early on client (useLayoutEffect to reduce flash, avoids SSR issues)
+  useLayoutEffect(() => {
     const saved = localStorage.getItem("friggg-theme");
     const prefers = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
     if (saved === "dark" || (!saved && prefers)) {
       document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
     }
-  }
+  }, []);
 
   // Register service worker for PWA + basic offline support
   useEffect(() => {

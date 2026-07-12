@@ -77,15 +77,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Friġġ — Smart Shared Family Pantry" },
+      { title: "Friġġ" },
       { name: "description", content: "Friġġ is a calm, premium pantry tracker for families — know what's in your fridge, freezer, and pantry at a glance." },
       { name: "author", content: "Friġġ" },
       { name: "theme-color", content: "#f6f4ee" },
-      { property: "og:title", content: "Friġġ — Smart Shared Family Pantry" },
-      { property: "og:description", content: "Track your fridge, freezer, and pantry — together." },
+      { property: "og:title", content: "Friġġ" },
+      { property: "og:description", content: "Friġġ is a calm, premium pantry tracker for families — know what's in your fridge, freezer, and pantry at a glance." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Friġġ" },
+      { name: "twitter:description", content: "Friġġ is a calm, premium pantry tracker for families — know what's in your fridge, freezer, and pantry at a glance." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fdf9824f-92c7-4004-a29d-e9ae3ee46728/id-preview-0a6701a8--ec87e693-e81a-46f5-90dd-408f1e0cb710.lovable.app-1783840622795.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fdf9824f-92c7-4004-a29d-e9ae3ee46728/id-preview-0a6701a8--ec87e693-e81a-46f5-90dd-408f1e0cb710.lovable.app-1783840622795.png" },
     ],
     links: [
       {

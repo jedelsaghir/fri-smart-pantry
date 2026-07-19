@@ -1009,14 +1009,15 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              /* FORCE minimal 1-column list — never grid-cols-2 */
+              /* FORCE 1-column stack — flex column only, never grid-cols-2 */
               <ul
-                className="pantry-item-list mt-5 grid !grid-cols-1 gap-2"
+                className="pantry-item-list mt-5"
                 data-layout="single-column"
+                data-cols="1"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr)",
-                  gridAutoFlow: "row",
+                  display: "flex",
+                  flexDirection: "column",
+                  flexWrap: "nowrap",
                   gap: "0.55rem",
                   width: "100%",
                   maxWidth: "100%",

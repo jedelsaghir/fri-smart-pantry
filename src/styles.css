@@ -268,19 +268,23 @@
 }
 
 /* ---------------------------------------------------------------------------
-   FORCE minimal 1-column pantry layout
-   One full-width card per row. Never grid-cols-2 / multi-column.
+   FORCE 1-column pantry layout — no matter what
+   Flex column stack only. Never grid-cols-2. Never multi-column.
    --------------------------------------------------------------------------- */
 .pantry-item-list,
 .pantry-item-list[data-layout="single-column"],
+.pantry-item-list[data-cols="1"],
 ul.pantry-item-list {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) !important;
-  grid-auto-columns: minmax(0, 1fr) !important;
-  grid-auto-flow: row !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
   gap: 0.55rem !important;
   width: 100% !important;
   max-width: 100% !important;
+  /* Nuke any grid / multi-col attempt */
+  grid-template-columns: none !important;
+  grid-auto-flow: row !important;
   columns: 1 !important;
   column-count: 1 !important;
   column-width: auto !important;
@@ -289,10 +293,14 @@ ul.pantry-item-list {
   padding: 0 !important;
 }
 
-/* Kill any 2-col utility that might leak onto the list */
+/* Explicitly override grid-cols-2 if a utility sneaks in */
+.pantry-item-list.grid,
+.pantry-item-list.grid-cols-1,
 .pantry-item-list.grid-cols-2,
-.pantry-item-list[class*="grid-cols-2"] {
-  grid-template-columns: minmax(0, 1fr) !important;
+.pantry-item-list[class*="grid-cols"] {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
 }
 
 .pantry-item-list > .pantry-item-row,
@@ -303,7 +311,7 @@ ul.pantry-item-list {
   max-width: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
-  grid-column: 1 / -1 !important;
+  flex: 0 0 auto !important;
   float: none !important;
   clear: both !important;
   break-inside: avoid !important;

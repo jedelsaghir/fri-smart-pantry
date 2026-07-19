@@ -149,13 +149,14 @@ export function ItemCard({
 
   return (
     <li
-      className="pantry-item-row list-none col-span-1 w-full"
+      className="pantry-item-row list-none w-full"
       data-layout="single-column"
+      data-cols="1"
       style={{
         display: "block",
         width: "100%",
         maxWidth: "100%",
-        gridColumn: "1 / -1",
+        flex: "0 0 auto",
         position: "relative",
         overflow: "hidden",
         borderRadius: "1.25rem",

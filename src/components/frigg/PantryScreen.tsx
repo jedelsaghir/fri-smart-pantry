@@ -951,19 +951,6 @@ export function PantryScreen() {
         ) : (
           // === PANTRY VIEW ===
           <>
-            {/* DIAGNOSTIC: if you do not see this bar, the preview is NOT running current main */}
-            <div
-              data-build-check="1col-2026-07-19"
-              className="mb-3 rounded-2xl px-3 py-2 text-center text-[12px] font-bold tracking-wide"
-              style={{
-                background: "oklch(0.75 0.18 145)",
-                color: "oklch(0.2 0.05 145)",
-                border: "2px solid oklch(0.55 0.15 145)",
-              }}
-            >
-              BUILD CHECK · 1-COLUMN LAYOUT · if missing, preview is stale
-            </div>
-
             {/* Full-width storage segmented control — never partial width */}
             <div
               className="mb-3"

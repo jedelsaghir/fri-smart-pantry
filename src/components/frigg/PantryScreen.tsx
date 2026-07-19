@@ -1009,47 +1009,15 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              /* FORCE 1-column: flex flex-col only — no grid of any kind */
               <div
                 id="pantry-item-list"
-                ref={(el) => {
-                  if (!el) return;
-                  // Runtime lock — overrides any leaked CSS utilities
-                  el.style.setProperty("display", "flex", "important");
-                  el.style.setProperty("flex-direction", "column", "important");
-                  el.style.setProperty("flex-wrap", "nowrap", "important");
-                  el.style.setProperty("align-items", "stretch", "important");
-                  el.style.setProperty("gap", "1rem", "important");
-                  el.style.setProperty("width", "100%", "important");
-                  el.style.setProperty("max-width", "100%", "important");
-                  el.style.setProperty("grid-template-columns", "none", "important");
-                  el.style.setProperty("columns", "1", "important");
-                  el.style.setProperty("column-count", "1", "important");
-                  Array.from(el.children).forEach((child) => {
-                    const node = child as HTMLElement;
-                    node.style.setProperty("display", "block", "important");
-                    node.style.setProperty("width", "100%", "important");
-                    node.style.setProperty("max-width", "100%", "important");
-                    node.style.setProperty("min-width", "100%", "important");
-                    node.style.setProperty("flex", "0 0 auto", "important");
-                    node.style.setProperty("float", "none", "important");
-                  });
-                }}
-                className="pantry-item-list mt-5 flex flex-col gap-4 w-full"
-                data-layout="single-column"
-                data-cols="1"
                 role="list"
+                className="pantry-item-list mt-5 flex w-full flex-col gap-4"
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  flexWrap: "nowrap",
-                  alignItems: "stretch",
                   gap: "1rem",
                   width: "100%",
-                  maxWidth: "100%",
-                  margin: 0,
-                  marginTop: "1.25rem",
-                  padding: 0,
                 }}
               >
                 {[...current]

@@ -8,10 +8,7 @@ const TABS: { key: StorageKey; label: string; emoji: string }[] = [
   { key: "pantry", label: "Pantry", emoji: "◇" },
 ];
 
-/**
- * Full-width premium segmented control for storage location.
- * Always spans the entire row — never multi-column item layout.
- */
+/** Full-width glass segmented control — always one row spanning the content width */
 export function StorageTabs({
   active,
   onChange,
@@ -23,15 +20,23 @@ export function StorageTabs({
     <div
       role="tablist"
       aria-label="Storage location"
-      className="storage-tabs-premium grid w-full max-w-full grid-cols-3 gap-1 rounded-[1.5rem] border border-border/40 p-1.5 shadow-[inset_0_1px_0_oklch(1_0_0_/_0.45),0_8px_24px_-12px_oklch(0.2_0.02_150_/_0.08)]"
+      data-storage-tabs="full-width"
+      className="storage-tabs-premium"
       style={{
-        width: "100%",
         display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr",
-        background:
-          "color-mix(in oklab, var(--color-secondary) 72%, transparent)",
-        backdropFilter: "saturate(180%) blur(20px)",
-        WebkitBackdropFilter: "saturate(180%) blur(20px)",
+        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        width: "100%",
+        maxWidth: "100%",
+        gap: "0.3rem",
+        padding: "0.4rem",
+        borderRadius: "1.5rem",
+        boxSizing: "border-box",
+        border: "1px solid color-mix(in oklab, var(--color-border) 45%, transparent)",
+        background: "color-mix(in oklab, var(--color-secondary) 68%, transparent)",
+        backdropFilter: "saturate(190%) blur(22px)",
+        WebkitBackdropFilter: "saturate(190%) blur(22px)",
+        boxShadow:
+          "inset 0 1px 0 oklch(1 0 0 / 0.45), 0 10px 28px -14px oklch(0.2 0.02 150 / 0.1)",
       }}
     >
       {TABS.map((t) => {
@@ -43,18 +48,32 @@ export function StorageTabs({
             type="button"
             aria-selected={isActive}
             onClick={() => onChange(t.key)}
-            className={
-              "flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[1.15rem] px-2 py-3.5 text-[14px] font-semibold tracking-[-0.02em] transition-all duration-200 active:scale-[0.985] " +
-              (isActive
-                ? "bg-card text-foreground border border-border/30 shadow-[0_1px_0_0_oklch(1_0_0_/_0.7)_inset,0_2px_8px_-2px_oklch(0.2_0.02_150_/_0.14),0_12px_28px_-10px_oklch(0.2_0.02_150_/_0.12)]"
-                : "border border-transparent text-muted-foreground hover:text-foreground/90 active:bg-card/35")
-            }
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.45rem",
+              width: "100%",
+              minHeight: "3.35rem",
+              padding: "0.85rem 0.5rem",
+              borderRadius: "1.15rem",
+              border: isActive
+                ? "1px solid color-mix(in oklab, var(--color-border) 40%, transparent)"
+                : "1px solid transparent",
+              background: isActive ? "var(--color-card)" : "transparent",
+              color: isActive ? "var(--color-foreground)" : undefined,
+              fontSize: "0.9rem",
+              fontWeight: 600,
+              letterSpacing: "-0.02em",
+              cursor: "pointer",
+              transition: "transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease",
+              boxShadow: isActive
+                ? "0 1px 0 0 oklch(1 0 0 / 0.7) inset, 0 4px 12px -4px oklch(0.2 0.02 150 / 0.14), 0 14px 28px -12px oklch(0.2 0.02 150 / 0.1)"
+                : "none",
+            }}
+            className={isActive ? "text-foreground" : "text-muted-foreground"}
           >
-            <span
-              className={
-                "text-[16px] leading-none " + (isActive ? "opacity-95" : "opacity-60")
-              }
-            >
+            <span style={{ fontSize: "1rem", opacity: isActive ? 0.95 : 0.6 }} aria-hidden>
               {t.emoji}
             </span>
             <span>{t.label}</span>

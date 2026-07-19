@@ -16,7 +16,7 @@ Everything stays private on your device. Works beautifully as a Progressive Web 
 
 ## Key Features
 
-- **Smart Inventory Tracking** — Beautiful card grid for fridge, freezer, and pantry. Quick +/- quantity, min stock controls, and live status pills (Fresh, Warning, Expiring soon, etc.).
+- **Smart Inventory Tracking** — Premium single-column cards for fridge, freezer, and pantry. Calm list shows emoji, name, status, days left, and quantity; tap for quantity/min stock controls and move actions.
 - **Expiration Management** — Edit days remaining directly. Freezer moves automatically extend shelf life using realistic guidelines.
 - **Premium Details Drawer** — Tap or long-press any card for rich item details: quantity, expiration, min stock, and **Quick Actions** (Move to Fridge / Freezer / Pantry).
 - **Receipt Scanner** — Simulated high-fidelity scan flow with review for ambiguous items and optional (non-intrusive) expiration photo prompt.
@@ -33,7 +33,7 @@ Everything stays private on your device. Works beautifully as a Progressive Web 
 Clean centered hero with the Friġġ wordmark and milk emoji. Segmented auth tabs. After creating an account you flow through three elegant steps: a welcoming intro, household name picker with suggestions, and a profile screen with avatar emoji choices. Smooth transitions and delightful micro-details.
 
 **Main Pantry View**  
-Glassmorphic sticky header with household name, subtle shared badge, family avatars, and stats (total items + attention count). Storage tabs (Fridge / Freezer / Pantry). Elegant 2-column grid of elevated cards showing emoji, name, status pill + days, quantity stepper, and min stock controls. Add-to-home-screen install banner when appropriate.
+Glassmorphic sticky header with household name, subtle shared badge, family avatars, and stats (total items + attention count). Full-width storage tabs (Fridge / Freezer / Pantry). Single-column elevated cards (one item per row) showing emoji, name, status pill + days left, and current quantity only — min stock and steppers open in the details drawer. Add-to-home-screen install banner when appropriate.
 
 **Item Details Drawer**  
 Rich bottom sheet opened by tapping the emoji/name or long-pressing the card. Large emoji header with status pill, live editable Quantity, Expiration (big +/-), and Minimum stock. Prominent **Quick Actions** three-column grid: Fridge, Freezer (shows extension days), Pantry. Current location is visually de-emphasized. Polished Done footer.

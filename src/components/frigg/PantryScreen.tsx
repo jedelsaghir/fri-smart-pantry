@@ -936,8 +936,11 @@ export function PantryScreen() {
         ) : (
           // === PANTRY VIEW ===
           <>
-            {/* Full-width storage segmented control */}
-            <div className="mb-2 w-full max-w-full" style={{ width: "100%" }}>
+            {/* Full-width storage segmented control — never partial width */}
+            <div
+              className="mb-3"
+              style={{ width: "100%", maxWidth: "100%", display: "block" }}
+            >
               <StorageTabs active={active} onChange={setActive} />
             </div>
             {/* Silent success + motivational banner */}
@@ -991,18 +994,14 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              /* FORCE single-column list — never grid-cols-2 */
-              <ul
+              /* HARD single-column: one full-width card per row — no CSS grid */
+              <div
                 className="pantry-item-list mt-6"
+                data-layout="single-column"
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1.125rem",
+                  display: "block",
                   width: "100%",
                   maxWidth: "100%",
-                  margin: 0,
-                  padding: 0,
-                  listStyle: "none",
                 }}
               >
                 {[...current]
@@ -1012,19 +1011,39 @@ export function PantryScreen() {
                       numeric: true,
                     })
                   )
-                  .map((item) => (
-                    <ItemCard
+                  .map((item, index) => (
+                    <div
                       key={item.id}
-                      item={item}
-                      storage={active}
-                      onInc={() => updateQty(item.id, +1)}
-                      onDec={() => updateQty(item.id, -1)}
-                      onUpdateMinStock={(newMin) => updateMinStock(item.id, newMin)}
-                      onUpdateDaysLeft={(newDays) => updateDaysLeft(item.id, newDays)}
-                      onOpenDetails={() => openItemDetails(item, active)}
-                    />
+                      className="pantry-item-row"
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        maxWidth: "100%",
+                        marginTop: index === 0 ? 0 : "1.25rem",
+                      }}
+                    >
+                      <ul
+                        style={{
+                          display: "block",
+                          margin: 0,
+                          padding: 0,
+                          listStyle: "none",
+                          width: "100%",
+                        }}
+                      >
+                        <ItemCard
+                          item={item}
+                          storage={active}
+                          onInc={() => updateQty(item.id, +1)}
+                          onDec={() => updateQty(item.id, -1)}
+                          onUpdateMinStock={(newMin) => updateMinStock(item.id, newMin)}
+                          onUpdateDaysLeft={(newDays) => updateDaysLeft(item.id, newDays)}
+                          onOpenDetails={() => openItemDetails(item, active)}
+                        />
+                      </ul>
+                    </div>
                   ))}
-              </ul>
+              </div>
             )}
           </>
         )}

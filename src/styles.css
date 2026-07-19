@@ -268,30 +268,46 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Force premium single-column pantry layout (never 2-col item grids)
+   FORCE premium single-column pantry layout
+   One item per row. Never grid-cols-2. Apple Health–style stack.
    --------------------------------------------------------------------------- */
-.pantry-item-list {
-  display: flex !important;
-  flex-direction: column !important;
-  grid-template-columns: none !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  gap: 1.125rem !important;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pantry-item-list > .pantry-item-card,
-.pantry-item-list > li {
+.pantry-item-list,
+.pantry-item-list[data-layout="single-column"] {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
-  flex: 0 0 auto !important;
+  columns: 1 !important;
+  column-count: 1 !important;
+  grid-template-columns: none !important;
+  grid-auto-flow: row !important;
+}
+
+.pantry-item-list .pantry-item-row,
+.pantry-item-list .pantry-item-card,
+.pantry-item-list li {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  float: none !important;
+  clear: both !important;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+  box-sizing: border-box !important;
+}
+
+/* Kill any accidental multi-column / 2-col grid on pantry descendants */
+.pantry-item-list * {
   grid-column: auto !important;
+}
+
+.pantry-item-list ul {
+  display: block !important;
+  width: 100% !important;
 }
 
 .storage-tabs-premium {
   width: 100% !important;
   max-width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
 }

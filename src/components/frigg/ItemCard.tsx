@@ -5,13 +5,17 @@ import type { PantryItem, ItemStatus, StorageKey } from "@/types/pantry";
 
 export type { PantryItem, ItemStatus };
 
-/** Compact status copy for calm cards */
 function shortStatusLabel(label: string): string {
   if (label === "Expiring soon") return "Soon";
   if (label === "Use today") return "Today";
   return label;
 }
 
+/**
+ * Premium single-column pantry card.
+ * Shows ONLY: emoji, name, status, days left, quantity.
+ * Min stock + steppers live exclusively in the details drawer.
+ */
 export function ItemCard({
   item,
   storage,
@@ -23,7 +27,6 @@ export function ItemCard({
 }: {
   item: PantryItem;
   storage?: StorageKey;
-  /** Kept for API compatibility — qty/min controls live in details drawer only */
   onInc?: () => void;
   onDec?: () => void;
   onUpdateMinStock?: (newMin: number) => void;
@@ -37,7 +40,6 @@ export function ItemCard({
   void onUpdateDaysLeft;
 
   const status = getStatus(item.daysLeft);
-
   const longPressTimer = useRef<number | null>(null);
   const longPressTriggered = useRef(false);
 
@@ -54,17 +56,13 @@ export function ItemCard({
     longPressTimer.current = window.setTimeout(() => {
       longPressTriggered.current = true;
       onOpenDetails?.();
-      if (navigator.vibrate) {
-        navigator.vibrate(10);
-      }
+      if (navigator.vibrate) navigator.vibrate(10);
     }, 520);
   };
 
-  const endLongPress = () => {
-    clearLongPress();
-  };
+  const endLongPress = () => clearLongPress();
 
-  const handleClick = () => {
+  const open = () => {
     if (longPressTriggered.current) {
       longPressTriggered.current = false;
       return;
@@ -76,14 +74,23 @@ export function ItemCard({
     <li
       role="button"
       tabIndex={0}
+      data-pantry-card="single-column"
       aria-label={`${item.name}, ${item.qty} ${item.unit}, ${status.label}, ${item.daysLeft} days left. Tap for details.`}
-      className="pantry-item-card elevated-card w-full max-w-full cursor-pointer select-none list-none rounded-[1.85rem] px-5 py-5 transition-[transform,box-shadow] duration-200 active:scale-[0.992]"
-      style={{ display: "block", width: "100%" }}
+      className="pantry-item-card elevated-card cursor-pointer select-none list-none"
+      style={{
+        display: "block",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        borderRadius: "1.85rem",
+        padding: "1.25rem 1.35rem",
+        margin: 0,
+      }}
       onPointerDown={startLongPress}
       onPointerUp={endLongPress}
       onPointerLeave={endLongPress}
       onPointerCancel={endLongPress}
-      onClick={handleClick}
+      onClick={open}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -91,70 +98,147 @@ export function ItemCard({
         }
       }}
     >
-      {/* Single-column Apple Health–style row: emoji | meta | qty */}
-      <div className="flex w-full items-center gap-4">
-        {/* Large emoji tile */}
+      {/* Top: large emoji + name */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+          width: "100%",
+        }}
+      >
         <div
-          className="grid size-16 shrink-0 place-items-center rounded-[1.35rem] bg-secondary text-[2.15rem] leading-none shadow-[inset_0_1px_0_oklch(1_0_0_/_0.6)] ring-1 ring-border/20"
           aria-hidden
+          style={{
+            width: "4.25rem",
+            height: "4.25rem",
+            flexShrink: 0,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: "1.35rem",
+            fontSize: "2.25rem",
+            lineHeight: 1,
+            background: "var(--color-secondary)",
+            boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.55)",
+          }}
+          className="ring-1 ring-border/20"
         >
           {item.emoji}
         </div>
 
-        {/* Name + status only */}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[17px] font-semibold leading-snug tracking-[-0.025em] text-foreground">
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p
+            className="truncate text-foreground"
+            style={{
+              margin: 0,
+              fontSize: "1.125rem",
+              fontWeight: 600,
+              letterSpacing: "-0.025em",
+              lineHeight: 1.25,
+            }}
+          >
             {item.name}
           </p>
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+
+          {/* Status + days — only meta on card */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "0.5rem 0.75rem",
+              marginTop: "0.65rem",
+            }}
+          >
             <span
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[-0.01em]"
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                borderRadius: "999px",
+                padding: "0.2rem 0.65rem",
+                fontSize: "0.6875rem",
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
                 backgroundColor: `color-mix(in oklab, ${status.color} 11%, var(--color-card))`,
                 color: status.color,
                 border: `1px solid color-mix(in oklab, ${status.color} 14%, transparent)`,
               }}
             >
               <span
-                className="size-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: status.color }}
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "999px",
+                  backgroundColor: status.color,
+                  flexShrink: 0,
+                }}
               />
               {shortStatusLabel(status.label)}
             </span>
-            <span className="text-[13px] font-medium tabular-nums tracking-[-0.01em] text-muted-foreground">
+            <span
+              className="text-muted-foreground"
+              style={{
+                fontSize: "0.8125rem",
+                fontWeight: 500,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
               {item.daysLeft}d left
             </span>
           </div>
         </div>
+      </div>
 
-        {/* Current quantity only — no min stock, no stepper */}
-        <div className="shrink-0 self-center rounded-2xl bg-secondary/50 px-3.5 py-2.5 text-right ring-1 ring-border/20">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Qty
-          </p>
-          <p className="mt-0.5 text-[16px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-foreground">
-            {item.qty}
-            <span className="ml-1 text-[12px] font-medium text-muted-foreground">{item.unit}</span>
-          </p>
-        </div>
+      {/* Bottom: quantity only (no min stock, no stepper) */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginTop: "1.1rem",
+          paddingTop: "0.95rem",
+          borderTop: "1px solid color-mix(in oklab, var(--color-border) 55%, transparent)",
+        }}
+      >
+        <span
+          className="text-muted-foreground"
+          style={{
+            fontSize: "0.6875rem",
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          Quantity
+        </span>
+        <span
+          className="text-foreground"
+          style={{
+            fontSize: "1.05rem",
+            fontWeight: 600,
+            fontVariantNumeric: "tabular-nums",
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {item.qty}
+          <span
+            className="text-muted-foreground"
+            style={{ marginLeft: "0.35rem", fontSize: "0.8125rem", fontWeight: 500 }}
+          >
+            {item.unit}
+          </span>
+        </span>
       </div>
     </li>
   );
 }
 
 function getStatus(daysLeft: number): ItemStatus {
-  if (daysLeft <= 0) {
-    return { label: "Expired", color: "var(--color-expiring)" };
-  }
-  if (daysLeft <= 1) {
-    return { label: "Use today", color: "var(--color-expiring)" };
-  }
-  if (daysLeft <= 3) {
-    return { label: "Expiring soon", color: "var(--color-soon)" };
-  }
-  if (daysLeft <= 7) {
-    return { label: "Warning", color: "var(--color-soon)" };
-  }
+  if (daysLeft <= 0) return { label: "Expired", color: "var(--color-expiring)" };
+  if (daysLeft <= 1) return { label: "Use today", color: "var(--color-expiring)" };
+  if (daysLeft <= 3) return { label: "Expiring soon", color: "var(--color-soon)" };
+  if (daysLeft <= 7) return { label: "Warning", color: "var(--color-soon)" };
   return { label: "Fresh", color: "var(--color-fresh)" };
 }
 

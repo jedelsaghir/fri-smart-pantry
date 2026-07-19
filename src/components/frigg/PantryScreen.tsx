@@ -36,6 +36,7 @@ import {
   getDefaultDaysLeft,
   getDefaultMinStock,
 } from "@/hooks/usePantry";
+import { useReceipts } from "@/hooks/useReceipts";
 import { ManageFamilyPage } from "./ManageFamilyPage";
 import {
   buildInviteUrl,
@@ -251,6 +252,8 @@ export function PantryScreen() {
     addScannedItems,
     dismissBanner,
   } = usePantry({ onActivity: addActivity });
+
+  const { receipts, addReceipt, removeReceipt } = useReceipts();
 
   const handleDeleteItem = useCallback(
     (id: string) => {
@@ -512,8 +515,20 @@ export function PantryScreen() {
   const checkedCount = shoppingList.filter((i) => i.checked).length;
 
   // For list view we show different header stats
-  const headerTotal = isListView ? listCount : isRecipesView ? 6 : isFinancesView ? 18 : current.length;
-  const headerAttention = isListView ? checkedCount : isRecipesView ? 3 : isFinancesView ? 5 : expiringSoon;
+  const headerTotal = isListView
+    ? listCount
+    : isRecipesView
+      ? 6
+      : isFinancesView
+        ? receipts.length
+        : current.length;
+  const headerAttention = isListView
+    ? checkedCount
+    : isRecipesView
+      ? 3
+      : isFinancesView
+        ? new Set(receipts.map((r) => r.store)).size
+        : expiringSoon;
   const attentionTone = isListView || isRecipesView || isFinancesView ? "calm" : (headerAttention > 0 ? "warn" : "calm");
 
   // === RECIPES DATA & HELPERS ===
@@ -733,7 +748,9 @@ export function PantryScreen() {
         title={isListView ? "Shopping List" : isRecipesView ? "Recipes" : isFinancesView ? "Finances" : "Your Friġġ"}
         subtitle={isListView ? "Restock smart" : isRecipesView ? "Cook with what you have" : isFinancesView ? "July 2026" : `Good morning, ${userName}`}
         totalLabel={isFinancesView ? "receipts" : isRecipesView ? "ideas" : undefined}
-        attentionLabel={isListView ? "checked" : isFinancesView ? "categories" : isRecipesView ? "ready" : undefined}
+        attentionLabel={
+          isListView ? "checked" : isFinancesView ? "stores" : isRecipesView ? "ready" : undefined
+        }
         attentionTone={isListView || isRecipesView || isFinancesView ? "calm" : undefined}
         familyMembers={familyMembers}
         isShared={true}
@@ -959,8 +976,8 @@ export function PantryScreen() {
             </p>
           </div>
         ) : isFinancesView ? (
-          // === FINANCIALS / MONEY VIEW - premium charts & insights ===
-          <FinancialsScreen />
+          // === FINANCIALS / MONEY VIEW - receipts + charts ===
+          <FinancialsScreen receipts={receipts} onDeleteReceipt={removeReceipt} />
         ) : (
           // === PANTRY VIEW ===
           <>
@@ -1069,6 +1086,10 @@ export function PantryScreen() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         onItemsAdded={addScannedItems}
+        onReceiptSaved={(receipt) => {
+          addReceipt(receipt);
+          addActivity("You", `saved receipt from ${receipt.store}`);
+        }}
       />
 
       {/* Settings Drawer — premium polished */}

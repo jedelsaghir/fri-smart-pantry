@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Camera, Image as ImageIcon, X, Loader2, Check, Trash2 } from "lucide-react";
 import { StorageTabs } from "./StorageTabs";
-import type { StorageKey, DetectedItem } from "@/types/pantry";
+import type { StorageKey, DetectedItem, StoredReceipt } from "@/types/pantry";
 import { toast } from "sonner";
+import { buildReceiptFromScan, readFileAsDataUrl } from "@/lib/receipts";
 
 export type { DetectedItem };
 
@@ -12,6 +13,8 @@ interface ReceiptScanFlowProps {
   open: boolean;
   onClose: () => void;
   onItemsAdded: (items: Array<Omit<DetectedItem, "confidence" | "id">>, options?: { silent?: boolean }) => void;
+  /** Persist full receipt (photo + line items) for Finances history */
+  onReceiptSaved?: (receipt: StoredReceipt) => void;
 }
 
 // Realistic mock receipt results
@@ -74,12 +77,19 @@ function formatStorageLabel(storage: StorageKey) {
   return storage === "fridge" ? "Fridge" : storage === "freezer" ? "Freezer" : "Pantry";
 }
 
-export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlowProps) {
+export function ReceiptScanFlow({
+  open,
+  onClose,
+  onItemsAdded,
+  onReceiptSaved,
+}: ReceiptScanFlowProps) {
   const [step, setStep] = useState<"capture" | "processing" | "review" | "prompt">("capture");
   const [detected, setDetected] = useState<DetectedItem[]>([]);
   const [reviewItems, setReviewItems] = useState<DetectedItem[]>([]);
   const [previewReceipt, setPreviewReceipt] = useState(false);
   const [addedCountForPrompt, setAddedCountForPrompt] = useState(0);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const receiptSavedRef = useRef(false);
 
   if (!open) return null;
 
@@ -89,6 +99,8 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
     setReviewItems([]);
     setPreviewReceipt(false);
     setAddedCountForPrompt(0);
+    setCapturedImage(null);
+    receiptSavedRef.current = false;
   };
 
   const handleClose = () => {
@@ -96,9 +108,27 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
     onClose();
   };
 
-  const startProcessing = () => {
+  const saveReceiptSnapshot = (allItems: DetectedItem[], imageDataUrl: string | null) => {
+    if (receiptSavedRef.current || allItems.length === 0) return;
+    receiptSavedRef.current = true;
+    const receipt = buildReceiptFromScan({
+      items: allItems.map(({ name, qty, unit, emoji, storage }) => ({
+        name,
+        qty,
+        unit,
+        emoji,
+        storage,
+      })),
+      imageDataUrl,
+    });
+    onReceiptSaved?.(receipt);
+  };
+
+  const startProcessing = (imageDataUrl: string | null = null) => {
+    setCapturedImage(imageDataUrl);
     setPreviewReceipt(true);
     setStep("processing");
+    receiptSavedRef.current = false;
 
     // Realistic 600-800ms processing
     const delay = 650 + Math.random() * 150;
@@ -123,9 +153,12 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
         setReviewItems(ambiguous);
         setStep("review");
       } else {
-        // High confidence — silently added, show clean toast then optional prompt
+        // High confidence — save full receipt, toast, optional prompt
+        saveReceiptSnapshot(results, imageDataUrl);
         const count = autoItems.length;
-        toast.success("Pantry Updated");
+        toast.success("Pantry Updated", {
+          description: "Receipt saved in Finances",
+        });
         setAddedCountForPrompt(count);
         setStep("prompt");
       }
@@ -133,14 +166,19 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
   };
 
   const handleTakePhoto = () => {
-    startProcessing();
+    // Demo capture: no camera stream — receipt image generated when saving
+    startProcessing(null);
   };
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // We don't actually read the image for the demo
-      startProcessing();
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        startProcessing(dataUrl);
+      } catch {
+        startProcessing(null);
+      }
     }
     // Reset input so same file can be chosen again
     e.target.value = "";
@@ -159,6 +197,9 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
 
   const confirmReview = () => {
     if (reviewItems.length === 0) {
+      // Still persist receipt from auto-detected high-confidence items
+      const autoOnly = detected.filter((i) => i.confidence >= 0.8);
+      if (autoOnly.length > 0) saveReceiptSnapshot(autoOnly, capturedImage);
       handleClose();
       return;
     }
@@ -166,8 +207,16 @@ export function ReceiptScanFlow({ open, onClose, onItemsAdded }: ReceiptScanFlow
     const toAdd = reviewItems.map(({ id, confidence, ...rest }) => rest);
     onItemsAdded(toAdd, { silent: true });
 
+    const allForReceipt = [
+      ...detected.filter((i) => i.confidence >= 0.8),
+      ...reviewItems,
+    ];
+    saveReceiptSnapshot(allForReceipt, capturedImage);
+
     const count = toAdd.length;
-    toast.success("Pantry Updated");
+    toast.success("Pantry Updated", {
+      description: "Receipt saved in Finances",
+    });
 
     setAddedCountForPrompt(count);
     setStep("prompt");

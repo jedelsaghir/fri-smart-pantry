@@ -37,6 +37,35 @@ export interface DetectedItem {
 /** Payload used when adding scanned items into the pantry */
 export type ScannedItemInput = Omit<DetectedItem, "id" | "confidence">;
 
+/** Single line on a saved receipt */
+export type ReceiptLineItem = {
+  id: string;
+  name: string;
+  qty: number;
+  unit: string;
+  emoji: string;
+  /** Unit price or line total in EUR */
+  price: number;
+  category?: string;
+  storage?: StorageKey;
+};
+
+/** Persisted receipt with original photo (data URL) + parsed breakdown */
+export type StoredReceipt = {
+  id: string;
+  /** ISO date string (yyyy-mm-dd or full ISO) */
+  date: string;
+  store: string;
+  total: number;
+  currency: string;
+  /** Original photo as data URL (or generated mock image) */
+  imageDataUrl: string;
+  items: ReceiptLineItem[];
+  /** When the receipt was saved into the app */
+  createdAt: string;
+  note?: string;
+};
+
 export type ShoppingListItem = {
   id: string;
   name: string;

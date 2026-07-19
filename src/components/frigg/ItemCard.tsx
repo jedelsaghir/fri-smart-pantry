@@ -76,15 +76,17 @@ export function ItemCard({
       tabIndex={0}
       data-pantry-card="single-column"
       aria-label={`${item.name}, ${item.qty} ${item.unit}, ${status.label}, ${item.daysLeft} days left. Tap for details.`}
-      className="pantry-item-card elevated-card cursor-pointer select-none list-none"
+      className="pantry-item-card elevated-card cursor-pointer select-none list-none col-span-1 w-full"
       style={{
         display: "block",
         width: "100%",
         maxWidth: "100%",
+        minHeight: "9.5rem",
         boxSizing: "border-box",
         borderRadius: "1.85rem",
-        padding: "1.25rem 1.35rem",
+        padding: "1.5rem 1.5rem 1.35rem",
         margin: 0,
+        gridColumn: "1 / -1",
       }}
       onPointerDown={startLongPress}
       onPointerUp={endLongPress}
@@ -98,25 +100,25 @@ export function ItemCard({
         }
       }}
     >
-      {/* Top: large emoji + name */}
+      {/* Top: large emoji + name — tall, spacious card */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "1rem",
+          gap: "1.15rem",
           width: "100%",
         }}
       >
         <div
           aria-hidden
           style={{
-            width: "4.25rem",
-            height: "4.25rem",
+            width: "4.75rem",
+            height: "4.75rem",
             flexShrink: 0,
             display: "grid",
             placeItems: "center",
-            borderRadius: "1.35rem",
-            fontSize: "2.25rem",
+            borderRadius: "1.4rem",
+            fontSize: "2.5rem",
             lineHeight: 1,
             background: "var(--color-secondary)",
             boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.55)",
@@ -131,7 +133,7 @@ export function ItemCard({
             className="truncate text-foreground"
             style={{
               margin: 0,
-              fontSize: "1.125rem",
+              fontSize: "1.2rem",
               fontWeight: 600,
               letterSpacing: "-0.025em",
               lineHeight: 1.25,
@@ -147,7 +149,7 @@ export function ItemCard({
               flexWrap: "wrap",
               alignItems: "center",
               gap: "0.5rem 0.75rem",
-              marginTop: "0.65rem",
+              marginTop: "0.75rem",
             }}
           >
             <span
@@ -156,8 +158,8 @@ export function ItemCard({
                 alignItems: "center",
                 gap: "0.35rem",
                 borderRadius: "999px",
-                padding: "0.2rem 0.65rem",
-                fontSize: "0.6875rem",
+                padding: "0.28rem 0.75rem",
+                fontSize: "0.75rem",
                 fontWeight: 600,
                 letterSpacing: "-0.01em",
                 backgroundColor: `color-mix(in oklab, ${status.color} 11%, var(--color-card))`,
@@ -179,7 +181,7 @@ export function ItemCard({
             <span
               className="text-muted-foreground"
               style={{
-                fontSize: "0.8125rem",
+                fontSize: "0.875rem",
                 fontWeight: 500,
                 fontVariantNumeric: "tabular-nums",
               }}
@@ -196,8 +198,8 @@ export function ItemCard({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginTop: "1.1rem",
-          paddingTop: "0.95rem",
+          marginTop: "1.35rem",
+          paddingTop: "1.1rem",
           borderTop: "1px solid color-mix(in oklab, var(--color-border) 55%, transparent)",
         }}
       >
@@ -215,7 +217,7 @@ export function ItemCard({
         <span
           className="text-foreground"
           style={{
-            fontSize: "1.05rem",
+            fontSize: "1.125rem",
             fontWeight: 600,
             fontVariantNumeric: "tabular-nums",
             letterSpacing: "-0.02em",
@@ -224,7 +226,7 @@ export function ItemCard({
           {item.qty}
           <span
             className="text-muted-foreground"
-            style={{ marginLeft: "0.35rem", fontSize: "0.8125rem", fontWeight: 500 }}
+            style={{ marginLeft: "0.35rem", fontSize: "0.875rem", fontWeight: 500 }}
           >
             {item.unit}
           </span>

@@ -269,40 +269,35 @@
 
 /* ---------------------------------------------------------------------------
    FORCE premium single-column pantry layout
-   One item per row. Never grid-cols-2. Apple Health–style stack.
+   One full-width card per row. grid-cols-1 only — never grid-cols-2.
    --------------------------------------------------------------------------- */
 .pantry-item-list,
 .pantry-item-list[data-layout="single-column"] {
-  display: block !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-auto-flow: row !important;
+  gap: 1.25rem !important;
   width: 100% !important;
   max-width: 100% !important;
   columns: 1 !important;
   column-count: 1 !important;
-  grid-template-columns: none !important;
-  grid-auto-flow: row !important;
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.pantry-item-list .pantry-item-row,
 .pantry-item-list .pantry-item-card,
-.pantry-item-list li {
+.pantry-item-list > li {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
+  min-height: 9.5rem !important;
+  grid-column: 1 / -1 !important;
   float: none !important;
   clear: both !important;
   break-inside: avoid !important;
   page-break-inside: avoid !important;
   box-sizing: border-box !important;
-}
-
-/* Kill any accidental multi-column / 2-col grid on pantry descendants */
-.pantry-item-list * {
-  grid-column: auto !important;
-}
-
-.pantry-item-list ul {
-  display: block !important;
-  width: 100% !important;
 }
 
 .storage-tabs-premium {

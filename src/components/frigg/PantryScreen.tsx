@@ -994,14 +994,19 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              /* HARD single-column: one full-width card per row — no CSS grid */
-              <div
-                className="pantry-item-list mt-6"
+              /* FORCE 1-column: grid-cols-1 only — never grid-cols-2 */
+              <ul
+                className="pantry-item-list mt-6 grid grid-cols-1 gap-5"
                 data-layout="single-column"
                 style={{
-                  display: "block",
+                  display: "grid",
+                  gridTemplateColumns: "1fr",
+                  gap: "1.25rem",
                   width: "100%",
                   maxWidth: "100%",
+                  margin: 0,
+                  padding: 0,
+                  listStyle: "none",
                 }}
               >
                 {[...current]
@@ -1011,39 +1016,19 @@ export function PantryScreen() {
                       numeric: true,
                     })
                   )
-                  .map((item, index) => (
-                    <div
+                  .map((item) => (
+                    <ItemCard
                       key={item.id}
-                      className="pantry-item-row"
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        maxWidth: "100%",
-                        marginTop: index === 0 ? 0 : "1.25rem",
-                      }}
-                    >
-                      <ul
-                        style={{
-                          display: "block",
-                          margin: 0,
-                          padding: 0,
-                          listStyle: "none",
-                          width: "100%",
-                        }}
-                      >
-                        <ItemCard
-                          item={item}
-                          storage={active}
-                          onInc={() => updateQty(item.id, +1)}
-                          onDec={() => updateQty(item.id, -1)}
-                          onUpdateMinStock={(newMin) => updateMinStock(item.id, newMin)}
-                          onUpdateDaysLeft={(newDays) => updateDaysLeft(item.id, newDays)}
-                          onOpenDetails={() => openItemDetails(item, active)}
-                        />
-                      </ul>
-                    </div>
+                      item={item}
+                      storage={active}
+                      onInc={() => updateQty(item.id, +1)}
+                      onDec={() => updateQty(item.id, -1)}
+                      onUpdateMinStock={(newMin) => updateMinStock(item.id, newMin)}
+                      onUpdateDaysLeft={(newDays) => updateDaysLeft(item.id, newDays)}
+                      onOpenDetails={() => openItemDetails(item, active)}
+                    />
                   ))}
-              </div>
+              </ul>
             )}
           </>
         )}

@@ -268,35 +268,54 @@
 }
 
 /* ---------------------------------------------------------------------------
-   FORCE premium single-column pantry layout
-   One full-width card per row. grid-cols-1 only — never grid-cols-2.
+   FORCE minimal 1-column pantry layout
+   One full-width card per row. Never grid-cols-2 / multi-column.
    --------------------------------------------------------------------------- */
 .pantry-item-list,
-.pantry-item-list[data-layout="single-column"] {
+.pantry-item-list[data-layout="single-column"],
+ul.pantry-item-list {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
+  grid-auto-columns: minmax(0, 1fr) !important;
   grid-auto-flow: row !important;
-  gap: 0.65rem !important;
+  gap: 0.55rem !important;
   width: 100% !important;
   max-width: 100% !important;
   columns: 1 !important;
   column-count: 1 !important;
+  column-width: auto !important;
   list-style: none !important;
   margin: 0 !important;
   padding: 0 !important;
 }
 
-.pantry-item-list .pantry-item-card,
-.pantry-item-list > li {
-  display: flex !important;
+/* Kill any 2-col utility that might leak onto the list */
+.pantry-item-list.grid-cols-2,
+.pantry-item-list[class*="grid-cols-2"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.pantry-item-list > .pantry-item-row,
+.pantry-item-list > li,
+.pantry-item-list .pantry-item-row {
+  display: block !important;
   width: 100% !important;
   max-width: 100% !important;
+  min-width: 0 !important;
   min-height: 0 !important;
   grid-column: 1 / -1 !important;
   float: none !important;
   clear: both !important;
   break-inside: avoid !important;
   page-break-inside: avoid !important;
+  box-sizing: border-box !important;
+}
+
+.pantry-item-list .pantry-item-card {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
   box-sizing: border-box !important;
 }
 

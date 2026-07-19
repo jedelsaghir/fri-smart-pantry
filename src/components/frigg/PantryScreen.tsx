@@ -231,12 +231,29 @@ export function PantryScreen() {
     updateMinStock,
     updateDaysLeft,
     patchItem,
+    removeItem,
+    restoreItem,
     moveItem,
     openItemDetails,
     closeItemDetails,
     addScannedItems,
     dismissBanner,
   } = usePantry({ onActivity: addActivity });
+
+  const handleDeleteItem = useCallback(
+    (id: string) => {
+      const snapshot = removeItem(id);
+      if (!snapshot) return;
+      toast(`${snapshot.item.emoji} ${snapshot.item.name} removed`, {
+        action: {
+          label: "Undo",
+          onClick: () => restoreItem(snapshot.item, snapshot.storage),
+        },
+        duration: 4500,
+      });
+    },
+    [removeItem, restoreItem]
+  );
 
   // Persist auth for seamless PWA / reload / offline experience
   const doLogin = () => {
@@ -992,14 +1009,15 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              /* FORCE 1-column compact list — scannable, less scrolling */
+              /* FORCE minimal 1-column list — never grid-cols-2 */
               <ul
-                className="pantry-item-list mt-5 grid grid-cols-1 gap-2.5"
+                className="pantry-item-list mt-5 grid !grid-cols-1 gap-2"
                 data-layout="single-column"
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr",
-                  gap: "0.65rem",
+                  gridTemplateColumns: "minmax(0, 1fr)",
+                  gridAutoFlow: "row",
+                  gap: "0.55rem",
                   width: "100%",
                   maxWidth: "100%",
                   margin: 0,
@@ -1019,11 +1037,8 @@ export function PantryScreen() {
                       key={item.id}
                       item={item}
                       storage={active}
-                      onInc={() => updateQty(item.id, +1)}
-                      onDec={() => updateQty(item.id, -1)}
-                      onUpdateMinStock={(newMin) => updateMinStock(item.id, newMin)}
-                      onUpdateDaysLeft={(newDays) => updateDaysLeft(item.id, newDays)}
                       onOpenDetails={() => openItemDetails(item, active)}
+                      onDelete={() => handleDeleteItem(item.id)}
                     />
                   ))}
               </ul>

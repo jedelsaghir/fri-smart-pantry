@@ -325,6 +325,48 @@ export function usePantry(options: UsePantryOptions = {}) {
     [patchItem]
   );
 
+  /**
+   * Remove an item from pantry. Returns a snapshot for Undo restore.
+   * Closes the details drawer if that item was open.
+   */
+  const removeItem = useCallback(
+    (id: string): { item: PantryItem; storage: StorageKey } | null => {
+      let snapshot: { item: PantryItem; storage: StorageKey } | null = null;
+
+      for (const storage of Object.keys(items) as StorageKey[]) {
+        const found = items[storage].find((i) => i.id === id);
+        if (found) {
+          snapshot = { item: { ...found }, storage };
+          break;
+        }
+      }
+
+      if (!snapshot) return null;
+
+      const { storage: fromStorage } = snapshot;
+      setItems((prev) => ({
+        ...prev,
+        [fromStorage]: prev[fromStorage].filter((i) => i.id !== id),
+      }));
+
+      setDetailsItem((prev) => (prev && prev.item.id === id ? null : prev));
+      onActivity?.("You", `removed ${snapshot.item.name}`);
+      return snapshot;
+    },
+    [items, onActivity]
+  );
+
+  /** Restore a previously removed item (Undo). */
+  const restoreItem = useCallback((item: PantryItem, storage: StorageKey) => {
+    setItems((prev) => {
+      if (prev[storage].some((i) => i.id === item.id)) return prev;
+      return {
+        ...prev,
+        [storage]: [...prev[storage], item],
+      };
+    });
+  }, []);
+
   /** Move item to a different storage; extend expiration when freezing */
   const moveItem = useCallback(
     (id: string, fromStorage: StorageKey, toStorage: StorageKey) => {
@@ -476,6 +518,8 @@ export function usePantry(options: UsePantryOptions = {}) {
     patchItem,
     updateItemName,
     updateItemPrice,
+    removeItem,
+    restoreItem,
     moveItem,
     moveToFreezer,
     openItemDetails,

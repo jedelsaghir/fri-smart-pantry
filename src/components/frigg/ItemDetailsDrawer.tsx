@@ -18,13 +18,44 @@ import type { DetailsItemState, PantryItem, StorageKey } from "@/types/pantry";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatExpiresLabel(daysLeft: number): string {
+function startOfTodayLocal(): Date {
   const d = new Date();
   d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() + Math.max(0, daysLeft));
-  const formatted = d.toLocaleDateString("en-GB", {
+  return d;
+}
+
+/** Calendar date for a daysLeft offset (local noon to avoid TZ edge cases) */
+function expirationDateFromDaysLeft(daysLeft: number): Date {
+  const d = startOfTodayLocal();
+  d.setDate(d.getDate() + Math.max(0, Math.floor(daysLeft)));
+  return d;
+}
+
+/** YYYY-MM-DD for <input type="date"> */
+function toDateInputValue(daysLeft: number): string {
+  const d = expirationDateFromDaysLeft(daysLeft);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Convert YYYY-MM-DD → whole days from today (clamped ≥ 0) */
+function daysLeftFromDateInput(iso: string): number {
+  const parts = iso.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return 0;
+  const [y, m, day] = parts;
+  const target = new Date(y, m - 1, day, 12, 0, 0, 0);
+  const today = startOfTodayLocal();
+  const diffMs = target.getTime() - today.getTime();
+  return Math.max(0, Math.round(diffMs / (24 * 60 * 60 * 1000)));
+}
+
+function formatExpiresLabel(daysLeft: number): string {
+  const formatted = expirationDateFromDaysLeft(daysLeft).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
+    year: "numeric",
   });
   if (daysLeft <= 0) return `Expired ${formatted}`;
   return `Expires ${formatted}`;
@@ -450,7 +481,7 @@ function DetailsBody({
           </p>
         </div>
 
-        {/* Expiration — date label, edit in days */}
+        {/* Expiration — real calendar date (no +/−) */}
         <div>
           <div className="flex items-center justify-between mb-1.5 px-0.5">
             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -460,18 +491,27 @@ function DetailsBody({
             <span className="text-sm font-semibold tracking-[-0.01em]">{expiresLabel}</span>
           </div>
 
-          <TapNumberControl
-            value={item.daysLeft}
-            onChange={(daysLeft) => onPatch(item.id, { daysLeft })}
-            min={0}
-            ariaLabel="days until expiration"
-            displayWidthClass="w-[4.5rem]"
-            valueClassName="text-2xl"
-          />
+          <label className="flex items-center gap-3 rounded-3xl bg-secondary/70 px-4 py-2.5 active:bg-secondary/80 transition">
+            <Calendar className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <input
+              type="date"
+              value={toDateInputValue(item.daysLeft)}
+              min={toDateInputValue(0)}
+              onChange={(e) => {
+                const iso = e.target.value;
+                if (!iso) return;
+                onPatch(item.id, { daysLeft: daysLeftFromDateInput(iso) });
+              }}
+              aria-label="Expiration date"
+              className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold tabular-nums text-foreground outline-none [color-scheme:light] dark:[color-scheme:dark]"
+            />
+          </label>
           <p className="mt-1 px-0.5 text-[11px] text-muted-foreground">
             {expiresLabel}
-            {item.daysLeft > 0 ? ` · ${item.daysLeft} day${item.daysLeft === 1 ? "" : "s"} left` : ""}.
-            Edit in days; freezers last 3–6× longer.
+            {item.daysLeft > 0
+              ? ` · ${item.daysLeft} day${item.daysLeft === 1 ? "" : "s"} left`
+              : " · expired or expires today"}
+            . Pick a date; freezers last 3–6× longer.
           </p>
         </div>
 

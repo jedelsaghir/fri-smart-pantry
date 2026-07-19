@@ -16,22 +16,31 @@ export function StorageTabs({
   onChange: (k: StorageKey) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-3xl bg-secondary/50 p-1 backdrop-blur-md border border-border/30">
+    <div
+      role="tablist"
+      aria-label="Storage location"
+      className="grid w-full grid-cols-3 gap-1 rounded-[1.35rem] bg-secondary/55 p-1.5 backdrop-blur-md border border-border/35 shadow-[inset_0_1px_0_oklch(1_0_0_/_0.35)]"
+    >
       {TABS.map((t) => {
         const isActive = t.key === active;
         return (
           <button
             key={t.key}
+            role="tab"
+            type="button"
+            aria-selected={isActive}
             onClick={() => onChange(t.key)}
             className={
-              "flex items-center justify-center gap-1.5 rounded-2xl py-2.5 text-sm font-semibold tracking-[-0.01em] transition-all active:scale-[0.985] " +
+              "flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-[1.05rem] px-2 py-3 text-[14px] font-semibold tracking-[-0.015em] transition-all active:scale-[0.985] " +
               (isActive
-                ? "bg-card text-foreground shadow-[0_1px_0_0_oklch(1_0_0_/_0.6)_inset,0_2px_4px_-1px_oklch(0.2_0.02_150_/_0.1),0_8px_16px_-4px_oklch(0.2_0.02_150_/_0.08)] border border-border/20"
-                : "text-muted-foreground hover:text-foreground active:bg-card/50")
+                ? "bg-card text-foreground shadow-[0_1px_0_0_oklch(1_0_0_/_0.65)_inset,0_2px_6px_-1px_oklch(0.2_0.02_150_/_0.12),0_10px_20px_-8px_oklch(0.2_0.02_150_/_0.1)] border border-border/25"
+                : "text-muted-foreground hover:text-foreground/85 active:bg-card/40 border border-transparent")
             }
           >
-            <span className="text-[13px] opacity-80">{t.emoji}</span>
-            {t.label}
+            <span className={"text-[15px] leading-none " + (isActive ? "opacity-90" : "opacity-65")}>
+              {t.emoji}
+            </span>
+            <span>{t.label}</span>
           </button>
         );
       })}

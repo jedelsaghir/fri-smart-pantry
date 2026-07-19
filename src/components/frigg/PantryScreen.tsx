@@ -936,7 +936,7 @@ export function PantryScreen() {
         ) : (
           // === PANTRY VIEW ===
           <>
-            <div className="flex items-center justify-between mb-1">
+            <div className="w-full mb-1">
               <StorageTabs active={active} onChange={setActive} />
             </div>
             {/* Silent success + motivational banner */}
@@ -990,7 +990,7 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              <ul className="mt-6 grid grid-cols-1 gap-3.5 min-[390px]:grid-cols-2 min-[390px]:gap-4">
+              <ul className="mt-5 flex flex-col gap-3.5">
                 {[...current]
                   .sort((a, b) =>
                     a.name.localeCompare(b.name, undefined, {

@@ -12,7 +12,7 @@ import { ReceiptScanFlow } from "./ReceiptScanFlow";
 import { toast } from "sonner";
 import { FinancialsScreen } from "./FinancialsScreen";
 import { LoginScreen } from "./LoginScreen";
-import { ArrowRight, X, Users } from "lucide-react";
+import { ArrowRight, X, Users, Plus } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -30,6 +30,7 @@ import type {
   RecipeFilter,
   ActivityLogEntry,
   FamilyMember,
+  CatalogItem,
 } from "@/types/pantry";
 import {
   usePantry,
@@ -37,6 +38,10 @@ import {
   getDefaultMinStock,
 } from "@/hooks/usePantry";
 import { useReceipts } from "@/hooks/useReceipts";
+import { useItemCatalog } from "@/hooks/useItemCatalog";
+import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
+import { ItemDatabaseSection } from "./ItemDatabaseSection";
+import { PantryAddSheet } from "./PantryAddSheet";
 import { ManageFamilyPage } from "./ManageFamilyPage";
 import {
   buildInviteUrl,
@@ -254,20 +259,120 @@ export function PantryScreen() {
   } = usePantry({ onActivity: addActivity });
 
   const { receipts, addReceipt, removeReceipt } = useReceipts();
+  const {
+    catalog,
+    rememberPantryItem,
+    addCatalogItem,
+    updateCatalogItem,
+    removeCatalogItem,
+    mergeGroups,
+    applyMerge,
+    suggest,
+  } = useItemCatalog();
+
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
+
+  const requestConfirm = useCallback((req: ConfirmRequest) => {
+    setConfirmRequest(req);
+  }, []);
 
   const handleDeleteItem = useCallback(
     (id: string) => {
-      const snapshot = removeItem(id);
-      if (!snapshot) return;
-      toast(`${snapshot.item.emoji} ${snapshot.item.name} removed`, {
-        action: {
-          label: "Undo",
-          onClick: () => restoreItem(snapshot.item, snapshot.storage),
+      let found: { item: (typeof current)[0]; storage: StorageKey } | null = null;
+      for (const storage of ["fridge", "freezer", "pantry"] as StorageKey[]) {
+        const item = items[storage].find((i) => i.id === id);
+        if (item) {
+          found = { item, storage };
+          break;
+        }
+      }
+      if (!found) return;
+
+      requestConfirm({
+        title: `Delete ${found.item.name}?`,
+        description: `Remove ${found.item.emoji} ${found.item.name} from your ${found.storage}. It will stay in the Shopping List Database for future use.`,
+        confirmLabel: "Delete",
+        destructive: true,
+        onConfirm: () => {
+          const snapshot = removeItem(id);
+          if (!snapshot) return;
+          rememberPantryItem(snapshot.item, "pantry_delete");
+          toast(`${snapshot.item.emoji} ${snapshot.item.name} removed`, {
+            action: {
+              label: "Undo",
+              onClick: () => restoreItem(snapshot.item, snapshot.storage),
+            },
+            duration: 4500,
+          });
         },
-        duration: 4500,
       });
     },
-    [removeItem, restoreItem]
+    [items, removeItem, restoreItem, rememberPantryItem, requestConfirm]
+  );
+
+  const handleDeleteReceipt = useCallback(
+    (id: string) => {
+      const r = receipts.find((x) => x.id === id);
+      if (!r) return;
+      requestConfirm({
+        title: "Delete receipt?",
+        description: `Remove the ${r.store} receipt (€${r.total.toFixed(2)}) and its photo from Finances.`,
+        confirmLabel: "Delete",
+        destructive: true,
+        onConfirm: () => removeReceipt(id),
+      });
+    },
+    [receipts, removeReceipt, requestConfirm]
+  );
+
+  const handleAddToPantry = useCallback(
+    (input: {
+      name: string;
+      unit: string;
+      emoji: string;
+      qty: number;
+      minStock: number;
+    }) => {
+      const newItem = {
+        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: input.name,
+        qty: input.qty,
+        unit: input.unit,
+        emoji: input.emoji,
+        daysLeft: getDefaultDaysLeft(input.name, active),
+        minStock: input.minStock || getDefaultMinStock(input.name),
+      };
+      setItems((prev) => ({
+        ...prev,
+        [active]: [...prev[active], newItem],
+      }));
+      rememberPantryItem(newItem, "pantry_add");
+      addActivity("You", `added ${input.qty} ${input.unit} ${input.name}`);
+      toast.success("Added to pantry", { description: newItem.name });
+    },
+    [active, setItems, rememberPantryItem, addActivity]
+  );
+
+  const handleScannedItems = useCallback(
+    (
+      scanned: Parameters<typeof addScannedItems>[0],
+      options?: Parameters<typeof addScannedItems>[1]
+    ) => {
+      addScannedItems(scanned, options);
+      scanned.forEach((s) => {
+        rememberPantryItem(
+          {
+            name: s.name,
+            unit: s.unit,
+            emoji: s.emoji,
+            minStock: getDefaultMinStock(s.name),
+          },
+          "scan"
+        );
+      });
+    },
+    [addScannedItems, rememberPantryItem]
   );
 
   // Persist auth for seamless PWA / reload / offline experience
@@ -356,6 +461,15 @@ export function PantryScreen() {
       return next;
     });
 
+    rememberPantryItem(
+      {
+        name: demo.name,
+        unit: demo.unit,
+        emoji: demo.emoji,
+        minStock: getDefaultMinStock(demo.name),
+      },
+      "pantry_add"
+    );
     addActivity(memberName, `added ${demo.qty}${demo.unit} ${demo.name}`);
     toast.success(`${memberName} updated the pantry`, {
       description: `+${demo.qty} ${demo.unit} ${demo.name}`,
@@ -464,6 +578,18 @@ export function PantryScreen() {
     });
 
     setShoppingList((prev) => prev.filter((item) => !item.checked));
+
+    purchased.forEach((p) => {
+      rememberPantryItem(
+        {
+          name: p.name,
+          unit: p.unit,
+          emoji: p.emoji,
+          minStock: getDefaultMinStock(p.name),
+        },
+        "pantry_add"
+      );
+    });
 
     setAddedBanner({
       count: purchased.length,
@@ -860,14 +986,41 @@ export function PantryScreen() {
 
                 <div className="mt-6 flex gap-3">
                   <button
-                    onClick={markPurchased}
+                    onClick={() => {
+                      if (checkedCount === 0) return;
+                      requestConfirm({
+                        title: "Mark as purchased?",
+                        description: `Move ${checkedCount} checked item${checkedCount === 1 ? "" : "s"} into your pantry and clear them from the list.`,
+                        confirmLabel: "Mark purchased",
+                        onConfirm: markPurchased,
+                      });
+                    }}
                     disabled={checkedCount === 0}
                     className="flex-1 rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] disabled:opacity-50 transition"
                   >
                     Mark {checkedCount || ""} as purchased
                   </button>
                   <button
-                    onClick={() => removeFromShoppingList()}
+                    onClick={() => {
+                      const n = shoppingList.filter((i) => i.checked).length;
+                      if (n === 0) {
+                        requestConfirm({
+                          title: "Clear shopping list?",
+                          description: "Remove all items from the current shopping list. Your Database is not affected.",
+                          confirmLabel: "Clear list",
+                          destructive: true,
+                          onConfirm: () => setShoppingList([]),
+                        });
+                        return;
+                      }
+                      requestConfirm({
+                        title: "Clear checked items?",
+                        description: `Remove ${n} checked item${n === 1 ? "" : "s"} from the shopping list.`,
+                        confirmLabel: "Clear",
+                        destructive: true,
+                        onConfirm: () => removeFromShoppingList(),
+                      });
+                    }}
                     className="rounded-3xl border px-4 py-3.5 text-sm font-medium active:bg-secondary/60"
                   >
                     Clear
@@ -882,6 +1035,30 @@ export function PantryScreen() {
                 </div>
               </>
             )}
+
+            <ItemDatabaseSection
+              catalog={catalog}
+              mergeGroups={mergeGroups}
+              onAdd={(input) => {
+                addCatalogItem(input);
+                toast.success("Added to Database", { description: input.name });
+              }}
+              onUpdate={updateCatalogItem}
+              onRemove={removeCatalogItem}
+              onMerge={(group, primaryId) => {
+                applyMerge(group, primaryId);
+                toast.success("Merged", { description: "Duplicates combined in Database." });
+              }}
+              onRequestDelete={(item: CatalogItem) => {
+                requestConfirm({
+                  title: `Delete ${item.name}?`,
+                  description: "Remove this item from the Database. Pantry stock is not deleted.",
+                  confirmLabel: "Delete",
+                  destructive: true,
+                  onConfirm: () => removeCatalogItem(item.id),
+                });
+              }}
+            />
           </>
         ) : isRecipesView ? (
           // === RECIPES VIEW - suggestions, filters, use ingredients ===
@@ -977,7 +1154,7 @@ export function PantryScreen() {
           </div>
         ) : isFinancesView ? (
           // === FINANCIALS / MONEY VIEW - receipts + charts ===
-          <FinancialsScreen receipts={receipts} onDeleteReceipt={removeReceipt} />
+          <FinancialsScreen receipts={receipts} onDeleteReceipt={handleDeleteReceipt} />
         ) : (
           // === PANTRY VIEW ===
           <>
@@ -988,6 +1165,14 @@ export function PantryScreen() {
             >
               <StorageTabs active={active} onChange={setActive} />
             </div>
+            <button
+              type="button"
+              onClick={() => setAddSheetOpen(true)}
+              className="mb-1 flex w-full items-center justify-center gap-2 rounded-3xl border border-border/60 bg-card py-3 text-sm font-semibold active:bg-secondary/50 active:scale-[0.99] transition"
+            >
+              <Plus className="size-4" />
+              Add item
+            </button>
             {/* Silent success + motivational banner */}
             {addedBanner && (
               <div
@@ -1082,10 +1267,20 @@ export function PantryScreen() {
         }
       }} />
 
+      <ConfirmDialog request={confirmRequest} onDismiss={() => setConfirmRequest(null)} />
+
+      <PantryAddSheet
+        open={addSheetOpen}
+        onOpenChange={setAddSheetOpen}
+        storage={active}
+        suggest={suggest}
+        onAdd={handleAddToPantry}
+      />
+
       <ReceiptScanFlow
         open={scanOpen}
         onClose={() => setScanOpen(false)}
-        onItemsAdded={addScannedItems}
+        onItemsAdded={handleScannedItems}
         onReceiptSaved={(receipt) => {
           addReceipt(receipt);
           addActivity("You", `saved receipt from ${receipt.store}`);

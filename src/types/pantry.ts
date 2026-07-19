@@ -75,6 +75,31 @@ export type ShoppingListItem = {
   checked: boolean;
 };
 
+/**
+ * Shared item catalog ("Database") — known product names learned from
+ * pantry adds/deletes and editable from the Shopping List page.
+ */
+export type CatalogItem = {
+  id: string;
+  name: string;
+  unit: string;
+  emoji: string;
+  defaultMinStock?: number;
+  lastPrice?: number;
+  /** ISO timestamp */
+  updatedAt: string;
+  /** How this entry last entered the catalog */
+  source?: "pantry_add" | "pantry_delete" | "scan" | "manual" | "merge";
+};
+
+/** Suggested merge group for catalog de-duplication */
+export type CatalogMergeGroup = {
+  id: string;
+  /** Canonical name suggestion (usually the longest / most common) */
+  primaryId: string;
+  memberIds: string[];
+};
+
 export type RecipeIngredient = {
   name: string;
   qty: number;

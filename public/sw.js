@@ -1,5 +1,5 @@
 // Friġġ PWA Service Worker — basic offline shell + asset caching
-const CACHE_NAME = "friggg-v1";
+const CACHE_NAME = "friggg-v2-1col";
 const ASSETS = [
   "/",
   "/manifest.json",

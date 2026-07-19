@@ -268,32 +268,42 @@
 }
 
 /* ---------------------------------------------------------------------------
-   FORCE 1-column pantry layout — no matter what
-   Flex column stack only. Never grid-cols-2. Never multi-column.
+   FORCE 1-column pantry layout — aggressive, highest specificity
+   Vertical flex stack only. Never grid-cols-2. Never multi-column.
    --------------------------------------------------------------------------- */
+#pantry-item-list,
+#pantry-item-list.pantry-item-list,
+div#pantry-item-list,
 .pantry-item-list,
 .pantry-item-list[data-layout="single-column"],
 .pantry-item-list[data-cols="1"],
+div.pantry-item-list,
 ul.pantry-item-list {
   display: flex !important;
   flex-direction: column !important;
   flex-wrap: nowrap !important;
   align-items: stretch !important;
-  gap: 0.55rem !important;
+  gap: 0.9rem !important;
   width: 100% !important;
   max-width: 100% !important;
   /* Nuke any grid / multi-col attempt */
   grid-template-columns: none !important;
+  grid-template-rows: none !important;
   grid-auto-flow: row !important;
+  grid-auto-columns: auto !important;
   columns: 1 !important;
   column-count: 1 !important;
   column-width: auto !important;
   list-style: none !important;
-  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
   padding: 0 !important;
 }
 
 /* Explicitly override grid-cols-2 if a utility sneaks in */
+#pantry-item-list.grid,
+#pantry-item-list.grid-cols-1,
+#pantry-item-list.grid-cols-2,
 .pantry-item-list.grid,
 .pantry-item-list.grid-cols-1,
 .pantry-item-list.grid-cols-2,
@@ -303,15 +313,18 @@ ul.pantry-item-list {
   grid-template-columns: none !important;
 }
 
+#pantry-item-list > *,
+#pantry-item-list > .pantry-item-row,
 .pantry-item-list > .pantry-item-row,
 .pantry-item-list > li,
 .pantry-item-list .pantry-item-row {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
-  min-width: 0 !important;
+  min-width: 100% !important;
   min-height: 0 !important;
   flex: 0 0 auto !important;
+  align-self: stretch !important;
   float: none !important;
   clear: both !important;
   break-inside: avoid !important;
@@ -319,6 +332,7 @@ ul.pantry-item-list {
   box-sizing: border-box !important;
 }
 
+#pantry-item-list .pantry-item-card,
 .pantry-item-list .pantry-item-card {
   display: flex !important;
   width: 100% !important;

@@ -1009,40 +1009,88 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              /* FORCE 1-column stack — flex column only, never grid-cols-2 */
-              <ul
-                className="pantry-item-list mt-5"
-                data-layout="single-column"
-                data-cols="1"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  flexWrap: "nowrap",
-                  gap: "0.55rem",
-                  width: "100%",
-                  maxWidth: "100%",
-                  margin: 0,
-                  padding: 0,
-                  listStyle: "none",
-                }}
-              >
-                {[...current]
-                  .sort((a, b) =>
-                    a.name.localeCompare(b.name, undefined, {
-                      sensitivity: "base",
-                      numeric: true,
-                    })
-                  )
-                  .map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      storage={active}
-                      onOpenDetails={() => openItemDetails(item, active)}
-                      onDelete={() => handleDeleteItem(item.id)}
-                    />
-                  ))}
-              </ul>
+              <>
+                {/* Critical CSS injected with the list — beats any leaked grid-cols-2 */}
+                <style
+                  dangerouslySetInnerHTML={{
+                    __html: `
+#pantry-item-list,
+#pantry-item-list.pantry-item-list,
+div#pantry-item-list {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  gap: 0.9rem !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 1.25rem 0 0 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+  grid-template-columns: none !important;
+  grid-auto-flow: row !important;
+  columns: 1 !important;
+  column-count: 1 !important;
+}
+#pantry-item-list > *,
+#pantry-item-list .pantry-item-row {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+  flex: 0 0 auto !important;
+  float: none !important;
+  clear: both !important;
+  box-sizing: border-box !important;
+}
+#pantry-item-list .pantry-item-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+`,
+                  }}
+                />
+                {/* FORCE 1-column vertical stack — never grid, never grid-cols-2 */}
+                <div
+                  id="pantry-item-list"
+                  className="pantry-item-list"
+                  data-layout="single-column"
+                  data-cols="1"
+                  role="list"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    flexWrap: "nowrap",
+                    alignItems: "stretch",
+                    gap: "0.9rem",
+                    width: "100%",
+                    maxWidth: "100%",
+                    marginTop: "1.25rem",
+                    marginBottom: 0,
+                    marginLeft: 0,
+                    marginRight: 0,
+                    padding: 0,
+                  }}
+                >
+                  {[...current]
+                    .sort((a, b) =>
+                      a.name.localeCompare(b.name, undefined, {
+                        sensitivity: "base",
+                        numeric: true,
+                      })
+                    )
+                    .map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        storage={active}
+                        onOpenDetails={() => openItemDetails(item, active)}
+                        onDelete={() => handleDeleteItem(item.id)}
+                      />
+                    ))}
+                </div>
+              </>
             )}
           </>
         )}

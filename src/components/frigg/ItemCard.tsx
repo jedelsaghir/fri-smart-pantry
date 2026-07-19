@@ -148,21 +148,25 @@ export function ItemCard({
   };
 
   return (
-    <li
-      className="pantry-item-row list-none w-full"
+    <div
+      role="listitem"
+      className="pantry-item-row w-full"
       data-layout="single-column"
       data-cols="1"
       style={{
         display: "block",
         width: "100%",
         maxWidth: "100%",
+        minWidth: "100%",
         flex: "0 0 auto",
+        alignSelf: "stretch",
         position: "relative",
         overflow: "hidden",
         borderRadius: "1.25rem",
         margin: 0,
         padding: 0,
         touchAction: "pan-y",
+        boxSizing: "border-box",
       }}
     >
       {/* Swipe-left delete reveal */}
@@ -371,7 +375,7 @@ export function ItemCard({
           </button>
         )}
       </div>
-    </li>
+    </div>
   );
 }
 

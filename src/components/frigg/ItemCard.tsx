@@ -2,21 +2,9 @@
 
 import { Minus, Plus } from "lucide-react";
 import { useRef } from "react";
+import type { PantryItem, ItemStatus, StorageKey } from "@/types/pantry";
 
-export interface PantryItem {
-  id: string;
-  name: string;
-  qty: number;
-  unit: string;
-  emoji: string;
-  daysLeft: number;
-  minStock: number;
-}
-
-export type ItemStatus = {
-  label: string;
-  color: string;
-};
+export type { PantryItem, ItemStatus };
 
 export function ItemCard({
   item,
@@ -28,7 +16,7 @@ export function ItemCard({
   onOpenDetails,
 }: {
   item: PantryItem;
-  storage?: "fridge" | "freezer" | "pantry";
+  storage?: StorageKey;
   onInc: () => void;
   onDec: () => void;
   onUpdateMinStock?: (newMin: number) => void;

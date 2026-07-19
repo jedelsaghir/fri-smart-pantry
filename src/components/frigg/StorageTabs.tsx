@@ -1,4 +1,6 @@
-export type StorageKey = "fridge" | "freezer" | "pantry";
+import type { StorageKey } from "@/types/pantry";
+
+export type { StorageKey };
 
 const TABS: { key: StorageKey; label: string; emoji: string }[] = [
   { key: "fridge", label: "Fridge", emoji: "❄︎" },

@@ -2,18 +2,11 @@
 
 import { useState } from "react";
 import { Camera, Image as ImageIcon, X, Loader2, Check, Trash2 } from "lucide-react";
-import { StorageTabs, type StorageKey } from "./StorageTabs";
+import { StorageTabs } from "./StorageTabs";
+import type { StorageKey, DetectedItem } from "@/types/pantry";
 import { toast } from "sonner";
 
-export interface DetectedItem {
-  id: string;
-  name: string;
-  qty: number;
-  unit: string;
-  emoji: string;
-  storage: StorageKey;
-  confidence: number;
-}
+export type { DetectedItem };
 
 interface ReceiptScanFlowProps {
   open: boolean;

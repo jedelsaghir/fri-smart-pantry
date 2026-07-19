@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Switch } from "@/components/ui/switch";
 import { GlassHeader } from "./GlassHeader";
-import { StorageTabs, type StorageKey } from "./StorageTabs";
-import { ItemCard, type PantryItem, getStatus } from "./ItemCard";
+import { StorageTabs } from "./StorageTabs";
+import { ItemCard, getStatus } from "./ItemCard";
 import { BottomNav } from "./BottomNav";
 import { ScanFab } from "./ScanFab";
-import { ReceiptScanFlow, type DetectedItem } from "./ReceiptScanFlow";
+import { ReceiptScanFlow } from "./ReceiptScanFlow";
 import { toast } from "sonner";
 import { FinancialsScreen } from "./FinancialsScreen";
 import { LoginScreen } from "./LoginScreen";
@@ -21,100 +21,31 @@ import {
   DrawerFooter,
   DrawerClose,
 } from "@/components/ui/drawer";
+import type {
+  StorageKey,
+  ActiveView,
+  ShoppingListItem,
+  Recipe,
+  RecipeFilter,
+  ActivityLogEntry,
+  FamilyMember,
+} from "@/types/pantry";
+import {
+  usePantry,
+  getDefaultDaysLeft,
+  getDefaultMinStock,
+  getFreezerExtensionDays,
+} from "@/hooks/usePantry";
+import { ManageFamilyPage } from "./ManageFamilyPage";
 
-const SEED: Record<StorageKey, PantryItem[]> = {
-  fridge: [
-    { id: "1", name: "Whole milk", qty: 2, unit: "L", emoji: "🥛", daysLeft: 12, minStock: 2 },
-    { id: "2", name: "Free-range eggs", qty: 8, unit: "pcs", emoji: "🥚", daysLeft: 19, minStock: 6 },
-    { id: "3", name: "Greek yogurt", qty: 1, unit: "tub", emoji: "🥣", daysLeft: 2, minStock: 2 },
-    { id: "4", name: "Cherry tomatoes", qty: 1, unit: "pack", emoji: "🍅", daysLeft: 5, minStock: 2 },
-    { id: "5", name: "Aged cheddar", qty: 220, unit: "g", emoji: "🧀", daysLeft: 18, minStock: 150 },
-    { id: "6", name: "Baby spinach", qty: 1, unit: "bag", emoji: "🥬", daysLeft: 1, minStock: 1 },
-  ],
-  freezer: [
-    { id: "f1", name: "Chicken thighs", qty: 600, unit: "g", emoji: "🍗", daysLeft: 95, minStock: 1 },
-  ],
-  pantry: [],
-};
-
-function getDefaultMinStock(name: string): number {
-  const lower = name.toLowerCase();
-  if (lower.includes("milk") || lower.includes("yogurt")) return 2;
-  if (lower.includes("egg")) return 6;
-  if (lower.includes("cheese")) return 150;
-  if (lower.includes("frozen") || lower.includes("chicken")) return 1;
-  if (lower.includes("bread") || lower.includes("pasta")) return 1;
-  if (lower.includes("oil")) return 1;
-  if (lower.includes("tomato") || lower.includes("spinach") || lower.includes("avocado") || lower.includes("herb")) return 1;
-  return 2;
-}
-
-// Realistic default fridge shelf life (days) for newly scanned / added items
-function getDefaultDaysLeft(name: string, targetStorage: StorageKey = "fridge"): number {
-  const lower = name.toLowerCase();
-
-  // If going directly into freezer via scan/review, use longer initial life
-  const isFreezer = targetStorage === "freezer";
-
-  // Meats / proteins
-  if (lower.includes("chicken") || lower.includes("thigh") || lower.includes("breast")) {
-    return isFreezer ? 120 + Math.floor(Math.random() * 30) : 4 + Math.floor(Math.random() * 2);
-  }
-  if (lower.includes("beef") || lower.includes("steak") || lower.includes("ground")) {
-    return isFreezer ? 150 : 3 + Math.floor(Math.random() * 2);
-  }
-  if (lower.includes("fish") || lower.includes("salmon") || lower.includes("shrimp")) {
-    return isFreezer ? 90 : 2 + Math.floor(Math.random() * 1);
-  }
-
-  // Dairy
-  if (lower.includes("milk")) return isFreezer ? 90 : 12 + Math.floor(Math.random() * 4);
-  if (lower.includes("yogurt") || lower.includes("greek")) return isFreezer ? 75 : 8 + Math.floor(Math.random() * 4);
-  if (lower.includes("cheese") || lower.includes("cheddar")) return isFreezer ? 180 : 18 + Math.floor(Math.random() * 6);
-  if (lower.includes("egg")) return isFreezer ? 180 : 18 + Math.floor(Math.random() * 6);
-
-  // Produce
-  if (lower.includes("spinach") || lower.includes("lettuce") || lower.includes("herb") || lower.includes("basil")) {
-    return isFreezer ? 180 : 4 + Math.floor(Math.random() * 3);
-  }
-  if (lower.includes("tomato") || lower.includes("cherry")) return isFreezer ? 120 : 5 + Math.floor(Math.random() * 3);
-  if (lower.includes("avocado")) return isFreezer ? 90 : 4 + Math.floor(Math.random() * 2);
-  if (lower.includes("berry") || lower.includes("frozen")) return isFreezer ? 200 : 5 + Math.floor(Math.random() * 3);
-
-  // Pantry staples
-  if (lower.includes("bread")) return isFreezer ? 120 : 6 + Math.floor(Math.random() * 3);
-  if (lower.includes("pasta") || lower.includes("rice")) return 45 + Math.floor(Math.random() * 15);
-  if (lower.includes("oil")) return 120 + Math.floor(Math.random() * 30);
-
-  // Default
-  const base = isFreezer ? 120 : 7 + Math.floor(Math.random() * 5);
-  return Math.max(1, base);
-}
-
-// Days to add to expiration when moving an item into the freezer
-function getFreezerExtensionDays(name: string): number {
-  const lower = name.toLowerCase();
-  if (lower.includes("chicken") || lower.includes("thigh") || lower.includes("breast") || lower.includes("beef") || lower.includes("steak")) {
-    return 90;
-  }
-  if (lower.includes("fish") || lower.includes("salmon") || lower.includes("shrimp")) {
-    return 75;
-  }
-  if (lower.includes("milk") || lower.includes("yogurt")) {
-    return 60;
-  }
-  if (lower.includes("spinach") || lower.includes("vegetable") || lower.includes("berry") || lower.includes("fruit") || lower.includes("tomato")) {
-    return 180;
-  }
-  if (lower.includes("bread")) return 90;
-  if (lower.includes("egg")) return 150;
-  if (lower.includes("cheese")) return 120;
-  return 90; // sensible default for most items
-}
+const DEFAULT_FAMILY_MEMBERS: FamilyMember[] = [
+  { id: "you", name: "You", emoji: "👤", isYou: true },
+  { id: "elena", name: "Elena", emoji: "👩‍🍳" },
+  { id: "alex", name: "Alex", emoji: "🧒" },
+];
 
 export function PantryScreen() {
-  const [active, setActive] = useState<StorageKey>("fridge");
-  const [activeView, setActiveView] = useState<"pantry" | "list" | "recipes" | "finances">("pantry");
+  const [activeView, setActiveView] = useState<ActiveView>("pantry");
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") return false;
     try { return localStorage.getItem("friggg-logged-in") === "true"; } catch { return false; }
@@ -169,30 +100,93 @@ export function PantryScreen() {
       localStorage.setItem("friggg-theme", "light");
     }
   };
-  const [addedBanner, setAddedBanner] = useState<{ count: number; message: string } | null>(null);
 
-  // Item details drawer state (for expiration editing + move to freezer)
-  const [detailsItem, setDetailsItem] = useState<{ item: PantryItem; storage: StorageKey } | null>(null);
-
-  // Persist pantry to localStorage so the app works offline and shows cached data on reload
-  const [items, setItems] = useState<Record<StorageKey, PantryItem[]>>(() => {
-    if (typeof window === "undefined") return SEED;
+  // Family Sharing state (persisted; editable via Manage Family page)
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_FAMILY_MEMBERS;
     try {
-      const saved = localStorage.getItem("friggg-items");
+      const saved = localStorage.getItem("friggg-family-members");
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Basic validation / merge with seed shape if needed
-        if (parsed && typeof parsed === "object" && parsed.fridge) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((m: FamilyMember) => m?.id && m?.name)) {
+          return parsed as FamilyMember[];
+        }
       }
     } catch {}
-    return SEED;
+    return DEFAULT_FAMILY_MEMBERS;
   });
-
   useEffect(() => {
     try {
-      localStorage.setItem("friggg-items", JSON.stringify(items));
+      localStorage.setItem("friggg-family-members", JSON.stringify(familyMembers));
     } catch {}
-  }, [items]);
+  }, [familyMembers]);
+
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([
+    { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
+    { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
+    { user: "You", action: "moved chicken to freezer", time: "3h ago" },
+  ]);
+  const [showFamilyDrawer, setShowFamilyDrawer] = useState(false);
+  const [showManageFamily, setShowManageFamily] = useState(false);
+
+  const addActivity = useCallback((user: string, action: string) => {
+    setActivityLog((prev) => [
+      { user, action, time: "just now" },
+      ...prev.slice(0, 4), // keep last 5 total
+    ]);
+  }, []);
+
+  const addFamilyMember = useCallback(
+    (member: Omit<FamilyMember, "id" | "isYou">) => {
+      const id = `member-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      setFamilyMembers((prev) => [...prev, { id, name: member.name, emoji: member.emoji }]);
+      addActivity("You", `added ${member.name} to the household`);
+    },
+    [addActivity]
+  );
+
+  const removeFamilyMember = useCallback(
+    (id: string) => {
+      setFamilyMembers((prev) => {
+        const target = prev.find((m) => m.id === id);
+        if (!target || target.isYou) return prev;
+        addActivity("You", `removed ${target.name} from the household`);
+        return prev.filter((m) => m.id !== id);
+      });
+    },
+    [addActivity]
+  );
+
+  const openManageFamily = useCallback(() => {
+    setShowFamilyDrawer(false);
+    setShowSettings(false);
+    setShowManageFamily(true);
+  }, []);
+
+  // Pantry domain state + actions (extracted from god component)
+  const {
+    active,
+    setActive,
+    items,
+    setItems,
+    current,
+    detailsItem,
+    setDetailsItem,
+    addedBanner,
+    setAddedBanner,
+    expiringSoon,
+    lowStockCount,
+    updateQty,
+    updateMinStock,
+    updateDaysLeft,
+    updateItemQty,
+    moveItem,
+    moveToFreezer,
+    openItemDetails,
+    closeItemDetails,
+    addScannedItems,
+    dismissBanner,
+  } = usePantry({ onActivity: addActivity });
 
   // Persist auth for seamless PWA / reload / offline experience
   const doLogin = () => {
@@ -241,27 +235,7 @@ export function PantryScreen() {
   };
 
   // Recipes state
-  const [recipeFilter, setRecipeFilter] = useState<"all" | "canMake" | "expiring">("all");
-
-  // Family Sharing state
-  const familyMembers = [
-    { name: "You", emoji: "👤" },
-    { name: "Elena", emoji: "👩‍🍳" },
-    { name: "Alex", emoji: "🧒" },
-  ];
-  const [activityLog, setActivityLog] = useState<Array<{ user: string; action: string; time: string }>>([
-    { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
-    { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
-    { user: "You", action: "moved chicken to freezer", time: "3h ago" },
-  ]);
-  const [showFamilyDrawer, setShowFamilyDrawer] = useState(false);
-
-  const addActivity = (user: string, action: string) => {
-    setActivityLog((prev) => [
-      { user, action, time: "just now" },
-      ...prev.slice(0, 4),
-    ]);
-  };
+  const [recipeFilter, setRecipeFilter] = useState<RecipeFilter>("all");
 
   const simulateFamilyUpdate = (memberName: string) => {
     // Simulate a family member adding an item or updating
@@ -306,148 +280,7 @@ export function PantryScreen() {
   };
 
   // Shopping list state (for the List tab)
-  type ShoppingListItem = {
-    id: string;
-    name: string;
-    qty: number;
-    unit: string;
-    emoji: string;
-    checked: boolean;
-  };
-
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
-
-  const current = items[active];
-
-  const updateQty = (id: string, delta: number) => {
-    setItems((prev) => {
-      const item = prev[active].find((i) => i.id === id);
-      const newItems = prev[active]
-        .map((i) => (i.id === id ? { ...i, qty: Math.max(0, i.qty + delta) } : i))
-        .filter((i) => i.qty > 0);
-      if (item) {
-        const verb = delta > 0 ? "added" : "used";
-        addActivity("You", `${verb} ${Math.abs(delta)} ${item.unit} ${item.name}`);
-      }
-      return { ...prev, [active]: newItems };
-    });
-  };
-
-  const updateMinStock = (id: string, newMin: number) => {
-    setItems((prev) => {
-      const next = { ...prev };
-      (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage].map((i) =>
-          i.id === id ? { ...i, minStock: Math.max(0, newMin) } : i
-        );
-      });
-      return next;
-    });
-  };
-
-  const updateDaysLeft = (id: string, newDays: number) => {
-    const clamped = Math.max(0, Math.floor(newDays));
-    setItems((prev) => {
-      const next = { ...prev };
-      (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage].map((i) =>
-          i.id === id ? { ...i, daysLeft: clamped } : i
-        );
-      });
-      return next;
-    });
-  };
-
-  // Cross-storage qty update used by details drawer (keeps drawer state in sync)
-  const updateItemQty = (id: string, delta: number) => {
-    setItems((prev) => {
-      const next = { ...prev };
-      let changedItem: PantryItem | null = null;
-
-      (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage]
-          .map((i) => {
-            if (i.id === id) {
-              const newQty = Math.max(0, i.qty + delta);
-              changedItem = { ...i, qty: newQty };
-              return { ...i, qty: newQty };
-            }
-            return i;
-          })
-          .filter((i) => i.qty > 0);
-      });
-      return next;
-    });
-
-    // Sync the open drawer preview (activity is logged via main card steppers)
-    if (detailsItem && detailsItem.item.id === id) {
-      setDetailsItem((prev) => {
-        if (!prev) return prev;
-        const newQty = Math.max(0, prev.item.qty + delta);
-        if (newQty <= 0) {
-          // Item consumed — close drawer shortly
-          setTimeout(() => setDetailsItem(null), 60);
-          return null;
-        }
-        return { ...prev, item: { ...prev.item, qty: newQty } };
-      });
-    }
-  };
-
-  // Move item to a different storage (e.g. Fridge → Freezer) and extend expiration when freezing
-  const moveItem = (id: string, fromStorage: StorageKey, toStorage: StorageKey) => {
-    if (fromStorage === toStorage) return;
-
-    // Capture item info + extension before state update
-    const sourceItem = items[fromStorage].find((i) => i.id === id);
-    if (!sourceItem) return;
-
-    const extension = (toStorage === "freezer" && fromStorage !== "freezer")
-      ? getFreezerExtensionDays(sourceItem.name)
-      : 0;
-
-    setItems((prev) => {
-      const source = [...prev[fromStorage]];
-      const idx = source.findIndex((i) => i.id === id);
-      if (idx === -1) return prev;
-
-      const item = { ...source[idx] };
-
-      if (extension > 0) {
-        item.daysLeft = item.daysLeft + extension;
-      }
-
-      source.splice(idx, 1);
-      const target = [...prev[toStorage], item];
-
-      return {
-        ...prev,
-        [fromStorage]: source,
-        [toStorage]: target,
-      };
-    });
-
-    // Close drawer if open for this item
-    if (detailsItem && detailsItem.item.id === id) {
-      setDetailsItem(null);
-    }
-
-    if (extension > 0) {
-      toast.success(`Moved to Freezer`, {
-        description: `Expiration extended by +${extension} days`,
-      });
-      addActivity("You", `moved ${sourceItem.name} to freezer`);
-    } else {
-      const dest = toStorage === "pantry" ? "Pantry" : toStorage === "freezer" ? "Freezer" : "Fridge";
-      toast.success(`Moved to ${dest}`);
-      addActivity("You", `moved ${sourceItem.name} to ${dest.toLowerCase()}`);
-    }
-  };
-
-  // Convenience: move from current fridge to freezer (primary use case)
-  const moveToFreezer = (id: string, fromStorage: StorageKey = "fridge") => {
-    moveItem(id, fromStorage, "freezer");
-  };
 
   // Compute items that should be on the shopping list (below min or running low)
   const computeSuggestedItems = (): ShoppingListItem[] => {
@@ -495,13 +328,6 @@ export function PantryScreen() {
 
   // Number of items the generator would suggest right now (for button badge)
   const suggestedCount = computeSuggestedItems().length;
-
-  // Open the item details drawer (expiration editor + move actions)
-  const openItemDetails = (item: PantryItem, storage: StorageKey) => {
-    setDetailsItem({ item: { ...item }, storage });
-  };
-
-  const closeItemDetails = () => setDetailsItem(null);
 
   // Toggle check on shopping list item
   const toggleShoppingItem = (id: string) => {
@@ -595,67 +421,6 @@ export function PantryScreen() {
     }
   };
 
-  // Core: add scanned items (can target any storage)
-  const addScannedItems = (scanned: Array<Omit<DetectedItem, "id" | "confidence">>, options: { silent?: boolean } = {}) => {
-    if (scanned.length === 0) return;
-
-    const newItemsByStorage: Partial<Record<StorageKey, PantryItem[]>> = {};
-
-    scanned.forEach((s) => {
-      const target = s.storage;
-      const newItem: PantryItem = {
-        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        name: s.name,
-        qty: s.qty,
-        unit: s.unit,
-        emoji: s.emoji,
-        daysLeft: getDefaultDaysLeft(s.name, target),
-        minStock: getDefaultMinStock(s.name),
-      };
-
-      if (!newItemsByStorage[target]) newItemsByStorage[target] = [];
-      newItemsByStorage[target]!.push(newItem);
-    });
-
-    setItems((prev) => {
-      const next = { ...prev };
-      (Object.keys(newItemsByStorage) as StorageKey[]).forEach((storage) => {
-        next[storage] = [...(next[storage] || []), ...(newItemsByStorage[storage] || [])];
-      });
-      return next;
-    });
-
-    // Show premium silent success feedback (unless silent from scan flow)
-    if (!options.silent) {
-      const storages = Array.from(new Set(scanned.map((s) => s.storage)));
-      const storageLabel =
-        storages.length === 1
-          ? storages[0] === "fridge"
-            ? "Fridge"
-            : storages[0] === "freezer"
-            ? "Freezer"
-            : "Pantry"
-          : "pantry";
-
-      const count = scanned.length;
-      const message = `Added ${count} item${count > 1 ? "s" : ""} to your ${storageLabel.toLowerCase()}`;
-
-      setAddedBanner({ count, message });
-
-      // Auto-hide banner
-      setTimeout(() => setAddedBanner(null), 5200);
-    }
-
-    // Log family activity
-    const count = scanned.length;
-    addActivity("You", `added ${count} item${count > 1 ? "s" : ""}`);
-  };
-
-  const expiringSoon = current.filter((i) => i.daysLeft <= 3).length;
-
-  // Clear banner if user switches tabs or manually
-  const dismissBanner = () => setAddedBanner(null);
-
   const isListView = activeView === "list";
   const isRecipesView = activeView === "recipes";
   const isFinancesView = activeView === "finances";
@@ -667,22 +432,7 @@ export function PantryScreen() {
   const headerAttention = isListView ? checkedCount : isRecipesView ? 3 : isFinancesView ? 5 : expiringSoon;
   const attentionTone = isListView || isRecipesView || isFinancesView ? "calm" : (headerAttention > 0 ? "warn" : "calm");
 
-  // Global low stock count (items currently below their minStock)
-  const lowStockCount = (["fridge", "freezer", "pantry"] as StorageKey[]).reduce((sum, s) => {
-    return sum + items[s].filter((i) => i.qty < (i.minStock ?? 2)).length;
-  }, 0);
-
   // === RECIPES DATA & HELPERS ===
-  type RecipeIngredient = { name: string; qty: number; unit: string };
-  type Recipe = {
-    id: string;
-    name: string;
-    emoji: string;
-    time: string;
-    servings: number;
-    ingredients: RecipeIngredient[];
-    category: string;
-  };
 
   const allRecipes: Recipe[] = [
     {
@@ -866,8 +616,23 @@ export function PantryScreen() {
     return <LoginScreen onLogin={doLogin} />;
   }
 
+  const sharedItemCount =
+    items.fridge.length + items.freezer.length + items.pantry.length;
+
   return (
     <div className="relative min-h-screen pb-32 bg-background">
+      {showManageFamily && (
+        <ManageFamilyPage
+          householdName={householdName}
+          members={familyMembers}
+          activityLog={activityLog}
+          sharedItemCount={sharedItemCount}
+          onBack={() => setShowManageFamily(false)}
+          onAddMember={addFamilyMember}
+          onRemoveMember={removeFamilyMember}
+        />
+      )}
+
       <GlassHeader
         household={householdName}
         expiringSoon={headerAttention}
@@ -1226,17 +991,16 @@ export function PantryScreen() {
 
             {/* Household */}
             <div className="elevated-card rounded-3xl p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
                   <div className="font-semibold">Household</div>
-                  <div className="text-sm">The Borg family • 3 members</div>
+                  <div className="text-sm truncate">
+                    {householdName} • {familyMembers.length} member{familyMembers.length === 1 ? "" : "s"}
+                  </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setShowSettings(false);
-                    setShowFamilyDrawer(true);
-                  }}
-                  className="text-xs px-3 py-1 rounded-full border active:bg-secondary"
+                  onClick={openManageFamily}
+                  className="shrink-0 text-xs px-3 py-1.5 rounded-full border font-semibold active:bg-secondary"
                 >
                   Manage
                 </button>
@@ -1320,7 +1084,9 @@ export function PantryScreen() {
         <DrawerContent className="max-w-md mx-auto">
           <DrawerHeader className="text-left">
             <DrawerTitle>Household</DrawerTitle>
-            <DrawerDescription>The Borg family • Shared pantry</DrawerDescription>
+            <DrawerDescription>
+              {householdName} • {familyMembers.length} member{familyMembers.length === 1 ? "" : "s"}
+            </DrawerDescription>
           </DrawerHeader>
 
           <div className="px-5 pb-4 space-y-6">
@@ -1328,9 +1094,9 @@ export function PantryScreen() {
             <div>
               <div className="text-sm font-semibold mb-2">Members</div>
               <div className="space-y-2">
-                {familyMembers.map((m, idx) => (
+                {familyMembers.map((m) => (
                   <button
-                    key={idx}
+                    key={m.id}
                     onClick={() => {
                       simulateFamilyUpdate(m.name);
                       setShowFamilyDrawer(false);
@@ -1341,7 +1107,7 @@ export function PantryScreen() {
                     <div className="flex-1">
                       <div className="font-medium">{m.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {m.name === "You" ? "Online now" : "Active recently"}
+                        {m.isYou ? "Online now" : "Active recently"}
                       </div>
                     </div>
                     <div className="text-xs text-[var(--color-fresh)]">Tap to simulate</div>
@@ -1358,7 +1124,7 @@ export function PantryScreen() {
                 {activityLog.length === 0 ? (
                   <div className="text-muted-foreground">No activity yet.</div>
                 ) : (
-                  activityLog.map((entry, i) => (
+                  activityLog.slice(0, 5).map((entry, i) => (
                     <div key={i} className="flex gap-2 rounded-xl bg-secondary/50 px-3 py-2">
                       <span className="font-medium shrink-0">{entry.user}</span>
                       <span className="text-foreground/80">{entry.action}</span>
@@ -1370,7 +1136,13 @@ export function PantryScreen() {
             </div>
           </div>
 
-          <DrawerFooter>
+          <DrawerFooter className="gap-2">
+            <button
+              onClick={openManageFamily}
+              className="w-full rounded-3xl py-3.5 text-sm font-semibold bg-brand text-brand-foreground active:scale-[0.985] transition"
+            >
+              Manage Family
+            </button>
             <button onClick={() => setShowFamilyDrawer(false)} className="w-full rounded-3xl py-3 text-sm font-semibold border active:bg-secondary/60">
               Done
             </button>

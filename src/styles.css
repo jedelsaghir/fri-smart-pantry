@@ -267,31 +267,17 @@
   min-width: 44px;
 }
 
-/* 1-column pantry list — vertical stack only */
-#pantry-item-list,
-.pantry-item-list {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 1rem !important;
+/* 1-column pantry cards — always full width */
+.pantry-item-row,
+.pantry-item-card {
+  display: block;
   width: 100% !important;
   max-width: 100% !important;
-  grid-template-columns: none !important;
-}
-
-#pantry-item-list > *,
-.pantry-item-list > *,
-.pantry-item-row {
-  display: block !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  flex: 0 0 auto !important;
   box-sizing: border-box !important;
 }
 
 .pantry-item-card {
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
+  display: flex !important;
 }
 
 .storage-tabs-premium {

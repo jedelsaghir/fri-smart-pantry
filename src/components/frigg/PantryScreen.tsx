@@ -1009,17 +1009,8 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              <div
-                id="pantry-item-list"
-                role="list"
-                className="pantry-item-list mt-5 flex w-full flex-col gap-4"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1rem",
-                  width: "100%",
-                }}
-              >
+              /* FINAL: 1-column vertical stack only — never grid / never 2-col */
+              <div className="mt-5 flex flex-col gap-4" style={{ width: "100%" }}>
                 {[...current]
                   .sort((a, b) =>
                     a.name.localeCompare(b.name, undefined, {
@@ -1028,13 +1019,14 @@ export function PantryScreen() {
                     })
                   )
                   .map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      storage={active}
-                      onOpenDetails={() => openItemDetails(item, active)}
-                      onDelete={() => handleDeleteItem(item.id)}
-                    />
+                    <div key={item.id} className="w-full" style={{ width: "100%" }}>
+                      <ItemCard
+                        item={item}
+                        storage={active}
+                        onOpenDetails={() => openItemDetails(item, active)}
+                        onDelete={() => handleDeleteItem(item.id)}
+                      />
+                    </div>
                   ))}
               </div>
             )}

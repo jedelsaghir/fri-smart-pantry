@@ -15,6 +15,7 @@ import {
   X,
   Link2,
   UserPlus,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { FamilyMember, ActivityLogEntry } from "@/types/pantry";
@@ -76,6 +77,8 @@ interface ManageFamilyPageProps {
   onAddMember: (member: Omit<FamilyMember, "id" | "isYou">) => void;
   onRemoveMember: (id: string) => void;
   onUpdateMember?: (id: string, patch: Partial<FamilyMember>) => void;
+  /** Rename the shared household (persisted) */
+  onRenameHousehold?: (name: string) => void;
   /** Demo: open invite acceptance as this member (logout + invite flow) */
   onSimulateAcceptInvite?: (member: FamilyMember) => void;
 }
@@ -89,6 +92,7 @@ export function ManageFamilyPage({
   onAddMember,
   onRemoveMember,
   onUpdateMember,
+  onRenameHousehold,
   onSimulateAcceptInvite,
 }: ManageFamilyPageProps) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -99,6 +103,8 @@ export function ManageFamilyPage({
   const [inviteSheetMember, setInviteSheetMember] = useState<FamilyMember | null>(null);
   const [inviteSheetMode, setInviteSheetMode] = useState<"share" | "qr">("share");
   const [copied, setCopied] = useState(false);
+  const [editingHousehold, setEditingHousehold] = useState(false);
+  const [householdDraft, setHouseholdDraft] = useState(householdName);
 
   const recentActivity = activityLog.slice(0, 5);
   const pendingCount = members.filter((m) => m.status === "pending").length;
@@ -201,6 +207,28 @@ export function ManageFamilyPage({
     }
   };
 
+  const startEditHousehold = () => {
+    setHouseholdDraft(householdName);
+    setEditingHousehold(true);
+  };
+
+  const commitHouseholdName = () => {
+    const trimmed = householdDraft.trim();
+    if (!trimmed) {
+      toast.error("Name required", { description: "Household name can't be empty." });
+      setHouseholdDraft(householdName);
+      setEditingHousehold(false);
+      return;
+    }
+    if (trimmed === householdName) {
+      setEditingHousehold(false);
+      return;
+    }
+    onRenameHousehold?.(trimmed);
+    setEditingHousehold(false);
+    toast.success("Household renamed", { description: trimmed });
+  };
+
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-background">
       {/* Sticky glass header */}
@@ -228,18 +256,79 @@ export function ManageFamilyPage({
       <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5">
         {/* Summary hero */}
         <section className="elevated-card mb-5 rounded-[1.75rem] p-5">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="grid size-12 place-items-center rounded-2xl bg-secondary text-2xl shadow-inner ring-1 ring-border/40">
+          <div className="mb-4 flex items-start gap-3">
+            <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-secondary text-2xl shadow-inner ring-1 ring-border/40">
               🏠
             </div>
-            <div className="min-w-0">
-              <p className="font-display text-[20px] font-medium leading-tight tracking-[-0.02em] text-foreground">
-                {householdName}
+            <div className="min-w-0 flex-1">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                Family name
               </p>
-              <p className="text-[13px] text-muted-foreground">
-                Multi-user shared pantry · {activeCount} active
-                {pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
-              </p>
+              {editingHousehold ? (
+                <div className="flex flex-col gap-2">
+                  <Input
+                    value={householdDraft}
+                    onChange={(e) => setHouseholdDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitHouseholdName();
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setHouseholdDraft(householdName);
+                        setEditingHousehold(false);
+                      }
+                    }}
+                    autoFocus
+                    maxLength={48}
+                    placeholder="e.g. The Borg family"
+                    aria-label="Household name"
+                    className="h-11 rounded-2xl border-border/50 bg-background/80 text-[16px] font-semibold tracking-[-0.02em]"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHouseholdDraft(householdName);
+                        setEditingHousehold(false);
+                      }}
+                      className="flex-1 rounded-2xl border py-2.5 text-[13px] font-semibold active:bg-secondary/60 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={commitHouseholdName}
+                      className="flex-1 rounded-2xl bg-brand py-2.5 text-[13px] font-semibold text-brand-foreground active:scale-[0.985] transition"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-display text-[20px] font-medium leading-tight tracking-[-0.02em] text-foreground">
+                      {householdName}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                      Multi-user shared pantry · {activeCount} active
+                      {pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
+                    </p>
+                  </div>
+                  {onRenameHousehold && (
+                    <button
+                      type="button"
+                      onClick={startEditHousehold}
+                      aria-label="Rename household"
+                      className="grid size-10 shrink-0 place-items-center rounded-2xl border border-border/50 text-foreground/80 active:scale-[0.96] active:bg-secondary/70 transition"
+                    >
+                      <Pencil className="size-4" strokeWidth={2.25} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

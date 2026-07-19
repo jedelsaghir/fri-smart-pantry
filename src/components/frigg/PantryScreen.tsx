@@ -43,8 +43,10 @@ import {
   defaultFamilyMembers,
   generateInviteCode,
   loadFamilyMembers,
+  loadHouseholdName,
   normalizeFamilyMember,
   saveFamilyMembers,
+  saveHouseholdName,
 } from "@/lib/family";
 
 export function PantryScreen() {
@@ -66,7 +68,9 @@ export function PantryScreen() {
 
   // Simple profile from onboarding (demo)
   const [userName, setUserName] = useState("Elena");
-  const [householdName, setHouseholdName] = useState("The Borg family");
+  const [householdName, setHouseholdName] = useState(() =>
+    typeof window === "undefined" ? "The Borg family" : loadHouseholdName("The Borg family")
+  );
   useEffect(() => {
     try {
       const p = localStorage.getItem("friggg-profile");
@@ -74,8 +78,7 @@ export function PantryScreen() {
         const parsed = JSON.parse(p);
         if (parsed?.name) setUserName(parsed.name.split(" ")[0] || "Elena");
       }
-      const h = localStorage.getItem("friggg-household");
-      if (h) setHouseholdName(h);
+      setHouseholdName(loadHouseholdName("The Borg family"));
     } catch {}
   }, []);
 
@@ -143,6 +146,15 @@ export function PantryScreen() {
       ...prev.slice(0, 4), // keep last 5 total
     ]);
   }, []);
+
+  const renameHousehold = useCallback(
+    (name: string) => {
+      const saved = saveHouseholdName(name);
+      setHouseholdName(saved);
+      addActivity("You", `renamed household to ${saved}`);
+    },
+    [addActivity]
+  );
 
   const addFamilyMember = useCallback(
     (member: Omit<FamilyMember, "id" | "isYou">) => {
@@ -709,6 +721,7 @@ export function PantryScreen() {
           onAddMember={addFamilyMember}
           onRemoveMember={removeFamilyMember}
           onUpdateMember={updateFamilyMember}
+          onRenameHousehold={renameHousehold}
           onSimulateAcceptInvite={simulateAcceptInvite}
         />
       )}

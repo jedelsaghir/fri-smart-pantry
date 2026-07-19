@@ -196,19 +196,31 @@ export function findMemberByInviteCode(code: string, members?: FamilyMember[]): 
   return list.find((m) => m.inviteCode.toLowerCase() === normalized) ?? null;
 }
 
+export function loadHouseholdName(fallback = "Family pantry"): string {
+  try {
+    const h = localStorage.getItem(HOUSEHOLD_KEY);
+    if (h?.trim()) return h.trim();
+  } catch {}
+  return fallback;
+}
+
+export function saveHouseholdName(name: string): string {
+  const trimmed = name.trim() || "Family pantry";
+  try {
+    localStorage.setItem(HOUSEHOLD_KEY, trimmed);
+  } catch {}
+  return trimmed;
+}
+
 export function getInviteContext(code: string): PendingInviteContext | null {
   const member = findMemberByInviteCode(code);
   if (!member || member.status === "owner") return null;
-  let householdName = "Family pantry";
-  try {
-    householdName = localStorage.getItem(HOUSEHOLD_KEY) || householdName;
-  } catch {}
   return {
     code: member.inviteCode,
     memberId: member.id,
     memberName: member.name,
     memberEmoji: member.emoji,
-    householdName,
+    householdName: loadHouseholdName(),
   };
 }
 

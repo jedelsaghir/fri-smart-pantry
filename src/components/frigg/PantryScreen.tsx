@@ -925,20 +925,27 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                {current.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    storage={active}
-                    onInc={() => updateQty(item.id, +1)}
-                    onDec={() => updateQty(item.id, -1)}
-                    onUpdateMinStock={(newMin) => updateMinStock(item.id, newMin)}
-                    onUpdateDaysLeft={(newDays) => updateDaysLeft(item.id, newDays)}
-                    onOpenDetails={() => openItemDetails(item, active)}
-                  />
-                ))}
-              </div>
+              <ul className="mt-6 grid grid-cols-1 gap-3.5 min-[390px]:grid-cols-2 min-[390px]:gap-4">
+                {[...current]
+                  .sort((a, b) =>
+                    a.name.localeCompare(b.name, undefined, {
+                      sensitivity: "base",
+                      numeric: true,
+                    })
+                  )
+                  .map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      storage={active}
+                      onInc={() => updateQty(item.id, +1)}
+                      onDec={() => updateQty(item.id, -1)}
+                      onUpdateMinStock={(newMin) => updateMinStock(item.id, newMin)}
+                      onUpdateDaysLeft={(newDays) => updateDaysLeft(item.id, newDays)}
+                      onOpenDetails={() => openItemDetails(item, active)}
+                    />
+                  ))}
+              </ul>
             )}
           </>
         )}

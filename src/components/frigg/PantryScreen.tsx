@@ -4,14 +4,15 @@ import { useState, useEffect, useCallback } from "react";
 import { Switch } from "@/components/ui/switch";
 import { GlassHeader } from "./GlassHeader";
 import { StorageTabs } from "./StorageTabs";
-import { ItemCard, getStatus } from "./ItemCard";
+import { ItemCard } from "./ItemCard";
+import { ItemDetailsDrawer } from "./ItemDetailsDrawer";
 import { BottomNav } from "./BottomNav";
 import { ScanFab } from "./ScanFab";
 import { ReceiptScanFlow } from "./ReceiptScanFlow";
 import { toast } from "sonner";
 import { FinancialsScreen } from "./FinancialsScreen";
 import { LoginScreen } from "./LoginScreen";
-import { Snowflake, Calendar, Package, Thermometer, ArrowRight, X, Users } from "lucide-react";
+import { ArrowRight, X, Users } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -34,7 +35,6 @@ import {
   usePantry,
   getDefaultDaysLeft,
   getDefaultMinStock,
-  getFreezerExtensionDays,
 } from "@/hooks/usePantry";
 import { ManageFamilyPage } from "./ManageFamilyPage";
 import {
@@ -223,7 +223,6 @@ export function PantryScreen() {
     setItems,
     current,
     detailsItem,
-    setDetailsItem,
     addedBanner,
     setAddedBanner,
     expiringSoon,
@@ -231,9 +230,8 @@ export function PantryScreen() {
     updateQty,
     updateMinStock,
     updateDaysLeft,
-    updateItemQty,
+    patchItem,
     moveItem,
-    moveToFreezer,
     openItemDetails,
     closeItemDetails,
     addScannedItems,
@@ -1240,224 +1238,13 @@ export function PantryScreen() {
         </DrawerContent>
       </Drawer>
 
-      {/* Item Details Drawer — premium, useful, with quick actions */}
-      <Drawer open={!!detailsItem} onOpenChange={(open) => !open && closeItemDetails()}>
-        <DrawerContent className="max-w-md mx-auto">
-          {detailsItem && (() => {
-            const { item, storage } = detailsItem;
-            const status = getStatus(item.daysLeft);
-            const isCurrent = (target: StorageKey) => storage === target;
-
-            const quickAction = (to: StorageKey) => {
-              if (isCurrent(to)) return;
-              moveItem(item.id, storage, to);
-            };
-
-            return (
-              <>
-                <DrawerHeader className="text-left pb-2">
-                  <div className="flex items-start gap-4">
-                    <div className="grid size-16 shrink-0 place-items-center rounded-3xl bg-secondary text-4xl shadow-inner ring-1 ring-border/40">
-                      {item.emoji}
-                    </div>
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <DrawerTitle className="text-[21px] tracking-[-0.015em] leading-tight">{item.name}</DrawerTitle>
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-[12px] text-muted-foreground">
-                        <span className="font-medium text-foreground/80">
-                          {storage === "fridge" ? "Fridge" : storage === "freezer" ? "Freezer" : "Pantry"}
-                        </span>
-                        <span className="opacity-50">·</span>
-                        <span>{item.qty} {item.unit}</span>
-                      </div>
-                      {/* Status pill */}
-                      <div className="mt-2">
-                        <span
-                          className="status-pill text-[10px] px-2.5 py-px inline-flex"
-                          style={{
-                            backgroundColor: `color-mix(in oklab, ${status.color} 13%, var(--color-card))`,
-                            color: status.color,
-                            borderColor: `color-mix(in oklab, ${status.color} 22%, transparent)`,
-                          }}
-                        >
-                          <span className="size-1 rounded-full mr-1.5" style={{ backgroundColor: status.color }} />
-                          {status.label} · {item.daysLeft}d
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </DrawerHeader>
-
-                <div className="px-5 pb-1 space-y-5">
-                  {/* Quick Quantity — useful premium control */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5 px-0.5">
-                      <div className="text-sm font-semibold tracking-[-0.01em]">Quantity</div>
-                      <div className="text-sm font-semibold tabular-nums text-foreground/90">{item.qty} {item.unit}</div>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-3xl bg-secondary/70 p-1">
-                      <button
-                        onClick={() => {
-                          updateItemQty(item.id, -1);
-                        }}
-                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl text-xl font-medium active:bg-background/70 active:scale-[0.985] transition"
-                        aria-label="Decrease quantity"
-                      >
-                        –
-                      </button>
-                      <div className="w-14 text-center text-2xl font-semibold tabular-nums text-foreground">{item.qty}</div>
-                      <button
-                        onClick={() => updateItemQty(item.id, +1)}
-                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl bg-brand text-brand-foreground text-xl font-medium active:brightness-105 active:scale-[0.985] transition"
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Expiration editor — refined */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5 px-0.5">
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <Calendar className="size-4" />
-                        Expiration
-                      </div>
-                      <span className="text-sm font-semibold tabular-nums">{item.daysLeft} days</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 rounded-3xl bg-secondary/70 p-1">
-                      <button
-                        onClick={() => {
-                          const newVal = Math.max(0, item.daysLeft - 1);
-                          setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, daysLeft: newVal } } : null);
-                          updateDaysLeft(item.id, newVal);
-                        }}
-                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl text-xl font-medium active:bg-background/70 active:scale-[0.985] transition"
-                        aria-label="Decrease days left"
-                      >
-                        –
-                      </button>
-                      <div className="w-16 text-center text-3xl font-semibold tabular-nums text-foreground">{item.daysLeft}</div>
-                      <button
-                        onClick={() => {
-                          const newVal = item.daysLeft + 1;
-                          setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, daysLeft: newVal } } : null);
-                          updateDaysLeft(item.id, newVal);
-                        }}
-                        className="touch-target flex-1 grid h-11 place-items-center rounded-3xl bg-brand text-brand-foreground text-xl font-medium active:brightness-105 active:scale-[0.985] transition"
-                        aria-label="Increase days left"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <p className="mt-1 px-0.5 text-[11px] text-muted-foreground">
-                      Freezer items typically last 3–6× longer.
-                    </p>
-                  </div>
-
-                  {/* Minimum stock */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5 px-0.5">
-                      <div className="text-sm font-semibold">Minimum stock</div>
-                      <div className="text-sm font-semibold tabular-nums">{item.minStock} {item.unit}</div>
-                    </div>
-                    <div className="flex items-center rounded-3xl bg-secondary/70 p-1">
-                      <button
-                        onClick={() => {
-                          const newMin = Math.max(0, item.minStock - 1);
-                          setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, minStock: newMin } } : null);
-                          updateMinStock(item.id, newMin);
-                        }}
-                        className="touch-target flex-1 h-11 grid place-items-center rounded-3xl text-xl active:bg-background/70 active:scale-[0.985] transition"
-                      >
-                        –
-                      </button>
-                      <div className="w-16 text-center text-2xl font-semibold tabular-nums">{item.minStock}</div>
-                      <button
-                        onClick={() => {
-                          const newMin = item.minStock + 1;
-                          setDetailsItem((prev) => prev ? { ...prev, item: { ...prev.item, minStock: newMin } } : null);
-                          updateMinStock(item.id, newMin);
-                        }}
-                        className="touch-target flex-1 h-11 grid place-items-center rounded-3xl bg-brand text-brand-foreground text-xl active:brightness-105 active:scale-[0.985] transition"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Quick Actions — clean dedicated section */}
-                  <div className="pt-1">
-                    <div className="px-0.5 mb-1.5 text-sm font-semibold tracking-[-0.01em]">Quick Actions</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Fridge */}
-                      <button
-                        onClick={() => quickAction("fridge")}
-                        disabled={isCurrent("fridge")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-3xl border py-3 text-sm font-medium active:scale-[0.985] transition disabled:opacity-60 disabled:active:scale-100 ${
-                          isCurrent("fridge")
-                            ? "bg-secondary border-border/70 text-foreground/70"
-                            : "bg-card active:bg-secondary/60 border-border/60"
-                        }`}
-                      >
-                        <Thermometer className="size-4" />
-                        <span>Fridge</span>
-                        {isCurrent("fridge") && <span className="text-[10px] text-muted-foreground">Current</span>}
-                      </button>
-
-                      {/* Freezer */}
-                      <button
-                        onClick={() => quickAction("freezer")}
-                        disabled={isCurrent("freezer")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-3xl border py-3 text-sm font-medium active:scale-[0.985] transition disabled:opacity-60 disabled:active:scale-100 ${
-                          isCurrent("freezer")
-                            ? "bg-secondary border-border/70 text-foreground/70"
-                            : "bg-[color-mix(in_oklab,var(--color-fresh)_8%,var(--color-card))] border-[color-mix(in_oklab,var(--color-fresh)_25%,transparent)]"
-                        }`}
-                      >
-                        <Snowflake className="size-4" />
-                        <span>Freezer</span>
-                        {!isCurrent("freezer") && (
-                          <span className="text-[10px] text-muted-foreground">+{getFreezerExtensionDays(item.name)}d</span>
-                        )}
-                        {isCurrent("freezer") && <span className="text-[10px] text-muted-foreground">Current</span>}
-                      </button>
-
-                      {/* Pantry */}
-                      <button
-                        onClick={() => quickAction("pantry")}
-                        disabled={isCurrent("pantry")}
-                        className={`flex flex-col items-center justify-center gap-1.5 rounded-3xl border py-3 text-sm font-medium active:scale-[0.985] transition disabled:opacity-60 disabled:active:scale-100 ${
-                          isCurrent("pantry")
-                            ? "bg-secondary border-border/70 text-foreground/70"
-                            : "bg-card active:bg-secondary/60 border-border/60"
-                        }`}
-                      >
-                        <Package className="size-4" />
-                        <span>Pantry</span>
-                        {isCurrent("pantry") && <span className="text-[10px] text-muted-foreground">Current</span>}
-                      </button>
-                    </div>
-                    <p className="px-0.5 mt-2 text-[11px] text-muted-foreground">
-                      Moving to freezer automatically extends expiration.
-                    </p>
-                  </div>
-                </div>
-
-                <DrawerFooter className="pt-2 pb-6">
-                  <DrawerClose asChild>
-                    <button className="w-full rounded-3xl py-3.5 text-sm font-semibold border active:bg-secondary/60">
-                      Done
-                    </button>
-                  </DrawerClose>
-                </DrawerFooter>
-              </>
-            );
-          })()}
-        </DrawerContent>
-      </Drawer>
+      {/* Item Details Drawer — rename, tappable numbers, date expiry, price */}
+      <ItemDetailsDrawer
+        detailsItem={detailsItem}
+        onClose={closeItemDetails}
+        onPatch={patchItem}
+        onMove={moveItem}
+      />
     </div>
   );
 }

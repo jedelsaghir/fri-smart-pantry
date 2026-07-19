@@ -12,6 +12,10 @@ export interface PantryItem {
   emoji: string;
   daysLeft: number;
   minStock: number;
+  /** Latest purchase price in EUR (optional) */
+  latestPrice?: number;
+  /** Price basis label, e.g. "100g", "L", "pcs" */
+  priceUnit?: string;
 }
 
 export type ItemStatus = {

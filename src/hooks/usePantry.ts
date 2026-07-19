@@ -17,18 +17,27 @@ import type {
 
 export const SEED: PantryItemsByStorage = {
   fridge: [
-    { id: "1", name: "Whole milk", qty: 2, unit: "L", emoji: "🥛", daysLeft: 12, minStock: 2 },
-    { id: "2", name: "Free-range eggs", qty: 8, unit: "pcs", emoji: "🥚", daysLeft: 19, minStock: 6 },
-    { id: "3", name: "Greek yogurt", qty: 1, unit: "tub", emoji: "🥣", daysLeft: 2, minStock: 2 },
-    { id: "4", name: "Cherry tomatoes", qty: 1, unit: "pack", emoji: "🍅", daysLeft: 5, minStock: 2 },
-    { id: "5", name: "Aged cheddar", qty: 220, unit: "g", emoji: "🧀", daysLeft: 18, minStock: 150 },
-    { id: "6", name: "Baby spinach", qty: 1, unit: "bag", emoji: "🥬", daysLeft: 1, minStock: 1 },
+    { id: "1", name: "Whole milk", qty: 2, unit: "L", emoji: "🥛", daysLeft: 12, minStock: 2, latestPrice: 1.29, priceUnit: "L" },
+    { id: "2", name: "Free-range eggs", qty: 8, unit: "pcs", emoji: "🥚", daysLeft: 19, minStock: 6, latestPrice: 0.35, priceUnit: "pcs" },
+    { id: "3", name: "Greek yogurt", qty: 1, unit: "tub", emoji: "🥣", daysLeft: 2, minStock: 2, latestPrice: 1.89, priceUnit: "tub" },
+    { id: "4", name: "Cherry tomatoes", qty: 1, unit: "pack", emoji: "🍅", daysLeft: 5, minStock: 2, latestPrice: 2.19, priceUnit: "pack" },
+    { id: "5", name: "Aged cheddar", qty: 220, unit: "g", emoji: "🧀", daysLeft: 18, minStock: 150, latestPrice: 2.45, priceUnit: "100g" },
+    { id: "6", name: "Baby spinach", qty: 1, unit: "bag", emoji: "🥬", daysLeft: 1, minStock: 1, latestPrice: 1.49, priceUnit: "bag" },
   ],
   freezer: [
-    { id: "f1", name: "Chicken thighs", qty: 600, unit: "g", emoji: "🍗", daysLeft: 95, minStock: 1 },
+    { id: "f1", name: "Chicken thighs", qty: 600, unit: "g", emoji: "🍗", daysLeft: 95, minStock: 1, latestPrice: 1.85, priceUnit: "100g" },
   ],
   pantry: [],
 };
+
+/** Sensible default price basis from item unit */
+export function defaultPriceUnit(unit: string): string {
+  const u = unit.toLowerCase().trim();
+  if (u === "g" || u === "kg") return "100g";
+  if (u === "ml") return "100ml";
+  if (u === "l") return "L";
+  return unit;
+}
 
 export function getDefaultMinStock(name: string): number {
   const lower = name.toLowerCase();
@@ -184,51 +193,102 @@ export function usePantry(options: UsePantryOptions = {}) {
     [active, onActivity]
   );
 
-  const updateMinStock = useCallback((id: string, newMin: number) => {
+  /**
+   * Patch any fields on an item across all storages and keep the open
+   * details drawer in sync (live save). Removes item if qty hits 0.
+   */
+  const patchItem = useCallback((id: string, patch: Partial<PantryItem>) => {
+    const normalized: Partial<PantryItem> = { ...patch };
+    if (typeof normalized.qty === "number") {
+      normalized.qty = Math.max(0, normalized.qty);
+    }
+    if (typeof normalized.minStock === "number") {
+      normalized.minStock = Math.max(0, normalized.minStock);
+    }
+    if (typeof normalized.daysLeft === "number") {
+      normalized.daysLeft = Math.max(0, Math.floor(normalized.daysLeft));
+    }
+    if (typeof normalized.latestPrice === "number") {
+      normalized.latestPrice = Math.max(0, Math.round(normalized.latestPrice * 100) / 100);
+    }
+    if (typeof normalized.name === "string") {
+      const trimmed = normalized.name.trim();
+      if (!trimmed) {
+        // Don't allow empty names — drop the name patch
+        delete normalized.name;
+      } else {
+        normalized.name = trimmed;
+      }
+    }
+
+    const apply = (item: PantryItem): PantryItem => {
+      const next = { ...item, ...normalized };
+      // Allow explicitly clearing optional price
+      if ("latestPrice" in patch && patch.latestPrice === undefined) {
+        delete next.latestPrice;
+      }
+      return next;
+    };
+
     setItems((prev) => {
       const next = { ...prev };
       (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage].map((i) =>
-          i.id === id ? { ...i, minStock: Math.max(0, newMin) } : i
-        );
+        next[storage] = next[storage]
+          .map((i) => (i.id === id ? apply(i) : i))
+          .filter((i) => i.qty > 0);
       });
       return next;
+    });
+
+    setDetailsItem((prev) => {
+      if (!prev || prev.item.id !== id) return prev;
+      const nextItem = apply(prev.item);
+      if (typeof normalized.qty === "number" && normalized.qty <= 0) {
+        setTimeout(() => setDetailsItem(null), 60);
+        return null;
+      }
+      return { ...prev, item: nextItem };
     });
   }, []);
 
-  const updateDaysLeft = useCallback((id: string, newDays: number) => {
-    const clamped = Math.max(0, Math.floor(newDays));
-    setItems((prev) => {
-      const next = { ...prev };
-      (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage].map((i) =>
-          i.id === id ? { ...i, daysLeft: clamped } : i
-        );
-      });
-      return next;
-    });
-  }, []);
+  const updateMinStock = useCallback(
+    (id: string, newMin: number) => {
+      patchItem(id, { minStock: newMin });
+    },
+    [patchItem]
+  );
+
+  const updateDaysLeft = useCallback(
+    (id: string, newDays: number) => {
+      patchItem(id, { daysLeft: newDays });
+    },
+    [patchItem]
+  );
 
   /** Cross-storage qty update used by details drawer (keeps drawer state in sync) */
   const updateItemQty = useCallback(
     (id: string, delta: number) => {
       setItems((prev) => {
+        let currentQty: number | null = null;
+        for (const storage of Object.keys(prev) as StorageKey[]) {
+          const found = prev[storage].find((i) => i.id === id);
+          if (found) {
+            currentQty = found.qty;
+            break;
+          }
+        }
+        if (currentQty === null) return prev;
+        const newQty = Math.max(0, currentQty + delta);
+
         const next = { ...prev };
         (Object.keys(next) as StorageKey[]).forEach((storage) => {
           next[storage] = next[storage]
-            .map((i) => {
-              if (i.id === id) {
-                const newQty = Math.max(0, i.qty + delta);
-                return { ...i, qty: newQty };
-              }
-              return i;
-            })
+            .map((i) => (i.id === id ? { ...i, qty: newQty } : i))
             .filter((i) => i.qty > 0);
         });
         return next;
       });
 
-      // Sync the open drawer preview (activity is logged via main card steppers)
       setDetailsItem((prev) => {
         if (!prev || prev.item.id !== id) return prev;
         const newQty = Math.max(0, prev.item.qty + delta);
@@ -240,6 +300,29 @@ export function usePantry(options: UsePantryOptions = {}) {
       });
     },
     []
+  );
+
+  const updateItemName = useCallback(
+    (id: string, name: string) => {
+      patchItem(id, { name });
+    },
+    [patchItem]
+  );
+
+  const updateItemPrice = useCallback(
+    (id: string, latestPrice: number, priceUnit?: string) => {
+      const patch: Partial<PantryItem> = { latestPrice };
+      if (priceUnit !== undefined) patch.priceUnit = priceUnit;
+      patchItem(id, patch);
+    },
+    [patchItem]
+  );
+
+  const setItemQty = useCallback(
+    (id: string, qty: number) => {
+      patchItem(id, { qty });
+    },
+    [patchItem]
   );
 
   /** Move item to a different storage; extend expiration when freezing */
@@ -389,6 +472,10 @@ export function usePantry(options: UsePantryOptions = {}) {
     updateMinStock,
     updateDaysLeft,
     updateItemQty,
+    setItemQty,
+    patchItem,
+    updateItemName,
+    updateItemPrice,
     moveItem,
     moveToFreezer,
     openItemDetails,

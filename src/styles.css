@@ -266,3 +266,32 @@
   min-height: 44px;
   min-width: 44px;
 }
+
+/* ---------------------------------------------------------------------------
+   Force premium single-column pantry layout (never 2-col item grids)
+   --------------------------------------------------------------------------- */
+.pantry-item-list {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  gap: 1.125rem !important;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pantry-item-list > .pantry-item-card,
+.pantry-item-list > li {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  grid-column: auto !important;
+}
+
+.storage-tabs-premium {
+  width: 100% !important;
+  max-width: 100% !important;
+}

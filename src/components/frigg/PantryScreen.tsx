@@ -936,7 +936,8 @@ export function PantryScreen() {
         ) : (
           // === PANTRY VIEW ===
           <>
-            <div className="w-full mb-1">
+            {/* Full-width storage segmented control */}
+            <div className="mb-2 w-full max-w-full" style={{ width: "100%" }}>
               <StorageTabs active={active} onChange={setActive} />
             </div>
             {/* Silent success + motivational banner */}
@@ -990,7 +991,20 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              <ul className="mt-5 flex flex-col gap-3.5">
+              /* FORCE single-column list — never grid-cols-2 */
+              <ul
+                className="pantry-item-list mt-6"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1.125rem",
+                  width: "100%",
+                  maxWidth: "100%",
+                  margin: 0,
+                  padding: 0,
+                  listStyle: "none",
+                }}
+              >
                 {[...current]
                   .sort((a, b) =>
                     a.name.localeCompare(b.name, undefined, {

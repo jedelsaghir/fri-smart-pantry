@@ -37,12 +37,15 @@ import {
   getFreezerExtensionDays,
 } from "@/hooks/usePantry";
 import { ManageFamilyPage } from "./ManageFamilyPage";
-
-const DEFAULT_FAMILY_MEMBERS: FamilyMember[] = [
-  { id: "you", name: "You", emoji: "👤", isYou: true },
-  { id: "elena", name: "Elena", emoji: "👩‍🍳" },
-  { id: "alex", name: "Alex", emoji: "🧒" },
-];
+import {
+  buildInviteUrl,
+  createMemberId,
+  defaultFamilyMembers,
+  generateInviteCode,
+  loadFamilyMembers,
+  normalizeFamilyMember,
+  saveFamilyMembers,
+} from "@/lib/family";
 
 export function PantryScreen() {
   const [activeView, setActiveView] = useState<ActiveView>("pantry");
@@ -50,6 +53,7 @@ export function PantryScreen() {
     if (typeof window === "undefined") return false;
     try { return localStorage.getItem("friggg-logged-in") === "true"; } catch { return false; }
   });
+  const [forcedInviteCode, setForcedInviteCode] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
 
@@ -101,25 +105,29 @@ export function PantryScreen() {
     }
   };
 
-  // Family Sharing state (persisted; editable via Manage Family page)
+  // Family Sharing state (persisted; multi-user invites via Manage Family)
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(() => {
-    if (typeof window === "undefined") return DEFAULT_FAMILY_MEMBERS;
-    try {
-      const saved = localStorage.getItem("friggg-family-members");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((m: FamilyMember) => m?.id && m?.name)) {
-          return parsed as FamilyMember[];
-        }
-      }
-    } catch {}
-    return DEFAULT_FAMILY_MEMBERS;
+    if (typeof window === "undefined") return defaultFamilyMembers();
+    return loadFamilyMembers();
   });
   useEffect(() => {
-    try {
-      localStorage.setItem("friggg-family-members", JSON.stringify(familyMembers));
-    } catch {}
+    saveFamilyMembers(familyMembers);
   }, [familyMembers]);
+
+  // Re-sync members after login (invite join updates localStorage)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    setFamilyMembers(loadFamilyMembers());
+    try {
+      const p = localStorage.getItem("friggg-profile");
+      if (p) {
+        const parsed = JSON.parse(p);
+        if (parsed?.name) setUserName(parsed.name.split(" ")[0] || "Elena");
+      }
+      const h = localStorage.getItem("friggg-household");
+      if (h) setHouseholdName(h);
+    } catch {}
+  }, [isAuthenticated]);
 
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([
     { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
@@ -138,9 +146,18 @@ export function PantryScreen() {
 
   const addFamilyMember = useCallback(
     (member: Omit<FamilyMember, "id" | "isYou">) => {
-      const id = `member-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      setFamilyMembers((prev) => [...prev, { id, name: member.name, emoji: member.emoji }]);
-      addActivity("You", `added ${member.name} to the household`);
+      const id = createMemberId();
+      const full = normalizeFamilyMember({
+        id,
+        name: member.name,
+        emoji: member.emoji,
+        phone: member.phone || "",
+        inviteCode: member.inviteCode || generateInviteCode(),
+        status: member.status || "pending",
+        email: member.email,
+      });
+      setFamilyMembers((prev) => [...prev, full]);
+      addActivity("You", `invited ${member.name} to the household`);
     },
     [addActivity]
   );
@@ -149,7 +166,7 @@ export function PantryScreen() {
     (id: string) => {
       setFamilyMembers((prev) => {
         const target = prev.find((m) => m.id === id);
-        if (!target || target.isYou) return prev;
+        if (!target || target.isYou || target.status === "owner") return prev;
         addActivity("You", `removed ${target.name} from the household`);
         return prev.filter((m) => m.id !== id);
       });
@@ -157,11 +174,46 @@ export function PantryScreen() {
     [addActivity]
   );
 
+  const updateFamilyMember = useCallback((id: string, patch: Partial<FamilyMember>) => {
+    setFamilyMembers((prev) =>
+      prev.map((m) => (m.id === id ? normalizeFamilyMember({ ...m, ...patch, id: m.id, name: patch.name ?? m.name }) : m))
+    );
+  }, []);
+
   const openManageFamily = useCallback(() => {
     setShowFamilyDrawer(false);
     setShowSettings(false);
     setShowManageFamily(true);
   }, []);
+
+  /** Demo: log out and open invite acceptance as the invited member */
+  const simulateAcceptInvite = useCallback(
+    (member: FamilyMember) => {
+      const code = member.inviteCode || generateInviteCode();
+      if (!member.inviteCode) {
+        updateFamilyMember(member.id, { inviteCode: code, status: "pending" });
+      }
+      setShowManageFamily(false);
+      setShowFamilyDrawer(false);
+      setShowSettings(false);
+      try {
+        localStorage.removeItem("friggg-logged-in");
+        localStorage.setItem("friggg-pending-invite", code);
+        // Keep pantry data so joiners see the same shared inventory
+      } catch {}
+      setIsAuthenticated(false);
+      setForcedInviteCode(code);
+      // Reflect invite URL for realism
+      try {
+        const url = buildInviteUrl(code);
+        window.history.replaceState({}, "", new URL(url).pathname + new URL(url).search);
+      } catch {}
+      toast.message("Invite opened", {
+        description: `Create an account as ${member.name} to join the shared pantry.`,
+      });
+    },
+    [updateFamilyMember]
+  );
 
   // Pantry domain state + actions (extracted from god component)
   const {
@@ -191,10 +243,15 @@ export function PantryScreen() {
   // Persist auth for seamless PWA / reload / offline experience
   const doLogin = () => {
     try { localStorage.setItem("friggg-logged-in", "true"); } catch {}
+    setForcedInviteCode(null);
+    setFamilyMembers(loadFamilyMembers());
     setIsAuthenticated(true);
   };
   const doLogout = () => {
-    try { localStorage.removeItem("friggg-logged-in"); } catch {}
+    try {
+      localStorage.removeItem("friggg-logged-in");
+      localStorage.removeItem("friggg-current-user-id");
+    } catch {}
     setIsAuthenticated(false);
   };
 
@@ -613,7 +670,13 @@ export function PantryScreen() {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={doLogin} />;
+    return (
+      <LoginScreen
+        onLogin={doLogin}
+        forcedInviteCode={forcedInviteCode}
+        onClearForcedInvite={() => setForcedInviteCode(null)}
+      />
+    );
   }
 
   const sharedItemCount =
@@ -630,6 +693,8 @@ export function PantryScreen() {
           onBack={() => setShowManageFamily(false)}
           onAddMember={addFamilyMember}
           onRemoveMember={removeFamilyMember}
+          onUpdateMember={updateFamilyMember}
+          onSimulateAcceptInvite={simulateAcceptInvite}
         />
       )}
 

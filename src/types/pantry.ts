@@ -60,12 +60,22 @@ export type Recipe = {
 
 export type RecipeFilter = "all" | "canMake" | "expiring";
 
+/** Household membership lifecycle for multi-user invites */
+export type FamilyMemberStatus = "owner" | "pending" | "joined";
+
 export type FamilyMember = {
   id: string;
   name: string;
   emoji: string;
-  /** True for the signed-in user — cannot be removed */
+  /** Phone digits for WhatsApp invites (E.164 or local) */
+  phone?: string;
+  /** Unique code embedded in invite links */
+  inviteCode: string;
+  status: FamilyMemberStatus;
+  /** True for the currently signed-in user — cannot be removed */
   isYou?: boolean;
+  email?: string;
+  joinedAt?: string;
 };
 
 export type ActivityLogEntry = {

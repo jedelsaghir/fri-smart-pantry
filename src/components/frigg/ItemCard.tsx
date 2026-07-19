@@ -12,7 +12,7 @@ function shortStatusLabel(label: string): string {
 }
 
 /**
- * Premium single-column pantry card.
+ * Compact premium single-column pantry card.
  * Shows ONLY: emoji, name, status, days left, quantity.
  * Min stock + steppers live exclusively in the details drawer.
  */
@@ -78,13 +78,14 @@ export function ItemCard({
       aria-label={`${item.name}, ${item.qty} ${item.unit}, ${status.label}, ${item.daysLeft} days left. Tap for details.`}
       className="pantry-item-card elevated-card cursor-pointer select-none list-none col-span-1 w-full"
       style={{
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
         width: "100%",
         maxWidth: "100%",
-        minHeight: "9.5rem",
         boxSizing: "border-box",
-        borderRadius: "1.85rem",
-        padding: "1.5rem 1.5rem 1.35rem",
+        borderRadius: "1.25rem",
+        padding: "0.7rem 0.85rem",
         margin: 0,
         gridColumn: "1 / -1",
       }}
@@ -100,136 +101,120 @@ export function ItemCard({
         }
       }}
     >
-      {/* Top: large emoji + name — tall, spacious card */}
+      {/* Compact emoji — ~50px */}
       <div
+        aria-hidden
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "1.15rem",
-          width: "100%",
+          width: "50px",
+          height: "50px",
+          flexShrink: 0,
+          display: "grid",
+          placeItems: "center",
+          borderRadius: "0.9rem",
+          fontSize: "1.5rem",
+          lineHeight: 1,
+          background: "var(--color-secondary)",
+          boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.55)",
         }}
+        className="ring-1 ring-border/20"
       >
-        <div
-          aria-hidden
+        {item.emoji}
+      </div>
+
+      {/* Name + status / days */}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p
+          className="truncate text-foreground"
           style={{
-            width: "4.75rem",
-            height: "4.75rem",
-            flexShrink: 0,
-            display: "grid",
-            placeItems: "center",
-            borderRadius: "1.4rem",
-            fontSize: "2.5rem",
-            lineHeight: 1,
-            background: "var(--color-secondary)",
-            boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.55)",
+            margin: 0,
+            fontSize: "0.975rem",
+            fontWeight: 600,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.3,
           }}
-          className="ring-1 ring-border/20"
         >
-          {item.emoji}
-        </div>
+          {item.name}
+        </p>
 
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <p
-            className="truncate text-foreground"
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "0.35rem 0.55rem",
+            marginTop: "0.3rem",
+          }}
+        >
+          <span
             style={{
-              margin: 0,
-              fontSize: "1.2rem",
-              fontWeight: 600,
-              letterSpacing: "-0.025em",
-              lineHeight: 1.25,
-            }}
-          >
-            {item.name}
-          </p>
-
-          {/* Status + days — only meta on card */}
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
+              display: "inline-flex",
               alignItems: "center",
-              gap: "0.5rem 0.75rem",
-              marginTop: "0.75rem",
+              gap: "0.28rem",
+              borderRadius: "999px",
+              padding: "0.12rem 0.5rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              letterSpacing: "-0.01em",
+              backgroundColor: `color-mix(in oklab, ${status.color} 11%, var(--color-card))`,
+              color: status.color,
+              border: `1px solid color-mix(in oklab, ${status.color} 14%, transparent)`,
             }}
           >
             <span
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
+                width: 5,
+                height: 5,
                 borderRadius: "999px",
-                padding: "0.28rem 0.75rem",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                backgroundColor: `color-mix(in oklab, ${status.color} 11%, var(--color-card))`,
-                color: status.color,
-                border: `1px solid color-mix(in oklab, ${status.color} 14%, transparent)`,
+                backgroundColor: status.color,
+                flexShrink: 0,
               }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "999px",
-                  backgroundColor: status.color,
-                  flexShrink: 0,
-                }}
-              />
-              {shortStatusLabel(status.label)}
-            </span>
-            <span
-              className="text-muted-foreground"
-              style={{
-                fontSize: "0.875rem",
-                fontWeight: 500,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {item.daysLeft}d left
-            </span>
-          </div>
+            />
+            {shortStatusLabel(status.label)}
+          </span>
+          <span
+            className="text-muted-foreground"
+            style={{
+              fontSize: "0.75rem",
+              fontWeight: 500,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {item.daysLeft}d left
+          </span>
         </div>
       </div>
 
-      {/* Bottom: quantity only (no min stock, no stepper) */}
+      {/* Quantity — right-aligned, no full-width footer */}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginTop: "1.35rem",
-          paddingTop: "1.1rem",
-          borderTop: "1px solid color-mix(in oklab, var(--color-border) 55%, transparent)",
+          flexShrink: 0,
+          textAlign: "right",
+          paddingLeft: "0.25rem",
         }}
       >
         <span
-          className="text-muted-foreground"
-          style={{
-            fontSize: "0.6875rem",
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-          }}
-        >
-          Quantity
-        </span>
-        <span
           className="text-foreground"
           style={{
-            fontSize: "1.125rem",
+            display: "block",
+            fontSize: "0.975rem",
             fontWeight: 600,
             fontVariantNumeric: "tabular-nums",
             letterSpacing: "-0.02em",
+            lineHeight: 1.2,
           }}
         >
           {item.qty}
-          <span
-            className="text-muted-foreground"
-            style={{ marginLeft: "0.35rem", fontSize: "0.875rem", fontWeight: 500 }}
-          >
-            {item.unit}
-          </span>
+        </span>
+        <span
+          className="text-muted-foreground"
+          style={{
+            display: "block",
+            marginTop: "0.1rem",
+            fontSize: "0.6875rem",
+            fontWeight: 500,
+          }}
+        >
+          {item.unit}
         </span>
       </div>
     </li>

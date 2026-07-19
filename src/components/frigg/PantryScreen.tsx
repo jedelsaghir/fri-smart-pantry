@@ -994,14 +994,14 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              /* FORCE 1-column: grid-cols-1 only — never grid-cols-2 */
+              /* FORCE 1-column compact list — scannable, less scrolling */
               <ul
-                className="pantry-item-list mt-6 grid grid-cols-1 gap-5"
+                className="pantry-item-list mt-5 grid grid-cols-1 gap-2.5"
                 data-layout="single-column"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr",
-                  gap: "1.25rem",
+                  gap: "0.65rem",
                   width: "100%",
                   maxWidth: "100%",
                   margin: 0,

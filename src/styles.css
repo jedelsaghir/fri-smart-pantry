@@ -276,7 +276,7 @@
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) !important;
   grid-auto-flow: row !important;
-  gap: 1.25rem !important;
+  gap: 0.65rem !important;
   width: 100% !important;
   max-width: 100% !important;
   columns: 1 !important;
@@ -288,10 +288,10 @@
 
 .pantry-item-list .pantry-item-card,
 .pantry-item-list > li {
-  display: block !important;
+  display: flex !important;
   width: 100% !important;
   max-width: 100% !important;
-  min-height: 9.5rem !important;
+  min-height: 0 !important;
   grid-column: 1 / -1 !important;
   float: none !important;
   clear: both !important;

@@ -1009,88 +1009,66 @@ export function PantryScreen() {
             {current.length === 0 ? (
               <EmptyState label={active} />
             ) : (
-              <>
-                {/* Critical CSS injected with the list — beats any leaked grid-cols-2 */}
-                <style
-                  dangerouslySetInnerHTML={{
-                    __html: `
-#pantry-item-list,
-#pantry-item-list.pantry-item-list,
-div#pantry-item-list {
-  display: flex !important;
-  flex-direction: column !important;
-  flex-wrap: nowrap !important;
-  align-items: stretch !important;
-  gap: 0.9rem !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  margin: 1.25rem 0 0 0 !important;
-  padding: 0 !important;
-  list-style: none !important;
-  grid-template-columns: none !important;
-  grid-auto-flow: row !important;
-  columns: 1 !important;
-  column-count: 1 !important;
-}
-#pantry-item-list > *,
-#pantry-item-list .pantry-item-row {
-  display: block !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 100% !important;
-  flex: 0 0 auto !important;
-  float: none !important;
-  clear: both !important;
-  box-sizing: border-box !important;
-}
-#pantry-item-list .pantry-item-card {
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-}
-`,
-                  }}
-                />
-                {/* FORCE 1-column vertical stack — never grid, never grid-cols-2 */}
-                <div
-                  id="pantry-item-list"
-                  className="pantry-item-list"
-                  data-layout="single-column"
-                  data-cols="1"
-                  role="list"
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    flexWrap: "nowrap",
-                    alignItems: "stretch",
-                    gap: "0.9rem",
-                    width: "100%",
-                    maxWidth: "100%",
-                    marginTop: "1.25rem",
-                    marginBottom: 0,
-                    marginLeft: 0,
-                    marginRight: 0,
-                    padding: 0,
-                  }}
-                >
-                  {[...current]
-                    .sort((a, b) =>
-                      a.name.localeCompare(b.name, undefined, {
-                        sensitivity: "base",
-                        numeric: true,
-                      })
-                    )
-                    .map((item) => (
-                      <ItemCard
-                        key={item.id}
-                        item={item}
-                        storage={active}
-                        onOpenDetails={() => openItemDetails(item, active)}
-                        onDelete={() => handleDeleteItem(item.id)}
-                      />
-                    ))}
-                </div>
-              </>
+              /* FORCE 1-column: flex flex-col only — no grid of any kind */
+              <div
+                id="pantry-item-list"
+                ref={(el) => {
+                  if (!el) return;
+                  // Runtime lock — overrides any leaked CSS utilities
+                  el.style.setProperty("display", "flex", "important");
+                  el.style.setProperty("flex-direction", "column", "important");
+                  el.style.setProperty("flex-wrap", "nowrap", "important");
+                  el.style.setProperty("align-items", "stretch", "important");
+                  el.style.setProperty("gap", "1rem", "important");
+                  el.style.setProperty("width", "100%", "important");
+                  el.style.setProperty("max-width", "100%", "important");
+                  el.style.setProperty("grid-template-columns", "none", "important");
+                  el.style.setProperty("columns", "1", "important");
+                  el.style.setProperty("column-count", "1", "important");
+                  Array.from(el.children).forEach((child) => {
+                    const node = child as HTMLElement;
+                    node.style.setProperty("display", "block", "important");
+                    node.style.setProperty("width", "100%", "important");
+                    node.style.setProperty("max-width", "100%", "important");
+                    node.style.setProperty("min-width", "100%", "important");
+                    node.style.setProperty("flex", "0 0 auto", "important");
+                    node.style.setProperty("float", "none", "important");
+                  });
+                }}
+                className="pantry-item-list mt-5 flex flex-col gap-4 w-full"
+                data-layout="single-column"
+                data-cols="1"
+                role="list"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  flexWrap: "nowrap",
+                  alignItems: "stretch",
+                  gap: "1rem",
+                  width: "100%",
+                  maxWidth: "100%",
+                  margin: 0,
+                  marginTop: "1.25rem",
+                  padding: 0,
+                }}
+              >
+                {[...current]
+                  .sort((a, b) =>
+                    a.name.localeCompare(b.name, undefined, {
+                      sensitivity: "base",
+                      numeric: true,
+                    })
+                  )
+                  .map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      storage={active}
+                      onOpenDetails={() => openItemDetails(item, active)}
+                      onDelete={() => handleDeleteItem(item.id)}
+                    />
+                  ))}
+              </div>
             )}
           </>
         )}

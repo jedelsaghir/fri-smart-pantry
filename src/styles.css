@@ -268,8 +268,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   FORCE 1-column pantry layout — aggressive, highest specificity
-   Vertical flex stack only. Never grid-cols-2. Never multi-column.
+   FORCE 1-column pantry layout (flex flex-col only)
    --------------------------------------------------------------------------- */
 #pantry-item-list,
 #pantry-item-list.pantry-item-list,
@@ -277,46 +276,28 @@ div#pantry-item-list,
 .pantry-item-list,
 .pantry-item-list[data-layout="single-column"],
 .pantry-item-list[data-cols="1"],
-div.pantry-item-list,
-ul.pantry-item-list {
+div.pantry-item-list {
   display: flex !important;
   flex-direction: column !important;
   flex-wrap: nowrap !important;
   align-items: stretch !important;
-  gap: 0.9rem !important;
+  gap: 1rem !important;
   width: 100% !important;
   max-width: 100% !important;
-  /* Nuke any grid / multi-col attempt */
   grid-template-columns: none !important;
   grid-template-rows: none !important;
   grid-auto-flow: row !important;
-  grid-auto-columns: auto !important;
   columns: 1 !important;
   column-count: 1 !important;
-  column-width: auto !important;
   list-style: none !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
   padding: 0 !important;
 }
 
-/* Explicitly override grid-cols-2 if a utility sneaks in */
-#pantry-item-list.grid,
-#pantry-item-list.grid-cols-1,
-#pantry-item-list.grid-cols-2,
-.pantry-item-list.grid,
-.pantry-item-list.grid-cols-1,
-.pantry-item-list.grid-cols-2,
-.pantry-item-list[class*="grid-cols"] {
-  display: flex !important;
-  flex-direction: column !important;
-  grid-template-columns: none !important;
-}
-
 #pantry-item-list > *,
 #pantry-item-list > .pantry-item-row,
 .pantry-item-list > .pantry-item-row,
-.pantry-item-list > li,
 .pantry-item-list .pantry-item-row {
   display: block !important;
   width: 100% !important;
@@ -327,8 +308,6 @@ ul.pantry-item-list {
   align-self: stretch !important;
   float: none !important;
   clear: both !important;
-  break-inside: avoid !important;
-  page-break-inside: avoid !important;
   box-sizing: border-box !important;
 }
 

@@ -243,7 +243,7 @@ export function ManageFamilyPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="flex flex-col gap-2.5">
             <div className="rounded-2xl bg-secondary/55 px-3.5 py-3 ring-1 ring-border/25">
               <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
                 <Users className="size-3.5" />
@@ -328,11 +328,11 @@ export function ManageFamilyPage({
                   </div>
 
                   {canInvite && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-3 flex flex-col gap-2">
                       <button
                         type="button"
                         onClick={() => handleWhatsApp(member)}
-                        className="flex items-center justify-center gap-1.5 rounded-2xl bg-[#25D366]/15 px-3 py-2.5 text-[12px] font-semibold text-[#128C7E] dark:text-[#25D366] ring-1 ring-[#25D366]/25 active:scale-[0.98] transition"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-[#25D366]/15 px-3 py-2.5 text-[12px] font-semibold text-[#128C7E] dark:text-[#25D366] ring-1 ring-[#25D366]/25 active:scale-[0.98] transition"
                       >
                         <MessageCircle className="size-3.5" strokeWidth={2.25} />
                         WhatsApp
@@ -340,7 +340,7 @@ export function ManageFamilyPage({
                       <button
                         type="button"
                         onClick={() => openInviteSheet(member, "qr")}
-                        className="flex items-center justify-center gap-1.5 rounded-2xl bg-secondary/70 px-3 py-2.5 text-[12px] font-semibold text-foreground ring-1 ring-border/40 active:scale-[0.98] transition"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-secondary/70 px-3 py-2.5 text-[12px] font-semibold text-foreground ring-1 ring-border/40 active:scale-[0.98] transition"
                       >
                         <QrCode className="size-3.5" strokeWidth={2.25} />
                         QR code

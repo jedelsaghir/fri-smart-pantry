@@ -221,13 +221,6 @@ export function ReceiptScanFlow({
       });
       streamRef.current = stream;
       setCameraOn(true);
-      // Attach after state commits — use microtask
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          void videoRef.current.play().catch(() => {});
-        }
-      });
     } catch {
       setCameraError("Camera permission denied or unavailable. You can still pick a photo from your library.");
       setCameraOn(false);

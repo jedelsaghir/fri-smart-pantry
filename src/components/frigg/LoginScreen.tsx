@@ -11,6 +11,7 @@ import {
   signInWithAccount,
   type PendingInviteContext,
 } from "@/lib/family";
+import { pullAndMergeOnLogin } from "@/lib/run-household-sync";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -83,7 +84,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
     } catch {}
   };
 
-  const handleInviteSignup = (e: React.FormEvent) => {
+  const handleInviteSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!invite) return;
     if (!email || !password) {
@@ -104,19 +105,57 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
       return;
     }
 
-    toast.success("Welcome to the household", {
-      description: `You're in ${invite.householdName}. The shared pantry is ready.`,
-    });
     onClearForcedInvite?.();
-    onLogin();
+    await finishWithCloudSync(email, password, {
+      successTitle: "Welcome to the household",
+      successBody: `You're in ${invite.householdName}. Syncing across devices…`,
+    });
   };
 
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  /** Sign-in / join / onboard: pull cloud household then reload so all hooks re-read storage */
+  const finishWithCloudSync = async (
+    userEmail: string,
+    userPassword: string,
+    copy?: { successTitle?: string; successBody?: string }
+  ) => {
+    toast.loading("Syncing household…", { id: "household-sync" });
+    const sync = await pullAndMergeOnLogin({
+      email: userEmail.trim().toLowerCase(),
+      password: userPassword,
+    });
+    toast.dismiss("household-sync");
+
+    if (sync.applied && sync.hadRemote) {
+      toast.success(copy?.successTitle || "Welcome back", {
+        description: "Household restored from the cloud on this device.",
+      });
+    } else if (sync.error) {
+      toast.success(copy?.successTitle || "Signed in", {
+        description: copy?.successBody || `Local data ready · cloud sync: ${sync.error}`,
+      });
+    } else {
+      toast.success(copy?.successTitle || "Signed in", {
+        description:
+          copy?.successBody ||
+          (sync.hadRemote
+            ? "You're up to date."
+            : "Cloud household saved — sign in on another device with the same email."),
+      });
+    }
+
+    // Full reload so pantry/family/receipts hooks pick up applied snapshot
+    onLogin();
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 80);
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Invite path takes priority when active
     if (invite && mode === "signup") {
-      handleInviteSignup(e);
+      await handleInviteSignup(e);
       return;
     }
 
@@ -131,8 +170,10 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
         toast.error("Sign in failed", { description: result.error });
         return;
       }
-      toast.success("Welcome back", { description: result.account.name });
-      onLogin();
+      await finishWithCloudSync(email, password, {
+        successTitle: "Welcome back",
+        successBody: `Hi ${result.account.name.split(" ")[0] || result.account.name}.`,
+      });
     } else {
       // Owner signup → beautiful onboarding
       setHouseholdName("The " + (name.split(" ")[1] || "Family") + " Home");
@@ -141,18 +182,18 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
     }
   };
 
-  const completeOnboarding = () => {
+  const completeOnboarding = async () => {
     const displayName = name || email.split("@")[0];
-    toast.success("All set!", {
-      description: `Welcome to Friġġ, ${displayName.split(" ")[0]}.`,
-    });
     try {
       localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
     } catch {}
     registerOwnerAccount(displayName, email, password, profileEmoji, householdName);
     setOnboardStep(null);
     resetAuthForm();
-    onLogin();
+    await finishWithCloudSync(email, password, {
+      successTitle: "All set!",
+      successBody: `Welcome to Friġġ, ${displayName.split(" ")[0]}. Your household will sync on other devices.`,
+    });
   };
 
   // Onboarding screens (simple, calm, sequential)
@@ -461,8 +502,8 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
         </div>
       </div>
 
-      <div className="text-center text-[10px] text-muted-foreground pb-8">
-        Demo • Everything stays private on your device
+      <div className="text-center text-[10px] text-muted-foreground pb-8 px-4">
+        Same email &amp; password on phone and computer restores your household from the cloud.
       </div>
     </div>
   );

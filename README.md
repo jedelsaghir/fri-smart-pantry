@@ -16,28 +16,44 @@ Everything stays private on your device. Works beautifully as a Progressive Web 
 
 ## Security & demo limits (read this)
 
-Friġġ is **local-first**. Pantry data lives in the browser; OCR uses a **server-side** vision call when configured.
+Friġġ keeps a **local cache** in the browser and **syncs the household to the server** when you sign in with the same email & password on another device.
 
 | Area | Reality |
 |------|---------|
-| Accounts / passwords | Stored **in plain text** in `localStorage` for simulation only — **not** production-grade auth |
-| Household “sharing” | Same-device simulation (invite links / WhatsApp open real apps; join does not sync across phones via a server) |
-| Receipt scan | **Live OCR architecture** via `getPlatform().ocr` → xAI vision (`XAI_API_KEY` server env). Without a key, scan fails honestly (no fake items). Live camera + library photos. |
+| Accounts / passwords | Demo auth — passwords stored for local simulation; server stores a hash for sync auth — **not** production-grade auth |
+| Multi-device sync | **Wired (D-1):** login pulls cloud snapshot; changes debounce-push. Same email/password on PC + iOS restores household, members, pantry, receipts, profile. |
+| Household invites | Invite links are local/demo across devices until a true invite backend ships (D-4) |
+| Receipt scan | **Live OCR** via `getPlatform().ocr` → xAI vision (`XAI_API_KEY`). |
 | Push notifications | Not implemented — in-app Alerts panel only |
-| Data | Export/import JSON backup from Settings; no automatic multi-device sync |
+| Backup | Settings export/import JSON still available |
 
-Do not use this build for real sensitive credentials or true multi-household production.
+Do not use this build for real sensitive credentials without hardening auth.
 
 ### Pluggable platform (OCR / sync / push)
 
 See [`src/platform/README.md`](src/platform/README.md). Adapters:
 
-- **Sync** — local no-op (D-1)
-- **OCR** — **wired**: camera + server vision (`ocr-xai` + `src/server/ocr-receipt.ts`). Set `XAI_API_KEY` on the host.
-- **Push** — optional browser Notification if granted (D-3 still no service worker push)
+- **Sync** — **wired**: `sync-cloud` + `src/server/household-sync.ts`
+- **OCR** — **wired**: camera + server vision (`ocr-xai`). Set `XAI_API_KEY` on the host.
+- **Push** — optional browser Notification if granted
 - **Invites** — localStorage codes only (D-4)
 
-Swap implementations with `setPlatform(createPlatform({ ... }))` without rewriting screens.
+### Enable multi-device sync (recommended for PC + iOS)
+
+```bash
+# Preferred durable store (free Upstash Redis REST)
+export UPSTASH_REDIS_REST_URL=https://....upstash.io
+export UPSTASH_REDIS_REST_TOKEN=...
+
+# Optional: custom directory for file-backed sync (Node server)
+# export FRIGG_SYNC_DIR=/var/lib/frigg-sync
+
+npm run dev
+```
+
+Without Upstash, the server still syncs via **filesystem** (`.data/frigg-sync`) when writable, or **in-memory** (works only while the same server instance is warm — fine for a single long-lived host, not multi-region serverless).
+
+**Usage:** create account / sign in on device A → use the app → sign in with the **same email & password** on device B → household restores automatically. Settings → **Sync now** forces upload/download.
 
 ### Enable receipt OCR
 

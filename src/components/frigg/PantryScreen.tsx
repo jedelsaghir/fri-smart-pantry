@@ -59,6 +59,8 @@ import {
   saveHouseholdName,
 } from "@/lib/family";
 import { firstNameFromDisplayName, personalGreeting } from "@/lib/greeting";
+import { scheduleHouseholdPush, logoutSyncSession, flushHouseholdPush } from "@/lib/run-household-sync";
+import { loadSyncCreds } from "@/lib/sync-session";
 
 export function PantryScreen() {
   const [activeView, setActiveView] = useState<ActiveView>("pantry");
@@ -488,8 +490,15 @@ export function PantryScreen() {
     setForcedInviteCode(null);
     setFamilyMembers(loadFamilyMembers());
     setIsAuthenticated(true);
+    // Seed cloud credentials from local account for background push after refresh
+    loadSyncCreds();
+    void flushHouseholdPush();
   };
   const doLogout = () => {
+    // Push one last time before clearing session
+    void flushHouseholdPush().finally(() => {
+      logoutSyncSession();
+    });
     try {
       localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
       localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
@@ -594,6 +603,24 @@ export function PantryScreen() {
       localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(shoppingList));
     } catch {}
   }, [shoppingList]);
+
+  // Multi-device: debounce cloud push when household data changes
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    scheduleHouseholdPush(1400);
+  }, [
+    isAuthenticated,
+    items,
+    familyMembers,
+    householdName,
+    activityLog,
+    shoppingList,
+    receipts,
+    userFullName,
+    userEmail,
+    userEmoji,
+    catalog,
+  ]);
 
   // Compute items that should be on the shopping list (below min or running low)
   const computeSuggestedItems = (): ShoppingListItem[] => {

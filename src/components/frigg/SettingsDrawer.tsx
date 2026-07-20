@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
   Drawer,
@@ -18,6 +19,10 @@ import {
   parseAndValidateBackup,
 } from "@/lib/backup";
 import { APP_BUILD } from "@/lib/app-build";
+import { readLocalSyncMeta } from "@/lib/household-sync";
+import { flushHouseholdPush, pullAndMergeOnLogin } from "@/lib/run-household-sync";
+import { loadSyncCreds } from "@/lib/sync-session";
+import { getPlatform } from "@/platform";
 
 export function SettingsDrawer({
   open,
@@ -66,6 +71,75 @@ export function SettingsDrawer({
   onShowInstallHint: () => void;
   onLogout: () => void;
 }) {
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<{
+    backend: string;
+    durable: boolean;
+    lastPushedAt?: string;
+    lastPulledAt?: string;
+    lastError?: string;
+  }>({ backend: "…", durable: false });
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const meta = readLocalSyncMeta();
+      let backend = "cloud";
+      let durable = false;
+      try {
+        const status = await getPlatform().sync.getStatus?.();
+        if (status) {
+          backend = status.backend;
+          durable = status.durable;
+        }
+      } catch {}
+      if (!cancelled) {
+        setSyncInfo({
+          backend,
+          durable,
+          lastPushedAt: meta.lastPushedAt,
+          lastPulledAt: meta.lastPulledAt,
+          lastError: meta.lastError,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, syncBusy]);
+
+  const handleSyncNow = async () => {
+    const creds = loadSyncCreds();
+    if (!creds) {
+      toast.error("Sign in again", {
+        description: "Cloud sync needs your email & password for this session.",
+      });
+      return;
+    }
+    setSyncBusy(true);
+    try {
+      const pull = await pullAndMergeOnLogin(creds);
+      const push = await flushHouseholdPush();
+      if (pull.applied) {
+        toast.success("Synced", {
+          description: "Cloud household applied. Reloading…",
+        });
+        window.setTimeout(() => window.location.reload(), 400);
+        return;
+      }
+      if (push.ok) {
+        toast.success("Uploaded", {
+          description: "This device’s household is on the cloud for your other devices.",
+        });
+      } else {
+        toast.error("Sync issue", { description: push.reason || pull.error || "Try again" });
+      }
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-w-md mx-auto max-h-[92dvh]">
@@ -275,11 +349,62 @@ export function SettingsDrawer({
             </div>
           </div>
 
+          {/* Multi-device cloud sync */}
+          <div className="elevated-card rounded-3xl p-4 space-y-3">
+            <div>
+              <div className="text-sm font-semibold">Cloud sync</div>
+              <p className="mt-1 text-[12px] text-muted-foreground leading-snug">
+                Same email &amp; password on phone and computer restores household, members, pantry,
+                and profile.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-secondary/50 px-3 py-2.5 text-[12px] space-y-1">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Backend</span>
+                <span className="font-medium tabular-nums">
+                  {syncInfo.backend}
+                  {syncInfo.durable ? " · durable" : " · session"}
+                </span>
+              </div>
+              {syncInfo.lastPushedAt && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Last upload</span>
+                  <span className="font-medium">
+                    {new Date(syncInfo.lastPushedAt).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {syncInfo.lastPulledAt && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Last restore</span>
+                  <span className="font-medium">
+                    {new Date(syncInfo.lastPulledAt).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {syncInfo.lastError && (
+                <p className="text-[11px] text-destructive/90 pt-0.5">{syncInfo.lastError}</p>
+              )}
+              {!syncInfo.durable && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 pt-1">
+                  Tip: set UPSTASH_REDIS_REST_URL + TOKEN on the server for reliable multi-device
+                  sync across restarts.
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={syncBusy}
+              onClick={() => void handleSyncNow()}
+              className="touch-target w-full rounded-2xl bg-brand py-2.5 text-xs font-semibold text-brand-foreground active:scale-[0.98] disabled:opacity-60"
+            >
+              {syncBusy ? "Syncing…" : "Sync now"}
+            </button>
+          </div>
+
           <div className="text-[11px] text-muted-foreground px-1 pt-1 space-y-1">
-            <p>Friġġ · build {APP_BUILD} · data stays on this device.</p>
-            <p>
-              If you still see WhatsApp invite buttons, re-sync from GitHub main and hard-refresh.
-            </p>
+            <p>Friġġ · build {APP_BUILD}</p>
+            <p>Sign in with the same account on every device to stay in sync.</p>
           </div>
 
           <button

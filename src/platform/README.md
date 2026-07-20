@@ -2,7 +2,7 @@
 
 | Concern | Interface | Current adapter | Future |
 |---------|-----------|-----------------|--------|
-| Multi-device sync | `SyncProvider` | `local/sync-local` | Cloud API |
+| Multi-device sync | `SyncProvider` | **`local/sync-cloud`** (server snapshot) | Upstash Redis for durable multi-instance |
 | Receipt OCR / camera | `OcrProvider` | **`local/ocr-xai`** (live vision) | Alternate models / on-device |
 | Push notifications | `PushProvider` | `local/push-none` | Web Push + SW |
 | Cross-device invites | `InviteProvider` | `local/invite-local` | Backend invite service |

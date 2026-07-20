@@ -60,7 +60,7 @@ Track as product decisions, not accidental bugs:
 
 | ID | Status | Item | Notes |
 |----|--------|------|-------|
-| D-1 | wontfix | Real multi-user cloud sync | **Deferred:** needs backend + auth. Local simulation only. Documented in README. |
+| D-1 | done | Multi-device household sync | **Wired:** same email/password → server snapshot pull on login + debounced push. Backends: Upstash Redis (preferred) / `.data/frigg-sync` / memory. |
 | D-2 | done | Real camera + OCR | **Wired:** `OcrProvider` → `ocr-xai` → `createServerFn` + xAI vision (`XAI_API_KEY`). Live `getUserMedia` + library. No fake items without a read. |
 | D-3 | wontfix | Push notifications | **Deferred:** needs push service. In-app Alerts panel covers local attention (P0-3/5). |
 | D-4 | wontfix | Real WhatsApp join across devices | **Deferred:** invite URLs open WhatsApp; join is same-device localStorage only. |

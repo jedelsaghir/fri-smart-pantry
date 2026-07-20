@@ -58,7 +58,7 @@ export type StoredReceipt = {
   store: string;
   total: number;
   currency: string;
-  /** Original photo as data URL (or generated mock image) */
+  /** Original photo as data URL; empty string when none was attached */
   imageDataUrl: string;
   items: ReceiptLineItem[];
   /** When the receipt was saved into the app */

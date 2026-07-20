@@ -16,29 +16,8 @@ export function createCatalogId(): string {
   return `cat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function seedCatalog(): CatalogItem[] {
-  const now = new Date().toISOString();
-  const rows: Array<Omit<CatalogItem, "id" | "updatedAt" | "source">> = [
-    { name: "Whole milk", unit: "L", emoji: "🥛", defaultMinStock: 2 },
-    { name: "Free-range eggs", unit: "pcs", emoji: "🥚", defaultMinStock: 6 },
-    { name: "Greek yogurt", unit: "tub", emoji: "🥣", defaultMinStock: 2 },
-    { name: "Cherry tomatoes", unit: "pack", emoji: "🍅", defaultMinStock: 1 },
-    { name: "Aged cheddar", unit: "g", emoji: "🧀", defaultMinStock: 150 },
-    { name: "Baby spinach", unit: "bag", emoji: "🥬", defaultMinStock: 1 },
-    { name: "Chicken thighs", unit: "g", emoji: "🍗", defaultMinStock: 1 },
-    { name: "Olive oil", unit: "bottle", emoji: "🫒", defaultMinStock: 1 },
-    { name: "Pasta", unit: "pack", emoji: "🍝", defaultMinStock: 1 },
-  ];
-  return rows.map((r) => ({
-    ...r,
-    id: createCatalogId(),
-    updatedAt: now,
-    source: "manual" as const,
-  }));
-}
-
 export function loadCatalog(): CatalogItem[] {
-  if (typeof window === "undefined") return seedCatalog();
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(CATALOG_KEY);
     if (raw) {
@@ -46,11 +25,8 @@ export function loadCatalog(): CatalogItem[] {
       if (Array.isArray(parsed)) return parsed as CatalogItem[];
     }
   } catch {}
-  const seed = seedCatalog();
-  try {
-    localStorage.setItem(CATALOG_KEY, JSON.stringify(seed));
-  } catch {}
-  return seed;
+  // Start empty — catalog grows from real pantry/scan/manual entries only
+  return [];
 }
 
 export function saveCatalog(items: CatalogItem[]): void {

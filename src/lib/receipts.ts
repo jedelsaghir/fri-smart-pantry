@@ -4,8 +4,6 @@ import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 export const RECEIPTS_KEY = STORAGE_KEYS.RECEIPTS;
 
-const STORES = ["Lidl", "Tesco", "Sainsbury's", "Aldi", "Local market"];
-
 const CATEGORY_BY_NAME: Record<string, string> = {
   milk: "Dairy",
   yogurt: "Dairy",
@@ -109,110 +107,40 @@ function escapeXml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() - days);
-  return d.toISOString();
-}
-
-function seedReceipts(): StoredReceipt[] {
-  const lidlItems: ReceiptLineItem[] = [
-    { id: "rl1", name: "Whole milk", qty: 2, unit: "L", emoji: "🥛", price: 2.58, category: "Dairy" },
-    { id: "rl2", name: "Free-range eggs", qty: 12, unit: "pcs", emoji: "🥚", price: 4.2, category: "Dairy" },
-    { id: "rl3", name: "Greek yogurt", qty: 2, unit: "tub", emoji: "🥣", price: 3.78, category: "Dairy" },
-    { id: "rl4", name: "Baby spinach", qty: 1, unit: "bag", emoji: "🥬", price: 1.49, category: "Produce" },
-  ];
-  const tescoItems: ReceiptLineItem[] = [
-    { id: "rt1", name: "Chicken thighs", qty: 600, unit: "g", emoji: "🍗", price: 5.99, category: "Meat" },
-    { id: "rt2", name: "Cherry tomatoes", qty: 1, unit: "pack", emoji: "🍅", price: 2.19, category: "Produce" },
-    { id: "rt3", name: "Aged cheddar", qty: 220, unit: "g", emoji: "🧀", price: 2.45, category: "Dairy" },
-  ];
-  const sainsItems: ReceiptLineItem[] = [
-    { id: "rs1", name: "Olive oil", qty: 1, unit: "bottle", emoji: "🫒", price: 4.5, category: "Pantry" },
-    { id: "rs2", name: "Pasta", qty: 2, unit: "packs", emoji: "🍝", price: 2.3, category: "Pantry" },
-    { id: "rs3", name: "Organic bread", qty: 1, unit: "loaf", emoji: "🍞", price: 1.65, category: "Bakery" },
-  ];
-
-  const mk = (
-    id: string,
-    store: string,
-    days: number,
-    items: ReceiptLineItem[]
-  ): StoredReceipt => {
-    const total = Math.round(items.reduce((s, i) => s + i.price, 0) * 100) / 100;
-    const date = daysAgoIso(days);
-    return {
-      id,
-      date,
-      store,
-      total,
-      currency: "EUR",
-      imageDataUrl: buildMockReceiptImage({
-        store,
-        date: new Date(date).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }),
-        items: items.map((i) => ({
-          name: i.name,
-          qty: i.qty,
-          unit: i.unit,
-          price: i.price,
-        })),
-        total,
-      }),
-      items,
-      createdAt: date,
-    };
-  };
-
-  return [
-    mk("rec-seed-1", "Lidl", 2, lidlItems),
-    mk("rec-seed-2", "Tesco", 5, tescoItems),
-    mk("rec-seed-3", "Sainsbury's", 9, sainsItems),
-  ];
+/** Legacy demo seed IDs — stripped on load so finances stay user-owned */
+export function isSeedReceiptId(id: string): boolean {
+  return id.startsWith("rec-seed-");
 }
 
 export function loadReceipts(): StoredReceipt[] {
-  if (typeof window === "undefined") return seedReceipts();
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(RECEIPTS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed as StoredReceipt[];
+      if (Array.isArray(parsed)) {
+        const cleaned = (parsed as StoredReceipt[]).filter((r) => r && !isSeedReceiptId(r.id));
+        if (cleaned.length !== parsed.length) {
+          try {
+            localStorage.setItem(RECEIPTS_KEY, JSON.stringify(cleaned));
+          } catch {}
+        }
+        return cleaned;
+      }
     }
   } catch {}
-  const seed = seedReceipts();
-  try {
-    localStorage.setItem(RECEIPTS_KEY, JSON.stringify(seed));
-  } catch {}
-  return seed;
+  return [];
 }
 
 export function saveReceipts(receipts: StoredReceipt[]): void {
   try {
     localStorage.setItem(RECEIPTS_KEY, JSON.stringify(receipts));
   } catch {
-    // localStorage full (large images) — try without largest images as last resort
+    // localStorage full (large images) — drop oversized photos rather than invent fakes
     try {
       const slim = receipts.map((r) => ({
         ...r,
-        imageDataUrl:
-          r.imageDataUrl.length > 80_000
-            ? buildMockReceiptImage({
-                store: r.store,
-                date: new Date(r.date).toLocaleDateString("en-GB"),
-                items: r.items.map((i) => ({
-                  name: i.name,
-                  qty: i.qty,
-                  unit: i.unit,
-                  price: i.price,
-                })),
-                total: r.total,
-              })
-            : r.imageDataUrl,
+        imageDataUrl: r.imageDataUrl && r.imageDataUrl.length > 80_000 ? "" : r.imageDataUrl,
       }));
       localStorage.setItem(RECEIPTS_KEY, JSON.stringify(slim));
     } catch {}
@@ -230,40 +158,31 @@ export function buildReceiptFromScan(opts: {
     unit: string;
     emoji: string;
     storage?: StorageKey;
+    /** Line total if known; otherwise 0 (no invented prices) */
+    price?: number;
   }>;
   imageDataUrl?: string | null;
   store?: string;
 }): StoredReceipt {
-  const store = opts.store || STORES[Math.floor(Math.random() * STORES.length)];
+  // Never invent a supermarket name — user/OCR can set later
+  const store = (opts.store && opts.store.trim()) || "Unknown store";
   const lineItems: ReceiptLineItem[] = opts.items.map((item, i) => ({
     id: `line-${Date.now()}-${i}`,
     name: item.name,
     qty: item.qty,
     unit: item.unit,
     emoji: item.emoji,
-    price: estimateLinePrice(item.name, item.qty),
+    price:
+      typeof item.price === "number" && Number.isFinite(item.price)
+        ? Math.round(item.price * 100) / 100
+        : 0,
     category: categoryForName(item.name),
     storage: item.storage,
   }));
   const total = Math.round(lineItems.reduce((s, i) => s + i.price, 0) * 100) / 100;
   const now = new Date().toISOString();
-  const imageDataUrl =
-    opts.imageDataUrl ||
-    buildMockReceiptImage({
-      store,
-      date: new Date().toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-      items: lineItems.map((i) => ({
-        name: i.name,
-        qty: i.qty,
-        unit: i.unit,
-        price: i.price,
-      })),
-      total,
-    });
+  // Only keep a real capture; no generated “fake receipt” SVG
+  const imageDataUrl = opts.imageDataUrl || "";
 
   return {
     id: createReceiptId(),

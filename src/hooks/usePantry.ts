@@ -20,23 +20,31 @@ export function defaultPriceUnit(unit: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Seed data + shelf-life helpers (pure; no React)
+// Empty defaults + shelf-life helpers (pure; no React)
 // ---------------------------------------------------------------------------
 
-export const SEED: PantryItemsByStorage = {
-  fridge: [
-    { id: "1", name: "Whole milk", qty: 2, unit: "L", emoji: "🥛", daysLeft: 12, minStock: 2, latestPrice: 1.29, priceUnit: "L" },
-    { id: "2", name: "Free-range eggs", qty: 8, unit: "pcs", emoji: "🥚", daysLeft: 19, minStock: 6, latestPrice: 0.35, priceUnit: "pcs" },
-    { id: "3", name: "Greek yogurt", qty: 1, unit: "tub", emoji: "🥣", daysLeft: 2, minStock: 2, latestPrice: 1.89, priceUnit: "tub" },
-    { id: "4", name: "Cherry tomatoes", qty: 1, unit: "pack", emoji: "🍅", daysLeft: 5, minStock: 2, latestPrice: 2.19, priceUnit: "pack" },
-    { id: "5", name: "Aged cheddar", qty: 220, unit: "g", emoji: "🧀", daysLeft: 18, minStock: 150, latestPrice: 2.45, priceUnit: "100g" },
-    { id: "6", name: "Baby spinach", qty: 1, unit: "bag", emoji: "🥬", daysLeft: 1, minStock: 1, latestPrice: 1.49, priceUnit: "bag" },
-  ],
-  freezer: [
-    { id: "f1", name: "Chicken thighs", qty: 600, unit: "g", emoji: "🍗", daysLeft: 95, minStock: 1, latestPrice: 1.85, priceUnit: "100g" },
-  ],
+/** Empty pantry — never auto-fill demo groceries */
+export const EMPTY_PANTRY: PantryItemsByStorage = {
+  fridge: [],
+  freezer: [],
   pantry: [],
 };
+
+/** @deprecated Legacy name; same as EMPTY_PANTRY (no demo seed). */
+export const SEED = EMPTY_PANTRY;
+
+/** Old demo item ids — stripped once so existing installs lose bogus stock */
+const LEGACY_SEED_ITEM_IDS = new Set(["1", "2", "3", "4", "5", "6", "f1"]);
+
+function stripLegacySeedItems(data: PantryItemsByStorage): PantryItemsByStorage {
+  const clean = (list: PantryItem[] | undefined) =>
+    (list || []).filter((item) => !LEGACY_SEED_ITEM_IDS.has(item.id));
+  return {
+    fridge: clean(data.fridge),
+    freezer: clean(data.freezer),
+    pantry: clean(data.pantry),
+  };
+}
 
 export function getDefaultMinStock(name: string): number {
   const lower = name.toLowerCase();
@@ -153,15 +161,21 @@ export function usePantry(options: UsePantryOptions = {}) {
 
   // Persist pantry to localStorage so the app works offline and shows cached data on reload
   const [items, setItems] = useState<PantryItemsByStorage>(() => {
-    if (typeof window === "undefined") return SEED;
+    if (typeof window === "undefined") return EMPTY_PANTRY;
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ITEMS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === "object" && parsed.fridge) return parsed;
+        if (parsed && typeof parsed === "object" && Array.isArray(parsed.fridge)) {
+          const cleaned = stripLegacySeedItems(parsed as PantryItemsByStorage);
+          try {
+            localStorage.setItem(STORAGE_KEYS.ITEMS, JSON.stringify(cleaned));
+          } catch {}
+          return cleaned;
+        }
       }
     } catch {}
-    return SEED;
+    return EMPTY_PANTRY;
   });
 
   useEffect(() => {

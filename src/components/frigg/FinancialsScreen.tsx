@@ -15,7 +15,6 @@ import {
 import { ChevronRight, FileText, Image as ImageIcon, Trash2, X } from "lucide-react";
 import type { StoredReceipt } from "@/types/pantry";
 import {
-  buildMockReceiptImage,
   createReceiptId,
   formatReceiptDate,
   readFileAsDataUrl,
@@ -133,23 +132,14 @@ function FinancialsScreenInner({
     const now = new Date().toISOString();
     const store = logStore.trim();
     const lineName = logNote.trim() || "Manual purchase";
-    const mockImg = buildMockReceiptImage({
-      store,
-      date: new Date().toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-      items: [{ name: lineName, qty: 1, unit: "x", price: total }],
-      total,
-    });
     const receipt: StoredReceipt = {
       id: createReceiptId(),
       date: now,
       store,
       total,
       currency: "EUR",
-      imageDataUrl: logPhoto || mockImg,
+      // Only a real photo the user attached — never a generated fake receipt image
+      imageDataUrl: logPhoto || "",
       items: [
         {
           id: `line-${Date.now()}`,
@@ -478,27 +468,36 @@ function FinancialsScreenInner({
               </DrawerHeader>
 
               <div className="overflow-y-auto px-5 pb-2 space-y-5 max-h-[min(62dvh,520px)]">
-                {/* Original photo */}
+                {/* Original photo (only if user attached one) */}
                 <div>
                   <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
                     <ImageIcon className="size-4" />
                     Original photo
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setPhotoFullscreen(true)}
-                    className="block w-full overflow-hidden rounded-3xl border border-border/50 bg-secondary/40 active:opacity-95"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={selected.imageDataUrl}
-                      alt={`Receipt from ${selected.store}`}
-                      className="mx-auto max-h-64 w-full object-contain"
-                    />
-                  </button>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground px-0.5">
-                    Tap image to view full size
-                  </p>
+                  {selected.imageDataUrl ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPhotoFullscreen(true)}
+                        className="block w-full overflow-hidden rounded-3xl border border-border/50 bg-secondary/40 active:opacity-95"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={selected.imageDataUrl}
+                          alt={`Receipt from ${selected.store}`}
+                          className="mx-auto max-h-64 w-full object-contain"
+                        />
+                      </button>
+                      <p className="mt-1.5 text-[11px] text-muted-foreground px-0.5">
+                        Tap image to view full size
+                      </p>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-border/60 bg-secondary/30 px-4 py-10 text-center">
+                      <FileText className="size-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">No photo attached</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Purchase breakdown */}
@@ -572,7 +571,7 @@ function FinancialsScreenInner({
       </Drawer>
 
       {/* Fullscreen photo */}
-      {photoFullscreen && selected && (
+      {photoFullscreen && selected?.imageDataUrl && (
         <div
           className="fixed inset-0 z-[100] flex flex-col bg-black/90"
           role="dialog"

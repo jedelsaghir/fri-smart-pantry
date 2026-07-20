@@ -16,8 +16,10 @@ import { ShoppingListView } from "./ShoppingListView";
 import { RecipesView, countRecipeAvailability, canMakeRecipeFully } from "./RecipesView";
 import { ALL_RECIPES } from "@/data/recipes";
 import { applyIncomingToStorage, deductIngredients, sameProduct } from "@/lib/pantry-ops";
+import { upsertShoppingListItem } from "@/lib/shopping";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { applyBackupToLocalStorage, buildBackupFromLocalStorage, downloadBackupJson } from "@/lib/backup";
+import { getPlatform } from "@/platform";
 import { ArrowRight, X, Users, Plus } from "lucide-react";
 import {
   Drawer,
@@ -48,6 +50,7 @@ import { useItemCatalog } from "@/hooks/useItemCatalog";
 import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
 import { ItemDatabaseSection } from "./ItemDatabaseSection";
 import { PantryAddSheet } from "./PantryAddSheet";
+import { AlertsDrawer } from "./AlertsDrawer";
 import { ManageFamilyPage } from "./ManageFamilyPage";
 import {
   buildInviteUrl,
@@ -138,16 +141,25 @@ export function PantryScreen() {
     toast.success("Profile updated");
   };
 
-  const toggleNotifications = (checked: boolean) => {
+  const toggleNotifications = async (checked: boolean) => {
     setNotificationsEnabled(checked);
     try {
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, String(checked));
     } catch {}
-    toast.message(checked ? "Alerts on" : "Alerts off", {
-      description: checked
-        ? "We’ll surface expiry and low-stock in the Alerts panel."
-        : "In-app alerts preference saved. Push notifications aren’t enabled yet.",
-    });
+    if (checked) {
+      const platform = getPlatform();
+      const perm = await platform.push.requestPermission();
+      toast.message("Alerts on", {
+        description:
+          perm === "granted"
+            ? "In-app Alerts on. Browser notifications allowed if the OS permits."
+            : "In-app Alerts on. Browser push not granted (optional).",
+      });
+    } else {
+      toast.message("Alerts off", {
+        description: "In-app alerts preference saved.",
+      });
+    }
   };
 
   // Dark mode (respects system + persisted, clean calm dark theme)
@@ -915,7 +927,17 @@ export function PantryScreen() {
         isShared={true}
         onShowFamily={() => setShowFamilyDrawer(true)}
         onOpenSettings={() => setShowSettings(true)}
-        onShowAlerts={() => setShowAlerts(true)}
+        onShowAlerts={() => {
+          setShowAlerts(true);
+          // Optional system notification when permission already granted (D-3 adapter)
+          if (notificationsEnabled && alertItems.length > 0) {
+            const platform = getPlatform();
+            void platform.push.notify(
+              "Friġġ alerts",
+              `${alertItems.length} item${alertItems.length === 1 ? "" : "s"} need attention`
+            );
+          }
+        }}
         alertsCount={alertsCount}
       />
 
@@ -974,39 +996,27 @@ export function PantryScreen() {
               });
             }}
             onAddFromCatalog={(c) => {
-              setShoppingList((prev) => {
-                const existing = prev.find((i) => i.name.toLowerCase() === c.name.toLowerCase());
-                if (existing) {
-                  return prev.map((i) =>
-                    i.id === existing.id ? { ...i, qty: i.qty + 1 } : i
-                  );
-                }
-                return [
-                  ...prev,
-                  {
-                    id: `shop-cat-${c.id}-${Date.now()}`,
-                    name: c.name,
-                    qty: 1,
-                    unit: c.unit,
-                    emoji: c.emoji,
-                    checked: false,
-                  },
-                ];
-              });
+              setShoppingList((prev) =>
+                upsertShoppingListItem(prev, {
+                  id: `shop-cat-${c.id}-${Date.now()}`,
+                  name: c.name,
+                  qty: 1,
+                  unit: c.unit,
+                  emoji: c.emoji,
+                })
+              );
               toast.success("Added to list", { description: c.name });
             }}
             onAddManualToList={(name, unit, emoji, qty) => {
-              setShoppingList((prev) => [
-                ...prev,
-                {
+              setShoppingList((prev) =>
+                upsertShoppingListItem(prev, {
                   id: `shop-manual-${Date.now()}`,
                   name,
                   qty,
                   unit,
                   emoji,
-                  checked: false,
-                },
-              ]);
+                })
+              );
               addCatalogItem({ name, unit, emoji });
               toast.success("Added to list", { description: name });
             }}
@@ -1408,57 +1418,12 @@ export function PantryScreen() {
         </DrawerContent>
       </Drawer>
 
-      {/* Alerts drawer (P0-5) — bell opens this, not family */}
-      <Drawer open={showAlerts} onOpenChange={setShowAlerts}>
-        <DrawerContent className="max-w-md mx-auto">
-          <DrawerHeader className="text-left">
-            <DrawerTitle>Alerts</DrawerTitle>
-            <DrawerDescription>
-              {notificationsEnabled
-                ? "Items that need attention in your pantry"
-                : "In-app alerts are off — turn them on in Settings"}
-            </DrawerDescription>
-          </DrawerHeader>
-          <div className="px-5 pb-4 max-h-[50vh] overflow-y-auto">
-            {!notificationsEnabled ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">
-                Enable <strong className="text-foreground">In-app alerts</strong> in Settings to see expiry and low stock here.
-              </p>
-            ) : alertItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">
-                All clear — nothing expiring or low right now.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {alertItems.map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-3 rounded-2xl bg-secondary/55 px-3 py-2.5 ring-1 ring-border/25"
-                  >
-                    <span className="text-2xl">{a.emoji}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{a.name}</p>
-                      <p className="text-[11px] text-muted-foreground capitalize">
-                        {a.storage} · {a.reason}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <DrawerFooter className="pt-1 pb-6">
-            <DrawerClose asChild>
-              <button
-                type="button"
-                className="w-full rounded-3xl py-3.5 text-sm font-semibold border active:bg-secondary/60"
-              >
-                Done
-              </button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+      <AlertsDrawer
+        open={showAlerts}
+        onOpenChange={setShowAlerts}
+        notificationsEnabled={notificationsEnabled}
+        alertItems={alertItems}
+      />
 
       {/* Family / Activity Drawer */}
       <Drawer open={showFamilyDrawer} onOpenChange={setShowFamilyDrawer}>

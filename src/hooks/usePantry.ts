@@ -175,24 +175,6 @@ export function usePantry(options: UsePantryOptions = {}) {
 
   const current = items[active];
 
-  const updateQty = useCallback(
-    (id: string, delta: number) => {
-      setItems((prev) => {
-        const item = prev[active].find((i) => i.id === id);
-        // Clamp qty to ≥ 1; deletion must use removeItem + confirm
-        const newItems = prev[active].map((i) =>
-          i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i
-        );
-        if (item) {
-          const verb = delta > 0 ? "added" : "used";
-          onActivity?.("You", `${verb} ${Math.abs(delta)} ${item.unit} ${item.name}`);
-        }
-        return { ...prev, [active]: newItems };
-      });
-    },
-    [active, onActivity]
-  );
-
   /**
    * Patch any fields on an item across all storages and keep the open
    * details drawer in sync (live save).
@@ -245,73 +227,6 @@ export function usePantry(options: UsePantryOptions = {}) {
       return { ...prev, item: apply(prev.item) };
     });
   }, []);
-
-  const updateMinStock = useCallback(
-    (id: string, newMin: number) => {
-      patchItem(id, { minStock: newMin });
-    },
-    [patchItem]
-  );
-
-  const updateDaysLeft = useCallback(
-    (id: string, newDays: number) => {
-      patchItem(id, { daysLeft: newDays });
-    },
-    [patchItem]
-  );
-
-  /** Cross-storage qty update (keeps drawer in sync). Qty clamped ≥ 1. */
-  const updateItemQty = useCallback((id: string, delta: number) => {
-    setItems((prev) => {
-      let currentQty: number | null = null;
-      for (const storage of Object.keys(prev) as StorageKey[]) {
-        const found = prev[storage].find((i) => i.id === id);
-        if (found) {
-          currentQty = found.qty;
-          break;
-        }
-      }
-      if (currentQty === null) return prev;
-      const newQty = Math.max(1, currentQty + delta);
-
-      const next = { ...prev };
-      (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage].map((i) =>
-          i.id === id ? { ...i, qty: newQty } : i
-        );
-      });
-      return next;
-    });
-
-    setDetailsItem((prev) => {
-      if (!prev || prev.item.id !== id) return prev;
-      const newQty = Math.max(1, prev.item.qty + delta);
-      return { ...prev, item: { ...prev.item, qty: newQty } };
-    });
-  }, []);
-
-  const updateItemName = useCallback(
-    (id: string, name: string) => {
-      patchItem(id, { name });
-    },
-    [patchItem]
-  );
-
-  const updateItemPrice = useCallback(
-    (id: string, latestPrice: number, priceUnit?: string) => {
-      const patch: Partial<PantryItem> = { latestPrice };
-      if (priceUnit !== undefined) patch.priceUnit = priceUnit;
-      patchItem(id, patch);
-    },
-    [patchItem]
-  );
-
-  const setItemQty = useCallback(
-    (id: string, qty: number) => {
-      patchItem(id, { qty });
-    },
-    [patchItem]
-  );
 
   /**
    * Remove an item from pantry. Returns a snapshot for Undo restore.
@@ -403,13 +318,6 @@ export function usePantry(options: UsePantryOptions = {}) {
       }
     },
     [items, onActivity]
-  );
-
-  const moveToFreezer = useCallback(
-    (id: string, fromStorage: StorageKey = "fridge") => {
-      moveItem(id, fromStorage, "freezer");
-    },
-    [moveItem]
   );
 
   const openItemDetails = useCallback((item: PantryItem, storage: StorageKey) => {
@@ -506,9 +414,7 @@ export function usePantry(options: UsePantryOptions = {}) {
     expiringSoon,
     lowStockCount,
 
-    // Actions (public surface used by screens)
-    updateMinStock,
-    updateDaysLeft,
+    // Actions
     patchItem,
     removeItem,
     restoreItem,

@@ -106,10 +106,20 @@ Re-open a D-* row when scheduling real infrastructure work.
 | R-16 | done | Documented unused ui kit |
 | R-17 | open | BottomNav Coming soon (harmless) |
 | R-18 | open | useIsMobile/sidebar scaffold |
-| R-19 | done | Expanded unit tests (13) |
+| R-19 | done | Expanded unit tests (15) |
 | R-20 | open | localStorage quota for huge photos (slim fallback remains) |
 
-**Architecture for D-***:** `src/platform/` — `SyncProvider`, `OcrProvider`, `PushProvider`, `InviteProvider` + local adapters; scan uses `getPlatform().ocr`.
+### N-* (third re-audit)
+
+| ID | Status | Fix |
+|----|--------|-----|
+| N-1 | done | Platform adoption: OCR scan path, push permission + notify on Alerts open |
+| N-2 | done | Removed dead `usePantry` internals (qty helpers / moveToFreezer / etc.) |
+| N-3 | partial | `AlertsDrawer` extracted; Settings/Family still in `PantryScreen` |
+| N-4 | done | Shopping list upsert via `sameProduct` (`lib/shopping.ts`) |
+| N-9 | done | Scan uses only `getPlatform().ocr` (no duplicate mock generator) |
+
+**Architecture for D-***:** `src/platform/` — see `src/platform/README.md`. Optional later: repositories if leaving localStorage; no Redux required yet.
 
 ---
 

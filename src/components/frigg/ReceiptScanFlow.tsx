@@ -18,29 +18,6 @@ interface ReceiptScanFlowProps {
   onReceiptSaved?: (receipt: StoredReceipt) => void;
 }
 
-// Realistic mock receipt results
-const MOCK_RECEIPTS: Array<Partial<DetectedItem>[]> = [
-  [
-    { name: "Whole milk", qty: 2, unit: "L", storage: "fridge", confidence: 0.96 },
-    { name: "Free-range eggs", qty: 12, unit: "pcs", storage: "fridge", confidence: 0.94 },
-    { name: "Greek yogurt", qty: 3, unit: "tub", storage: "fridge", confidence: 0.91 },
-    { name: "Baby spinach", qty: 1, unit: "bag", storage: "fridge", confidence: 0.89 },
-    { name: "Avocados", qty: 5, unit: "pcs", storage: "fridge", confidence: 0.64 }, // ambiguous
-  ],
-  [
-    { name: "Frozen berries", qty: 2, unit: "bags", storage: "freezer", confidence: 0.95 },
-    { name: "Chicken thighs", qty: 800, unit: "g", storage: "freezer", confidence: 0.88 },
-    { name: "Aged cheddar", qty: 300, unit: "g", storage: "fridge", confidence: 0.93 },
-    { name: "Organic bread", qty: 1, unit: "loaf", storage: "pantry", confidence: 0.71 }, // ambiguous
-  ],
-  [
-    { name: "Cherry tomatoes", qty: 2, unit: "packs", storage: "fridge", confidence: 0.97 },
-    { name: "Olive oil", qty: 1, unit: "bottle", storage: "pantry", confidence: 0.92 },
-    { name: "Pasta", qty: 2, unit: "packs", storage: "pantry", confidence: 0.9 },
-    { name: "Fresh basil", qty: 1, unit: "bunch", storage: "fridge", confidence: 0.58 }, // ambiguous
-  ],
-];
-
 const EMOJI_MAP: Record<string, string> = {
   "Whole milk": "🥛",
   "Free-range eggs": "🥚",
@@ -59,19 +36,6 @@ const EMOJI_MAP: Record<string, string> = {
 
 function getEmoji(name: string): string {
   return EMOJI_MAP[name] || "🛒";
-}
-
-function generateMockDetections(): DetectedItem[] {
-  const base = MOCK_RECEIPTS[Math.floor(Math.random() * MOCK_RECEIPTS.length)];
-  return base.map((item, index) => ({
-    id: `det-${Date.now()}-${index}`,
-    name: item.name!,
-    qty: item.qty!,
-    unit: item.unit!,
-    emoji: getEmoji(item.name!),
-    storage: item.storage as StorageKey,
-    confidence: item.confidence!,
-  }));
 }
 
 function formatStorageLabel(storage: StorageKey) {
@@ -138,22 +102,24 @@ export function ReceiptScanFlow({
     setTimeout(async () => {
       // Platform OCR adapter (demo today — D-2 swaps implementation)
       let results: DetectedItem[];
-      try {
-        const detectedRows = await getPlatform().ocr.detectFromImage(imageDataUrl);
-        results = detectedRows.map((row, index) => ({
+      const platform = getPlatform();
+      const detectedRows = await platform.ocr.detectFromImage(imageDataUrl);
+      results = detectedRows.map((row, index) => {
+        // Demo: last item often needs review; live OCR can attach real confidence later
+        const confidence =
+          platform.ocr.mode === "demo" && detectedRows.length > 2 && index === detectedRows.length - 1
+            ? 0.65
+            : 0.92;
+        return {
           id: `det-${Date.now()}-${index}`,
           name: row.name,
           qty: row.qty,
           unit: row.unit,
           emoji: row.emoji || getEmoji(row.name),
           storage: row.storage,
-          confidence: 0.9,
-        }));
-        // Mark last item slightly ambiguous sometimes for review UX
-        if (results.length > 2) results[results.length - 1] = { ...results[results.length - 1], confidence: 0.65 };
-      } catch {
-        results = generateMockDetections();
-      }
+          confidence,
+        };
+      });
       setDetected(results);
 
       // Split: high confidence go straight in, low need review

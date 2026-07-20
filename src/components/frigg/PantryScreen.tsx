@@ -1093,8 +1093,7 @@ export function PantryScreen() {
           </Suspense>
         ) : (
           // === PANTRY VIEW ===
-          // NOTE: Never re-add temporary "BUILD CHECK" / diagnostic green banners here.
-          // They were removed permanently; layout is 1-column without them.
+          // Do not inject temporary diagnostic layout banners above StorageTabs.
           <>
             {/* Full-width storage segmented control — never partial width */}
             <div

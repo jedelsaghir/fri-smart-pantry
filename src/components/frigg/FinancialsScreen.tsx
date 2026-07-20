@@ -12,13 +12,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ChevronRight, FileText, Image as ImageIcon, Trash2, X } from "lucide-react";
+import { ChevronRight, FileText, Image as ImageIcon, Trash2, X, Store, Sparkles } from "lucide-react";
 import type { StoredReceipt } from "@/types/pantry";
 import {
   createReceiptId,
   formatReceiptDate,
   readFileAsDataUrl,
 } from "@/lib/receipts";
+import { analyzeMonthStores } from "@/lib/store-insights";
 import {
   Drawer,
   DrawerClose,
@@ -55,7 +56,7 @@ function FinancialsScreenInner({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  const [logStore, setLogStore] = useState("Lidl");
+  const [logStore, setLogStore] = useState("");
   const [logTotal, setLogTotal] = useState("");
   const [logNote, setLogNote] = useState("");
   const [logPhoto, setLogPhoto] = useState<string | null>(null);
@@ -70,9 +71,15 @@ function FinancialsScreenInner({
     [receipts]
   );
 
+  /** Category spend from receipt line categories (not per-SKU price history) */
   const categories: CategoryData[] = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of receipts) {
+      if (r.items.length === 0) {
+        // Manual total-only receipts count as Other
+        map.set("Other", (map.get("Other") || 0) + r.total);
+        continue;
+      }
       for (const item of r.items) {
         const cat = item.category || "Other";
         map.set(cat, (map.get(cat) || 0) + item.price);
@@ -88,43 +95,27 @@ function FinancialsScreenInner({
 
   const categoryTotal = categories.reduce((sum, c) => sum + c.amount, 0);
   const totalFormatted = totalSpent.toFixed(2);
-  const storeCount = new Set(receipts.map((r) => r.store)).size;
+  const storeCount = new Set(receipts.map((r) => r.store).filter(Boolean)).size;
 
   const pieData = categories.map((cat, i) => ({
     ...cat,
     fill: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
   }));
 
-  const storeData = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of receipts) {
-      map.set(r.store, (map.get(r.store) || 0) + r.total);
-    }
-    return [...map.entries()]
-      .map(([store, amount]) => ({ store, amount: Math.round(amount * 100) / 100 }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 6);
-  }, [receipts]);
+  /** This month's store-level value analysis (Price Trends) */
+  const monthInsight = useMemo(() => analyzeMonthStores(receipts), [receipts]);
 
-  const weeklyTrend = useMemo(() => {
-    const buckets = new Map<string, number>();
-    for (const r of receipts) {
-      const d = new Date(r.date);
-      if (Number.isNaN(d.getTime())) continue;
-      const weekStart = new Date(d);
-      weekStart.setHours(0, 0, 0, 0);
-      weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-      const key = weekStart.toISOString().slice(0, 10);
-      buckets.set(key, (buckets.get(key) || 0) + r.total);
-    }
-    return [...buckets.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6)
-      .map(([week, amount], i) => ({
-        week: `W${i + 1}`,
-        amount: Math.round(amount * 100) / 100,
-      }));
-  }, [receipts]);
+  const storeData = useMemo(
+    () =>
+      monthInsight.stores.map((s) => ({
+        store: s.store.length > 10 ? `${s.store.slice(0, 9)}…` : s.store,
+        fullStore: s.store,
+        amount: s.totalSpend,
+        avg: s.avgBasket,
+        visits: s.visits,
+      })),
+    [monthInsight]
+  );
 
   const submitLogPurchase = () => {
     const total = Math.max(0, parseFloat(logTotal.replace(",", ".")) || 0);
@@ -314,65 +305,138 @@ function FinancialsScreenInner({
         </div>
       )}
 
-      {/* By store — real data (P2-5) */}
-      {storeData.length > 0 && (
-        <div>
-          <div className="mb-3 flex items-center justify-between px-1">
-            <div className="text-sm font-semibold tracking-[0.005em] text-foreground/90">
-              By store
-            </div>
+      {/* Price Trends — best store for this month (not per-item price tracking) */}
+      <div>
+        <div className="mb-3 flex items-center justify-between px-1">
+          <div className="text-sm font-semibold tracking-[0.005em] text-foreground/90">
+            Price Trends
           </div>
-          <div className="elevated-card rounded-3xl p-4">
-            <div className="h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={storeData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                  <XAxis dataKey="store" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    formatter={(value: number) => [`€${Number(value).toFixed(2)}`, ""]}
-                    contentStyle={{
-                      backgroundColor: "var(--color-card)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "12px",
-                      fontSize: "12px",
-                    }}
-                  />
-                  <Bar dataKey="amount" fill="#4a7c59" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <div className="text-[11px] text-muted-foreground">{monthInsight.monthLabel}</div>
         </div>
-      )}
 
-      {/* Weekly spend trend from receipts */}
-      {weeklyTrend.length > 1 && (
-        <div>
-          <div className="mb-3 px-1 text-sm font-semibold tracking-[0.005em] text-foreground/90">
-            Weekly spend
-          </div>
-          <div className="elevated-card rounded-3xl p-4">
-            <div className="h-[160px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                  <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    formatter={(value: number) => [`€${Number(value).toFixed(2)}`, ""]}
-                    contentStyle={{
-                      backgroundColor: "var(--color-card)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "12px",
-                      fontSize: "12px",
-                    }}
-                  />
-                  <Bar dataKey="amount" fill="#5f8a6e" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+        <div className="elevated-card space-y-4 rounded-3xl p-4">
+          {monthInsight.receiptCount === 0 ? (
+            <div className="py-4 text-center">
+              <div className="mx-auto mb-2 grid size-12 place-items-center rounded-2xl bg-secondary text-xl">
+                <Store className="size-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">No trips this month yet</p>
+              <p className="mx-auto mt-1 max-w-[260px] text-[12px] text-muted-foreground">
+                Save receipts or log purchases — we compare stores by trip totals, not individual
+                item prices.
+              </p>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Smart recommendation */}
+              <div className="rounded-2xl bg-[color-mix(in_oklab,var(--color-fresh)_10%,var(--color-secondary))] px-3.5 py-3 ring-1 ring-[color-mix(in_oklab,var(--color-fresh)_22%,transparent)]">
+                <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-fresh)]">
+                  <Sparkles className="size-3.5" />
+                  Smart pick
+                </div>
+                {monthInsight.recommendedStore && (
+                  <p className="font-display text-[20px] font-medium tracking-[-0.02em] text-foreground">
+                    {monthInsight.recommendedStore}
+                  </p>
+                )}
+                <p className="mt-1 text-[13px] leading-snug text-foreground/85">
+                  {monthInsight.recommendation}
+                </p>
+                {monthInsight.reason && monthInsight.stores.length > 1 && (
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">{monthInsight.reason}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between text-[12px] text-muted-foreground px-0.5">
+                <span>
+                  {monthInsight.receiptCount} trip
+                  {monthInsight.receiptCount === 1 ? "" : "s"} this month
+                </span>
+                <span className="font-semibold tabular-nums text-foreground">
+                  €{monthInsight.monthTotal.toFixed(2)}
+                </span>
+              </div>
+
+              {/* Per-store month breakdown */}
+              <ul className="space-y-2">
+                {monthInsight.stores.map((s) => {
+                  const isBest = s.store === monthInsight.recommendedStore;
+                  return (
+                    <li
+                      key={s.store}
+                      className={
+                        "flex items-center gap-3 rounded-2xl px-3 py-2.5 ring-1 " +
+                        (isBest
+                          ? "bg-[color-mix(in_oklab,var(--color-fresh)_8%,transparent)] ring-[color-mix(in_oklab,var(--color-fresh)_28%,transparent)]"
+                          : "bg-secondary/45 ring-border/30")
+                      }
+                    >
+                      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-background/70">
+                        <Store className="size-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-[14px] font-semibold tracking-[-0.01em]">
+                            {s.store}
+                          </p>
+                          {isBest && (
+                            <span className="shrink-0 rounded-full bg-[color-mix(in_oklab,var(--color-fresh)_18%,transparent)] px-2 py-px text-[10px] font-semibold text-[var(--color-fresh)]">
+                              Best value
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {s.visits} visit{s.visits === 1 ? "" : "s"} · avg €
+                          {s.avgBasket.toFixed(2)} / trip
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold tabular-nums">
+                          €{s.totalSpend.toFixed(2)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground tabular-nums">
+                          {Math.round(s.share * 100)}%
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {storeData.length > 1 && (
+                <div className="h-[160px] pt-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={storeData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                      <XAxis dataKey="store" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        formatter={(value: number, _n, item) => {
+                          const row = item?.payload as { avg?: number; visits?: number };
+                          return [
+                            `€${Number(value).toFixed(2)} total · avg €${(row?.avg ?? 0).toFixed(2)} (${row?.visits ?? 0} trips)`,
+                            "Spend",
+                          ];
+                        }}
+                        contentStyle={{
+                          backgroundColor: "var(--color-card)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "12px",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Bar dataKey="amount" fill="#4a7c59" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              <p className="text-[11px] leading-snug text-muted-foreground px-0.5">
+                Based on whole-receipt totals by store this month — not item-by-item price history.
+              </p>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Receipts archive */}
       <div>

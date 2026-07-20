@@ -79,6 +79,8 @@ interface ManageFamilyPageProps {
   onRenameHousehold?: (name: string) => void;
   /** Demo: open invite acceptance as this member (logout + invite flow) */
   onSimulateAcceptInvite?: (member: FamilyMember) => void;
+  /** Clear all household activity log entries */
+  onClearActivity?: () => void;
 }
 
 export function ManageFamilyPage({
@@ -92,12 +94,14 @@ export function ManageFamilyPage({
   onUpdateMember,
   onRenameHousehold,
   onSimulateAcceptInvite,
+  onClearActivity,
 }: ManageFamilyPageProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmoji, setNewEmoji] = useState(DEFAULT_EMOJI);
   const [pendingRemove, setPendingRemove] = useState<FamilyMember | null>(null);
+  const [confirmClearActivity, setConfirmClearActivity] = useState(false);
   /** Survives AlertDialog close race so Remove always applies (pending + joined) */
   const pendingRemoveRef = useRef<FamilyMember | null>(null);
   const [inviteSheetMember, setInviteSheetMember] = useState<FamilyMember | null>(null);
@@ -602,11 +606,27 @@ export function ManageFamilyPage({
 
         {/* Activity summary */}
         <section className="mb-4">
-          <div className="mb-2.5 flex items-center gap-2 px-1">
-            <Activity className="size-3.5 text-muted-foreground" />
-            <h2 className="text-[13px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-              Recent activity
-            </h2>
+          <div className="mb-2.5 flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <Activity className="size-3.5 shrink-0 text-muted-foreground" />
+              <h2 className="text-[13px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                Recent activity
+              </h2>
+              {activityLog.length > 0 && (
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {activityLog.length}
+                </span>
+              )}
+            </div>
+            {onClearActivity && activityLog.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setConfirmClearActivity(true)}
+                className="touch-target shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold text-destructive/90 active:bg-destructive/10 transition"
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
           <div className="elevated-card overflow-hidden rounded-[1.75rem]">
@@ -633,6 +653,11 @@ export function ManageFamilyPage({
               </ul>
             )}
           </div>
+          {activityLog.length > 5 && (
+            <p className="mt-2 px-1 text-center text-[11px] text-muted-foreground">
+              Showing latest 5 of {activityLog.length}. Clear all to reset the log.
+            </p>
+          )}
         </section>
       </div>
 
@@ -752,6 +777,38 @@ export function ManageFamilyPage({
           </div>
         </div>
       )}
+
+      {/* Clear activity log */}
+      <AlertDialog open={confirmClearActivity} onOpenChange={setConfirmClearActivity}>
+        <AlertDialogContent className="z-[110] max-w-[min(22rem,calc(100vw-2rem))] rounded-3xl border-border/50">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-[22px] tracking-[-0.02em]">
+              Clear recent activity?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[14px] leading-relaxed">
+              This removes all {activityLog.length} household activity{" "}
+              {activityLog.length === 1 ? "entry" : "entries"} from this device. New actions will
+              start a fresh log.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel className="rounded-2xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                onClearActivity?.();
+                setConfirmClearActivity(false);
+                toast.success("Activity cleared", {
+                  description: "Recent activity list is empty.",
+                });
+              }}
+            >
+              Clear all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Remove confirmation — pending invites and active members */}
       <AlertDialog

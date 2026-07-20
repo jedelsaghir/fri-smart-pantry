@@ -241,6 +241,13 @@ export function PantryScreen() {
     ]);
   }, []);
 
+  const clearActivity = useCallback(() => {
+    setActivityLog([]);
+    try {
+      localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOG, JSON.stringify([]));
+    } catch {}
+  }, []);
+
   const renameHousehold = useCallback(
     (name: string) => {
       const saved = saveHouseholdName(name);
@@ -918,6 +925,7 @@ export function PantryScreen() {
           onUpdateMember={updateFamilyMember}
           onRenameHousehold={renameHousehold}
           onSimulateAcceptInvite={simulateAcceptInvite}
+          onClearActivity={clearActivity}
         />
       )}
 
@@ -1281,6 +1289,7 @@ export function PantryScreen() {
         activityLog={activityLog}
         onSimulateMember={simulateFamilyUpdate}
         onManageFamily={openManageFamily}
+        onClearActivity={clearActivity}
       />
 
       {/* Item Details Drawer — rename, tappable numbers, date expiry, price */}

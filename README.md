@@ -28,6 +28,17 @@ Friġġ is a **local-first demo**. There is **no cloud backend**.
 
 Do not use this build for real sensitive credentials or true multi-household production.
 
+### Pluggable platform (future cloud / OCR / push)
+
+See [`src/platform/README.md`](src/platform/README.md). Adapters:
+
+- **Sync** — local no-op (D-1)
+- **OCR** — demo detections via `getPlatform().ocr` (D-2)
+- **Push** — optional browser Notification if granted (D-3 still no service worker push)
+- **Invites** — localStorage codes only (D-4)
+
+Swap implementations with `setPlatform(createPlatform({ ... }))` without rewriting screens.
+
 ## Key Features
 
 - **Smart Inventory Tracking** — Premium single-column cards for fridge, freezer, and pantry. Calm list shows emoji, name, status, days left, and quantity; tap for quantity/min stock controls and move actions.

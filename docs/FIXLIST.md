@@ -84,6 +84,35 @@ Re-open a D-* row when scheduling real infrastructure work.
 
 ---
 
+## R-* re-audit (post P1/P2)
+
+| ID | Status | Fix |
+|----|--------|-----|
+| R-1 | done | Cook uses `deductIngredients`; confirmed; catalog learn; undo |
+| R-2 | done | Expiration photo step honest “not available yet” (platform OCR) |
+| R-3 | done | Confirm before removing scan review lines |
+| R-4 | done | `sameProduct` / `namesMatchLoose` for purchase + recipes |
+| R-5 | done | Theme key documented in root FOUC script (`friggg-theme` = STORAGE_KEYS.THEME) |
+| R-6 | partial | List/Recipes extracted; settings still in PantryScreen |
+| R-7 | done | Add to shopping list from **Pantry** tab as well as Database |
+| R-8 | done | Log purchase optional photo attach |
+| R-9 | done | Weekly spend chart from receipts |
+| R-10 | done | Backup `parseAndValidateBackup` |
+| R-11 | done | Empty activity log seed (no fake Elena/Alex) |
+| R-12 | done | Neutral profile defaults |
+| R-13 | done | Review-remove copy explains high-confidence already in pantry |
+| R-14 | done | Removed dead `onRemove` prop |
+| R-15 | done | Slimmed `usePantry` public return surface |
+| R-16 | done | Documented unused ui kit |
+| R-17 | open | BottomNav Coming soon (harmless) |
+| R-18 | open | useIsMobile/sidebar scaffold |
+| R-19 | done | Expanded unit tests (13) |
+| R-20 | open | localStorage quota for huge photos (slim fallback remains) |
+
+**Architecture for D-***:** `src/platform/` — `SyncProvider`, `OcrProvider`, `PushProvider`, `InviteProvider` + local adapters; scan uses `getPlatform().ocr`.
+
+---
+
 ## Progress log
 
 | Date | IDs | Note |
@@ -91,6 +120,7 @@ Re-open a D-* row when scheduling real infrastructure work.
 | 2026-07-19 | — | List created from full repo audit. |
 | 2026-07-19 | P0-1…P0-6 | Implemented: qty-0 confirm, profile edit, in-app alerts pref + Alerts drawer, shopping list persist, scan demo label. |
 | 2026-07-19 | P1-1…P1-9, P2-1…P2-10, D-1…D-4 | P1 product completeness + P2 polish; D-* marked wontfix with README/docs. |
+| 2026-07-19 | R-1…R-16, R-19; platform/ | Re-audit fixes + platform architecture for D-1…D-4. |
 
 ---
 

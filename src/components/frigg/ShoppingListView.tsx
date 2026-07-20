@@ -24,9 +24,9 @@ export function ShoppingListView({
   onAddManualToList,
   onCatalogAdd,
   onCatalogUpdate,
-  onCatalogRemove,
   onCatalogMerge,
   onCatalogRequestDelete,
+  pantrySuggestions = [],
 }: {
   shoppingList: ShoppingListItem[];
   listCount: number;
@@ -44,14 +44,19 @@ export function ShoppingListView({
   onAddManualToList: (name: string, unit: string, emoji: string, qty: number) => void;
   onCatalogAdd: (input: { name: string; unit: string; emoji: string }) => void;
   onCatalogUpdate: (id: string, patch: Partial<CatalogItem>) => void;
-  onCatalogRemove: (id: string) => void;
   onCatalogMerge: (group: CatalogMergeGroup, primaryId: string) => void;
   onCatalogRequestDelete: (item: CatalogItem) => void;
+  /** Current pantry items for “add from pantry” (R-7) */
+  pantrySuggestions?: Array<{ name: string; unit: string; emoji: string }>;
 }) {
   const [showPick, setShowPick] = useState(false);
   const [pickQuery, setPickQuery] = useState("");
+  const [pickSource, setPickSource] = useState<"database" | "pantry">("database");
 
   const filteredCatalog = catalog.filter((c) =>
+    c.name.toLowerCase().includes(pickQuery.trim().toLowerCase())
+  );
+  const filteredPantry = pantrySuggestions.filter((c) =>
     c.name.toLowerCase().includes(pickQuery.trim().toLowerCase())
   );
 
@@ -88,38 +93,82 @@ export function ShoppingListView({
         className="mb-3 flex w-full items-center justify-center gap-2 rounded-3xl border border-border/60 bg-card py-3 text-sm font-semibold active:bg-secondary/50 transition"
       >
         <Plus className="size-4" />
-        Add from Database
+        Add from Database / Pantry
       </button>
 
       {showPick && (
         <div className="elevated-card mb-4 space-y-2 rounded-3xl p-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPickSource("database")}
+              className={`flex-1 rounded-2xl py-2 text-xs font-semibold ${
+                pickSource === "database" ? "bg-brand text-brand-foreground" : "bg-secondary/70"
+              }`}
+            >
+              Database
+            </button>
+            <button
+              type="button"
+              onClick={() => setPickSource("pantry")}
+              className={`flex-1 rounded-2xl py-2 text-xs font-semibold ${
+                pickSource === "pantry" ? "bg-brand text-brand-foreground" : "bg-secondary/70"
+              }`}
+            >
+              Pantry
+            </button>
+          </div>
           <Input
             value={pickQuery}
             onChange={(e) => setPickQuery(e.target.value)}
-            placeholder="Search Database…"
+            placeholder={pickSource === "database" ? "Search Database…" : "Search pantry…"}
             className="h-10 rounded-2xl"
           />
           <ul className="max-h-48 overflow-y-auto space-y-1">
-            {filteredCatalog.slice(0, 20).map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAddFromCatalog(c);
-                    setShowPick(false);
-                    setPickQuery("");
-                  }}
-                  className="flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left active:bg-secondary/70"
-                >
-                  <span className="text-xl">{c.emoji}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.name}</span>
-                  <span className="text-[11px] text-muted-foreground">{c.unit}</span>
-                </button>
-              </li>
-            ))}
-            {filteredCatalog.length === 0 && (
+            {pickSource === "database"
+              ? filteredCatalog.slice(0, 20).map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAddFromCatalog(c);
+                        setShowPick(false);
+                        setPickQuery("");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left active:bg-secondary/70"
+                    >
+                      <span className="text-xl">{c.emoji}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.name}</span>
+                      <span className="text-[11px] text-muted-foreground">{c.unit}</span>
+                    </button>
+                  </li>
+                ))
+              : filteredPantry.slice(0, 20).map((c, i) => (
+                  <li key={`${c.name}-${c.unit}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAddFromCatalog({
+                          id: `pantry-${i}`,
+                          name: c.name,
+                          unit: c.unit,
+                          emoji: c.emoji,
+                          updatedAt: new Date().toISOString(),
+                        });
+                        setShowPick(false);
+                        setPickQuery("");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left active:bg-secondary/70"
+                    >
+                      <span className="text-xl">{c.emoji}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.name}</span>
+                      <span className="text-[11px] text-muted-foreground">{c.unit}</span>
+                    </button>
+                  </li>
+                ))}
+            {(pickSource === "database" ? filteredCatalog : filteredPantry).length === 0 && (
               <li className="px-2 py-3 text-center text-xs text-muted-foreground">
-                No matches — add items in Database below.
+                No matches.
               </li>
             )}
           </ul>
@@ -249,7 +298,6 @@ export function ShoppingListView({
         mergeGroups={mergeGroups}
         onAdd={onCatalogAdd}
         onUpdate={onCatalogUpdate}
-        onRemove={onCatalogRemove}
         onMerge={onCatalogMerge}
         onRequestDelete={onCatalogRequestDelete}
       />

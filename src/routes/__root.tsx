@@ -154,7 +154,7 @@ function RootShell({ children }: { children: ReactNode }) {
             __html: `
               (function() {
                 try {
-                  var saved = localStorage.getItem('friggg-theme');
+                  var saved = localStorage.getItem('friggg-theme'); /* STORAGE_KEYS.THEME */
                   var prefers = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
                   if (saved === 'dark' || (!saved && prefers)) {
                     document.documentElement.classList.add('dark');

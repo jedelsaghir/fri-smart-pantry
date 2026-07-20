@@ -6,6 +6,7 @@ import { StorageTabs } from "./StorageTabs";
 import type { StorageKey, DetectedItem, StoredReceipt } from "@/types/pantry";
 import { toast } from "sonner";
 import { buildReceiptFromScan, readFileAsDataUrl } from "@/lib/receipts";
+import { getPlatform } from "@/platform";
 
 export type { DetectedItem };
 
@@ -89,6 +90,7 @@ export function ReceiptScanFlow({
   const [previewReceipt, setPreviewReceipt] = useState(false);
   const [addedCountForPrompt, setAddedCountForPrompt] = useState(0);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [pendingRemoveReviewId, setPendingRemoveReviewId] = useState<string | null>(null);
   const receiptSavedRef = useRef(false);
 
   if (!open) return null;
@@ -133,8 +135,25 @@ export function ReceiptScanFlow({
     // Realistic 600-800ms processing
     const delay = 650 + Math.random() * 150;
 
-    setTimeout(() => {
-      const results = generateMockDetections();
+    setTimeout(async () => {
+      // Platform OCR adapter (demo today — D-2 swaps implementation)
+      let results: DetectedItem[];
+      try {
+        const detectedRows = await getPlatform().ocr.detectFromImage(imageDataUrl);
+        results = detectedRows.map((row, index) => ({
+          id: `det-${Date.now()}-${index}`,
+          name: row.name,
+          qty: row.qty,
+          unit: row.unit,
+          emoji: row.emoji || getEmoji(row.name),
+          storage: row.storage,
+          confidence: 0.9,
+        }));
+        // Mark last item slightly ambiguous sometimes for review UX
+        if (results.length > 2) results[results.length - 1] = { ...results[results.length - 1], confidence: 0.65 };
+      } catch {
+        results = generateMockDetections();
+      }
       setDetected(results);
 
       // Split: high confidence go straight in, low need review
@@ -192,7 +211,13 @@ export function ReceiptScanFlow({
   };
 
   const removeReviewItem = (id: string) => {
-    setReviewItems((prev) => prev.filter((item) => item.id !== id));
+    setPendingRemoveReviewId(id);
+  };
+
+  const confirmRemoveReviewItem = () => {
+    if (!pendingRemoveReviewId) return;
+    setReviewItems((prev) => prev.filter((item) => item.id !== pendingRemoveReviewId));
+    setPendingRemoveReviewId(null);
   };
 
   const confirmReview = () => {
@@ -229,15 +254,18 @@ export function ReceiptScanFlow({
   };
 
   const handleTakePhotosForExpiration = () => {
+    // D-2: real capture not wired — close honestly
     setAddedCountForPrompt(0);
-    toast.success("Photos captured", {
-      description: "Expiration dates & quantities improved.",
-      duration: 2500,
+    toast.message("Not available yet", {
+      description: "Expiration photos need a live camera module (see platform/ocr).",
+      duration: 3200,
     });
     handleClose();
   };
 
   // ---- UI ----
+  const pendingRemoveName = reviewItems.find((i) => i.id === pendingRemoveReviewId)?.name;
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm">
       <div className="flex-1 flex flex-col bg-background rounded-t-3xl mt-auto max-h-[94dvh] overflow-hidden shadow-2xl">
@@ -509,6 +537,19 @@ export function ReceiptScanFlow({
           </div>
         )}
       </div>
+
+      {pendingRemoveReviewId && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-background p-5 shadow-xl">
+            <p className="font-display text-lg font-medium tracking-tight">Remove {pendingRemoveName}?</p>
+            <p className="mt-1 text-sm text-muted-foreground">This drops it from the review list only. Already-added high-confidence items stay in the pantry.</p>
+            <div className="mt-4 flex gap-2">
+              <button type="button" className="flex-1 rounded-2xl border py-2.5 text-sm font-semibold" onClick={() => setPendingRemoveReviewId(null)}>Cancel</button>
+              <button type="button" className="flex-1 rounded-2xl bg-destructive py-2.5 text-sm font-semibold text-destructive-foreground" onClick={confirmRemoveReviewItem}>Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

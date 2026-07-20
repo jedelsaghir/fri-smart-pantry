@@ -52,6 +52,50 @@ export function applyIncomingToStorage(
   };
 }
 
+/** Match recipe/shopping names to pantry (name only, normalized) */
+export function namesMatchLoose(a: string, b: string): boolean {
+  return normalizeItemName(a) === normalizeItemName(b);
+}
+
+/**
+ * Deduct ingredient qty from first matching pantry rows (R-1/R-4).
+ * Returns names deducted and next state. Items at 0 are removed (after cook confirm).
+ */
+export function deductIngredients(
+  prev: PantryItemsByStorage,
+  ingredients: Array<{ name: string; qty: number; unit?: string }>
+): { next: PantryItemsByStorage; used: string[] } {
+  const next: PantryItemsByStorage = {
+    fridge: [...prev.fridge],
+    freezer: [...prev.freezer],
+    pantry: [...prev.pantry],
+  };
+  const used: string[] = [];
+
+  for (const ing of ingredients) {
+    let remaining = ing.qty;
+    for (const storage of Object.keys(next) as StorageKey[]) {
+      if (remaining <= 0) break;
+      next[storage] = next[storage].map((item) => {
+        if (remaining <= 0) return item;
+        if (!namesMatchLoose(item.name, ing.name)) return item;
+        if (ing.unit && item.unit.trim().toLowerCase() !== ing.unit.trim().toLowerCase()) {
+          // unit mismatch: still allow name-only deduct for recipes with loose units
+        }
+        const take = Math.min(item.qty, remaining);
+        if (take <= 0) return item;
+        remaining -= take;
+        if (!used.includes(item.name)) used.push(item.name);
+        return { ...item, qty: item.qty - take };
+      });
+      // drop zeros after each ingredient pass per storage
+      next[storage] = next[storage].filter((i) => i.qty > 0);
+    }
+  }
+
+  return { next, used };
+}
+
 /** Best-effort set latestPrice on matching pantry items (any storage) */
 export function applyPriceToMatchingItems(
   prev: PantryItemsByStorage,

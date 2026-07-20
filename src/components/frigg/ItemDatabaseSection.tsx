@@ -20,7 +20,6 @@ export function ItemDatabaseSection({
   mergeGroups,
   onAdd,
   onUpdate,
-  onRemove,
   onMerge,
   onRequestDelete,
 }: {
@@ -28,7 +27,6 @@ export function ItemDatabaseSection({
   mergeGroups: CatalogMergeGroup[];
   onAdd: (input: { name: string; unit: string; emoji: string }) => void;
   onUpdate: (id: string, patch: Partial<CatalogItem>) => void;
-  onRemove: (id: string) => void;
   onMerge: (group: CatalogMergeGroup, primaryId: string) => void;
   onRequestDelete: (item: CatalogItem) => void;
 }) {

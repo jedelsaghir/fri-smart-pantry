@@ -499,7 +499,6 @@ export function usePantry(options: UsePantryOptions = {}) {
     setItems,
     current,
     detailsItem,
-    setDetailsItem,
     addedBanner,
     setAddedBanner,
 
@@ -507,19 +506,13 @@ export function usePantry(options: UsePantryOptions = {}) {
     expiringSoon,
     lowStockCount,
 
-    // Actions
-    updateQty,
+    // Actions (public surface used by screens)
     updateMinStock,
     updateDaysLeft,
-    updateItemQty,
-    setItemQty,
     patchItem,
-    updateItemName,
-    updateItemPrice,
     removeItem,
     restoreItem,
     moveItem,
-    moveToFreezer,
     openItemDetails,
     closeItemDetails,
     addScannedItems,

@@ -18,6 +18,7 @@ import {
   buildMockReceiptImage,
   createReceiptId,
   formatReceiptDate,
+  readFileAsDataUrl,
 } from "@/lib/receipts";
 import {
   Drawer,
@@ -58,6 +59,7 @@ export function FinancialsScreen({
   const [logStore, setLogStore] = useState("Lidl");
   const [logTotal, setLogTotal] = useState("");
   const [logNote, setLogNote] = useState("");
+  const [logPhoto, setLogPhoto] = useState<string | null>(null);
 
   const selected = useMemo(
     () => receipts.find((r) => r.id === selectedId) ?? null,
@@ -105,31 +107,53 @@ export function FinancialsScreen({
       .slice(0, 6);
   }, [receipts]);
 
+  const weeklyTrend = useMemo(() => {
+    const buckets = new Map<string, number>();
+    for (const r of receipts) {
+      const d = new Date(r.date);
+      if (Number.isNaN(d.getTime())) continue;
+      const weekStart = new Date(d);
+      weekStart.setHours(0, 0, 0, 0);
+      weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+      const key = weekStart.toISOString().slice(0, 10);
+      buckets.set(key, (buckets.get(key) || 0) + r.total);
+    }
+    return [...buckets.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([week, amount], i) => ({
+        week: `W${i + 1}`,
+        amount: Math.round(amount * 100) / 100,
+      }));
+  }, [receipts]);
+
   const submitLogPurchase = () => {
     const total = Math.max(0, parseFloat(logTotal.replace(",", ".")) || 0);
     if (!logStore.trim() || total <= 0) return;
     const now = new Date().toISOString();
     const store = logStore.trim();
+    const lineName = logNote.trim() || "Manual purchase";
+    const mockImg = buildMockReceiptImage({
+      store,
+      date: new Date().toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+      items: [{ name: lineName, qty: 1, unit: "x", price: total }],
+      total,
+    });
     const receipt: StoredReceipt = {
       id: createReceiptId(),
       date: now,
       store,
       total,
       currency: "EUR",
-      imageDataUrl: buildMockReceiptImage({
-        store,
-        date: new Date().toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }),
-        items: [{ name: logNote.trim() || "Purchase", qty: 1, unit: "x", price: total }],
-        total,
-      }),
+      imageDataUrl: logPhoto || mockImg,
       items: [
         {
           id: `line-${Date.now()}`,
-          name: logNote.trim() || "Manual purchase",
+          name: lineName,
           qty: 1,
           unit: "x",
           emoji: "🧾",
@@ -144,6 +168,7 @@ export function FinancialsScreen({
     setLogOpen(false);
     setLogTotal("");
     setLogNote("");
+    setLogPhoto(null);
   };
 
   return (
@@ -194,10 +219,31 @@ export function FinancialsScreen({
               placeholder="Note (optional)"
               className="h-11 rounded-2xl"
             />
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-border/60 py-3 text-xs font-semibold active:bg-secondary/50">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  try {
+                    setLogPhoto(await readFileAsDataUrl(file));
+                  } catch {
+                    setLogPhoto(null);
+                  }
+                }}
+              />
+              {logPhoto ? "Photo attached ✓" : "Attach photo (optional)"}
+            </label>
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setLogOpen(false)}
+                onClick={() => {
+                  setLogOpen(false);
+                  setLogPhoto(null);
+                }}
                 className="flex-1 rounded-2xl border py-2.5 text-sm font-semibold"
               >
                 Cancel
@@ -302,6 +348,35 @@ export function FinancialsScreen({
                     }}
                   />
                   <Bar dataKey="amount" fill="#4a7c59" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Weekly spend trend from receipts */}
+      {weeklyTrend.length > 1 && (
+        <div>
+          <div className="mb-3 px-1 text-sm font-semibold tracking-[0.005em] text-foreground/90">
+            Weekly spend
+          </div>
+          <div className="elevated-card rounded-3xl p-4">
+            <div className="h-[160px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(value: number) => [`€${Number(value).toFixed(2)}`, ""]}
+                    contentStyle={{
+                      backgroundColor: "var(--color-card)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Bar dataKey="amount" fill="#5f8a6e" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

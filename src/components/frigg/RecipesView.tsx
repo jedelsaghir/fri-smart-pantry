@@ -1,6 +1,7 @@
 "use client";
 
 import type { PantryItemsByStorage, Recipe, RecipeFilter, StorageKey } from "@/types/pantry";
+import { namesMatchLoose } from "@/lib/pantry-ops";
 
 export function RecipesView({
   items,
@@ -123,9 +124,8 @@ export function countRecipeAvailability(
   recipe: Recipe
 ): number {
   return recipe.ingredients.filter((ing) => {
-    const t = ing.name.toLowerCase();
     return (["fridge", "freezer", "pantry"] as StorageKey[]).some((storage) =>
-      items[storage].some((n) => n.name.toLowerCase() === t && n.qty >= ing.qty)
+      items[storage].some((n) => namesMatchLoose(n.name, ing.name) && n.qty >= ing.qty)
     );
   }).length;
 }

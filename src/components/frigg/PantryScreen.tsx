@@ -15,7 +15,7 @@ import { LoginScreen } from "./LoginScreen";
 import { ShoppingListView } from "./ShoppingListView";
 import { RecipesView, countRecipeAvailability, canMakeRecipeFully } from "./RecipesView";
 import { ALL_RECIPES } from "@/data/recipes";
-import { applyIncomingToStorage } from "@/lib/pantry-ops";
+import { applyIncomingToStorage, deductIngredients, sameProduct } from "@/lib/pantry-ops";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { applyBackupToLocalStorage, buildBackupFromLocalStorage, downloadBackupJson } from "@/lib/backup";
 import { ArrowRight, X, Users, Plus } from "lucide-react";
@@ -79,15 +79,15 @@ export function PantryScreen() {
   }, []);
 
   // Profile (persisted)
-  const [userName, setUserName] = useState("Elena");
-  const [userFullName, setUserFullName] = useState("Elena Borg");
-  const [userEmail, setUserEmail] = useState("elena@borg.family");
-  const [userEmoji, setUserEmoji] = useState("👩‍🍳");
+  const [userName, setUserName] = useState("there");
+  const [userFullName, setUserFullName] = useState("Your name");
+  const [userEmail, setUserEmail] = useState("");
+  const [userEmoji, setUserEmoji] = useState("👤");
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({
-    name: "Elena Borg",
-    email: "elena@borg.family",
-    emoji: "👩‍🍳",
+    name: "Your name",
+    email: "",
+    emoji: "👤",
   });
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -121,8 +121,8 @@ export function PantryScreen() {
   }, []);
 
   const saveProfile = () => {
-    const name = profileDraft.name.trim() || "Elena Borg";
-    const email = profileDraft.email.trim() || "you@family.com";
+    const name = profileDraft.name.trim() || "Your name";
+    const email = profileDraft.email.trim();
     const emoji = profileDraft.emoji.trim() || "👤";
     try {
       localStorage.setItem(
@@ -200,13 +200,7 @@ export function PantryScreen() {
   }, [isAuthenticated]);
 
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>(() => {
-    if (typeof window === "undefined") {
-      return [
-        { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
-        { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
-        { user: "You", action: "moved chicken to freezer", time: "3h ago" },
-      ];
-    }
+    if (typeof window === "undefined") return [];
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.ACTIVITY_LOG);
       if (raw) {
@@ -214,11 +208,7 @@ export function PantryScreen() {
         if (Array.isArray(parsed)) return parsed as ActivityLogEntry[];
       }
     } catch {}
-    return [
-      { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
-      { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
-      { user: "You", action: "moved chicken to freezer", time: "3h ago" },
-    ];
+    return [];
   });
   useEffect(() => {
     try {
@@ -646,16 +636,12 @@ export function PantryScreen() {
       purchased.forEach((p) => {
         let merged = false;
         (Object.keys(next) as StorageKey[]).forEach((storage) => {
-          const has = next[storage].some(
-            (item) => item.name.toLowerCase() === p.name.toLowerCase()
-          );
+          const has = next[storage].some((item) => sameProduct(item, p));
           if (has) {
             next = {
               ...next,
               [storage]: next[storage].map((item) =>
-                item.name.toLowerCase() === p.name.toLowerCase()
-                  ? { ...item, qty: item.qty + p.qty }
-                  : item
+                sameProduct(item, p) ? { ...item, qty: item.qty + p.qty } : item
               ),
             };
             merged = true;
@@ -829,30 +815,18 @@ export function PantryScreen() {
       description: `This will deduct from your pantry where stock allows: ${preview}.`,
       confirmLabel: "Cook & deduct",
       onConfirm: () => {
-        const used: string[] = [];
         const snapshot = JSON.parse(JSON.stringify(items)) as typeof items;
-
-        setItems((prev) => {
-          const next = { ...prev };
-          (Object.keys(next) as StorageKey[]).forEach((storage) => {
-            next[storage] = next[storage]
-              .map((item) => {
-                const match = recipe.ingredients.find(
-                  (ing) => ing.name.toLowerCase() === item.name.toLowerCase()
-                );
-                if (match && item.qty >= match.qty) {
-                  const newQty = Math.max(0, item.qty - match.qty);
-                  if (newQty < item.qty) used.push(item.name);
-                  return { ...item, qty: newQty };
-                }
-                return item;
-              })
-              .filter((i) => i.qty > 0);
-          });
-          return next;
-        });
+        const { next, used } = deductIngredients(items, recipe.ingredients);
+        setItems(next);
 
         if (used.length > 0) {
+          // Items removed at 0 after cook (confirmed) — keep names in Database
+          used.forEach((name) => {
+            const found = (["fridge", "freezer", "pantry"] as StorageKey[])
+              .flatMap((s) => snapshot[s])
+              .find((i) => i.name === name);
+            if (found) rememberPantryItem(found, "pantry_delete");
+          });
           toast.success(`Used in ${recipe.name}`, {
             description: `Deducted: ${used.join(", ")}`,
             action: {
@@ -1041,7 +1015,6 @@ export function PantryScreen() {
               toast.success("Added to Database", { description: input.name });
             }}
             onCatalogUpdate={updateCatalogItem}
-            onCatalogRemove={removeCatalogItem}
             onCatalogMerge={(group, primaryId) => {
               applyMerge(group, primaryId);
               toast.success("Merged", { description: "Duplicates combined in Database." });
@@ -1055,6 +1028,9 @@ export function PantryScreen() {
                 onConfirm: () => removeCatalogItem(item.id),
               });
             }}
+            pantrySuggestions={(["fridge", "freezer", "pantry"] as StorageKey[]).flatMap((s) =>
+              items[s].map((i) => ({ name: i.name, unit: i.unit, emoji: i.emoji }))
+            )}
           />
         ) : isRecipesView ? (
           <RecipesView
@@ -1386,13 +1362,17 @@ export function PantryScreen() {
                       try {
                         const text = await file.text();
                         const data = JSON.parse(text);
-                        applyBackupToLocalStorage(data);
+                        const { parseAndValidateBackup } = await import("@/lib/backup");
+                        const valid = parseAndValidateBackup(data);
+                        applyBackupToLocalStorage(valid);
                         toast.success("Backup restored", {
-                          description: "Reload the app to see all changes.",
+                          description: "Reloading to apply all data…",
                         });
                         window.location.reload();
-                      } catch {
-                        toast.error("Invalid backup file");
+                      } catch (err) {
+                        toast.error("Invalid backup file", {
+                          description: err instanceof Error ? err.message : "Could not restore",
+                        });
                       }
                     }}
                   />

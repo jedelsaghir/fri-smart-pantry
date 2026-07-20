@@ -32,6 +32,8 @@ export interface DetectedItem {
   emoji: string;
   storage: StorageKey;
   confidence: number;
+  /** Line total from OCR when known */
+  price?: number;
 }
 
 /** Payload used when adding scanned items into the pantry */

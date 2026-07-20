@@ -61,7 +61,7 @@ Track as product decisions, not accidental bugs:
 | ID | Status | Item | Notes |
 |----|--------|------|-------|
 | D-1 | wontfix | Real multi-user cloud sync | **Deferred:** needs backend + auth. Local simulation only. Documented in README. |
-| D-2 | wontfix | Real camera + OCR | **Deferred:** needs camera API + ML/OCR. Demo detection labeled (P0-6). |
+| D-2 | done | Real camera + OCR | **Wired:** `OcrProvider` → `ocr-xai` → `createServerFn` + xAI vision (`XAI_API_KEY`). Live `getUserMedia` + library. No fake items without a read. |
 | D-3 | wontfix | Push notifications | **Deferred:** needs push service. In-app Alerts panel covers local attention (P0-3/5). |
 | D-4 | wontfix | Real WhatsApp join across devices | **Deferred:** invite URLs open WhatsApp; join is same-device localStorage only. |
 
@@ -134,6 +134,7 @@ Re-open a D-* row when scheduling real infrastructure work.
 | 2026-07-19 | R-1…R-16, R-19; platform/ | Re-audit fixes + platform architecture for D-1…D-4. |
 | 2026-07-19 | N-1…N-4, N-9 | Dead hook cleanup, shopping sameProduct, OCR-only platform, push hook, AlertsDrawer. |
 | 2026-07-20 | N-3, M-1 | Settings/Family drawers extracted; mobile performance & touch UX. |
+| 2026-07-20 | D-2 | Live OCR architecture: server xAI vision, camera, parse pipeline, no demo seed lines. |
 
 ---
 

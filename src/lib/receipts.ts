@@ -162,9 +162,12 @@ export function buildReceiptFromScan(opts: {
     price?: number;
   }>;
   imageDataUrl?: string | null;
-  store?: string;
+  store?: string | null;
+  /** Prefer OCR total when provided */
+  total?: number | null;
+  currency?: string;
 }): StoredReceipt {
-  // Never invent a supermarket name — user/OCR can set later
+  // Prefer OCR store; never invent a supermarket brand
   const store = (opts.store && opts.store.trim()) || "Unknown store";
   const lineItems: ReceiptLineItem[] = opts.items.map((item, i) => ({
     id: `line-${Date.now()}-${i}`,
@@ -179,7 +182,11 @@ export function buildReceiptFromScan(opts: {
     category: categoryForName(item.name),
     storage: item.storage,
   }));
-  const total = Math.round(lineItems.reduce((s, i) => s + i.price, 0) * 100) / 100;
+  const sumLines = Math.round(lineItems.reduce((s, i) => s + i.price, 0) * 100) / 100;
+  const total =
+    typeof opts.total === "number" && Number.isFinite(opts.total) && opts.total > 0
+      ? Math.round(opts.total * 100) / 100
+      : sumLines;
   const now = new Date().toISOString();
   // Only keep a real capture; no generated “fake receipt” SVG
   const imageDataUrl = opts.imageDataUrl || "";
@@ -189,7 +196,7 @@ export function buildReceiptFromScan(opts: {
     date: now,
     store,
     total,
-    currency: "EUR",
+    currency: (opts.currency && opts.currency.trim()) || "EUR",
     imageDataUrl,
     items: lineItems,
     createdAt: now,

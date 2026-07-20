@@ -16,35 +16,44 @@ Everything stays private on your device. Works beautifully as a Progressive Web 
 
 ## Security & demo limits (read this)
 
-Friġġ is a **local-first demo**. There is **no cloud backend**.
+Friġġ is **local-first**. Pantry data lives in the browser; OCR uses a **server-side** vision call when configured.
 
 | Area | Reality |
 |------|---------|
 | Accounts / passwords | Stored **in plain text** in `localStorage` for simulation only — **not** production-grade auth |
 | Household “sharing” | Same-device simulation (invite links / WhatsApp open real apps; join does not sync across phones via a server) |
-| Receipt scan | **Demo detection** — sample line items; library photos are stored but not OCR’d |
+| Receipt scan | **Live OCR architecture** via `getPlatform().ocr` → xAI vision (`XAI_API_KEY` server env). Without a key, scan fails honestly (no fake items). Live camera + library photos. |
 | Push notifications | Not implemented — in-app Alerts panel only |
 | Data | Export/import JSON backup from Settings; no automatic multi-device sync |
 
 Do not use this build for real sensitive credentials or true multi-household production.
 
-### Pluggable platform (future cloud / OCR / push)
+### Pluggable platform (OCR / sync / push)
 
 See [`src/platform/README.md`](src/platform/README.md). Adapters:
 
 - **Sync** — local no-op (D-1)
-- **OCR** — demo detections via `getPlatform().ocr` (D-2)
+- **OCR** — **wired**: camera + server vision (`ocr-xai` + `src/server/ocr-receipt.ts`). Set `XAI_API_KEY` on the host.
 - **Push** — optional browser Notification if granted (D-3 still no service worker push)
 - **Invites** — localStorage codes only (D-4)
 
 Swap implementations with `setPlatform(createPlatform({ ... }))` without rewriting screens.
+
+### Enable receipt OCR
+
+```bash
+export XAI_API_KEY=xai-...   # https://console.x.ai — server only, never VITE_
+# optional:
+export XAI_OCR_MODEL=grok-4.5
+npm run dev
+```
 
 ## Key Features
 
 - **Smart Inventory Tracking** — Premium single-column cards for fridge, freezer, and pantry. Calm list shows emoji, name, status, days left, and quantity; tap for quantity/min stock controls and move actions.
 - **Expiration Management** — Edit days remaining directly. Freezer moves automatically extend shelf life using realistic guidelines.
 - **Premium Details Drawer** — Tap or long-press any card for rich item details: quantity, expiration, min stock, and **Quick Actions** (Move to Fridge / Freezer / Pantry).
-- **Receipt Scanner** — Simulated high-fidelity scan flow with review for ambiguous items and optional (non-intrusive) expiration photo prompt.
+- **Receipt Scanner** — Live camera or library photo → server vision OCR → high-confidence auto-add + review for uncertain lines; receipt photo + totals go to Finances.
 - **Shopping List** — One-tap intelligent generation of items you're low on or below minimums. Mark purchased to add back to pantry.
 - **Recipes** — Context-aware suggestions. Filter by "can make now" or "use expiring". Deduct ingredients when you cook.
 - **Household Sharing** — Activity log and family simulation. Multiple members can "update" the shared pantry.

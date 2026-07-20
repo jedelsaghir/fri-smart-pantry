@@ -1,42 +1,62 @@
-import type { OcrProvider } from "@/platform/types";
-import type { ScannedItemInput, StorageKey } from "@/types/pantry";
+/**
+ * Demo OCR — only for explicit tests via setPlatform().
+ * Default production path is xaiOcrProvider (real vision / unavailable).
+ * Does NOT invent items when used as the app default anymore.
+ */
 
-const MOCK_BATCHES: ScannedItemInput[][] = [
-  [
-    { name: "Whole milk", qty: 2, unit: "L", emoji: "🥛", storage: "fridge" },
-    { name: "Free-range eggs", qty: 12, unit: "pcs", emoji: "🥚", storage: "fridge" },
-    { name: "Greek yogurt", qty: 2, unit: "tub", emoji: "🥣", storage: "fridge" },
-    { name: "Baby spinach", qty: 1, unit: "bag", emoji: "🥬", storage: "fridge" },
-    { name: "Avocados", qty: 5, unit: "pcs", emoji: "🥑", storage: "fridge" },
-  ],
-  [
-    { name: "Frozen berries", qty: 2, unit: "bags", emoji: "🫐", storage: "freezer" },
-    { name: "Chicken thighs", qty: 800, unit: "g", emoji: "🍗", storage: "freezer" },
-    { name: "Aged cheddar", qty: 300, unit: "g", emoji: "🧀", storage: "fridge" },
-    { name: "Organic bread", qty: 1, unit: "loaf", emoji: "🍞", storage: "pantry" },
-  ],
-  [
-    { name: "Cherry tomatoes", qty: 2, unit: "packs", emoji: "🍅", storage: "fridge" },
-    { name: "Olive oil", qty: 1, unit: "bottle", emoji: "🫒", storage: "pantry" },
-    { name: "Pasta", qty: 2, unit: "packs", emoji: "🍝", storage: "pantry" },
-    { name: "Fresh basil", qty: 1, unit: "bunch", emoji: "🌿", storage: "fridge" },
-  ],
-];
+import type { OcrProvider } from "@/platform/types";
+import { enrichOcrItems } from "@/lib/ocr-parse";
 
 /**
- * Demo OCR (D-2 deferred): ignores image pixels, returns sample line items.
- * Swap for a live provider that calls a vision API.
+ * @deprecated Prefer xaiOcrProvider. Kept for unit/integration tests that
+ * inject demo detections with setPlatform(createPlatform({ ocr: demoOcrProvider })).
  */
 export const demoOcrProvider: OcrProvider = {
   id: "demo-ocr",
   mode: "demo",
   supportsLiveCamera() {
-    return false;
+    return typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
   },
-  async detectFromImage(_imageDataUrl: string | null) {
-    // Small delay so UI processing state is visible
-    await new Promise((r) => setTimeout(r, 80));
-    const batch = MOCK_BATCHES[Math.floor(Math.random() * MOCK_BATCHES.length)];
-    return batch.map((row) => ({ ...row, storage: row.storage as StorageKey }));
+  async isConfigured() {
+    return true;
+  },
+  async detectFromImage(imageDataUrl: string | null) {
+    await new Promise((r) => setTimeout(r, 40));
+    if (!imageDataUrl) {
+      return {
+        ok: false,
+        mode: "demo",
+        provider: "demo-ocr",
+        items: [],
+        reason: "Demo OCR still requires an image input in the new architecture.",
+      };
+    }
+    // Fixed tiny sample for tests only — not random supermarket fiction
+    return {
+      ok: true,
+      mode: "demo",
+      provider: "demo-ocr",
+      store: "Demo Store",
+      total: 3.5,
+      currency: "EUR",
+      items: enrichOcrItems([
+        {
+          name: "Demo milk",
+          qty: 1,
+          unit: "L",
+          storage: "fridge",
+          confidence: 0.95,
+          price: 1.5,
+        },
+        {
+          name: "Demo eggs",
+          qty: 6,
+          unit: "pcs",
+          storage: "fridge",
+          confidence: 0.7,
+          price: 2.0,
+        },
+      ]),
+    };
   },
 };

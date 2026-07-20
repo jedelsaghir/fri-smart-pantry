@@ -353,12 +353,15 @@ export function usePantry(options: UsePantryOptions = {}) {
         let next = { ...prev };
         scanned.forEach((s, index) => {
           const target = s.storage;
-          const unitPrice = estimateLinePrice(s.name, s.qty);
-          // Prefer per-unit display for countables; line total for bulk weight already estimated
+          // Prefer real OCR line price; only estimate when OCR had no price
+          const lineTotal =
+            typeof s.price === "number" && Number.isFinite(s.price) && s.price > 0
+              ? s.price
+              : estimateLinePrice(s.name, s.qty);
           const latestPrice =
             s.unit === "g" || s.unit === "kg" || s.unit === "ml"
-              ? Math.round((unitPrice / Math.max(1, s.qty / 100)) * 100) / 100
-              : Math.round((unitPrice / Math.max(1, s.qty)) * 100) / 100;
+              ? Math.round((lineTotal / Math.max(1, s.qty / 100)) * 100) / 100
+              : Math.round((lineTotal / Math.max(1, s.qty)) * 100) / 100;
           const newItem: PantryItem = {
             id: `item-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
             name: s.name,

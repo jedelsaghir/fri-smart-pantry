@@ -6,7 +6,6 @@
 import type {
   FamilyMember,
   PantryItemsByStorage,
-  ScannedItemInput,
   StorageKey,
 } from "@/types/pantry";
 
@@ -22,14 +21,46 @@ export interface SyncProvider {
   pushFamily(members: FamilyMember[]): Promise<{ ok: boolean; reason?: string }>;
 }
 
+/** One product line returned by OCR / detection */
+export type OcrLineItem = {
+  name: string;
+  qty: number;
+  unit: string;
+  emoji?: string;
+  storage?: StorageKey;
+  /** 0–1 model confidence */
+  confidence?: number;
+  /** Line total when known */
+  price?: number;
+  category?: string;
+};
+
+/** Structured result from OcrProvider.detectFromImage */
+export type OcrDetectResult = {
+  ok: boolean;
+  mode: "live" | "demo" | "unavailable";
+  provider: string;
+  items: OcrLineItem[];
+  store?: string | null;
+  total?: number | null;
+  currency?: string;
+  /** Human-readable error / config message when ok is false or items empty */
+  reason?: string;
+};
+
 /** D-2 — camera capture + OCR / item detection */
 export interface OcrProvider {
   readonly id: string;
-  readonly mode: "demo" | "live";
-  /** Analyze receipt image; demo returns mock detections */
-  detectFromImage(imageDataUrl: string | null): Promise<ScannedItemInput[]>;
-  /** Whether a live camera stream is available */
+  readonly mode: "demo" | "live" | "unavailable";
+  /**
+   * Analyze a receipt image (data URL). Requires a real image for live mode.
+   * Never invents grocery lines when the provider cannot read the image.
+   */
+  detectFromImage(imageDataUrl: string | null): Promise<OcrDetectResult>;
+  /** Whether getUserMedia camera capture is available in this browser */
   supportsLiveCamera(): boolean;
+  /** Best-effort probe (e.g. server has XAI_API_KEY) */
+  isConfigured(): Promise<boolean>;
 }
 
 /** D-3 — push / system notifications */
@@ -55,7 +86,10 @@ export interface InviteProvider {
     reason?: string;
   }>;
   /** Accept invite for current account */
-  acceptInvite(code: string, account: { email: string; name: string; password: string }): Promise<{
+  acceptInvite(
+    code: string,
+    account: { email: string; name: string; password: string }
+  ): Promise<{
     ok: boolean;
     reason?: string;
   }>;

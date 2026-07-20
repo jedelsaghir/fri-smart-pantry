@@ -24,7 +24,12 @@ export function RecipesView({
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      {/* Equal-width filter pills — always fully visible, no horizontal scroll */}
+      <div
+        role="tablist"
+        aria-label="Recipe filters"
+        className="grid w-full grid-cols-3 gap-1 rounded-[1.15rem] bg-secondary/55 p-1 ring-1 ring-border/30"
+      >
         {(
           [
             { key: "all", label: "All ideas" },
@@ -35,12 +40,15 @@ export function RecipesView({
           <button
             key={f.key}
             type="button"
+            role="tab"
+            aria-selected={recipeFilter === f.key}
             onClick={() => onFilterChange(f.key)}
-            className={`rounded-2xl px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition active:scale-[0.985] ${
-              recipeFilter === f.key
-                ? "bg-brand text-brand-foreground"
-                : "bg-secondary/70 text-foreground/80 active:bg-secondary"
-            }`}
+            className={
+              "min-w-0 touch-manipulation rounded-[0.9rem] px-1.5 py-2.5 text-center text-[11px] font-semibold leading-snug tracking-[-0.01em] transition active:scale-[0.98] sm:text-xs " +
+              (recipeFilter === f.key
+                ? "bg-brand text-brand-foreground shadow-sm"
+                : "text-foreground/80 active:bg-secondary/80")
+            }
           >
             {f.label}
           </button>

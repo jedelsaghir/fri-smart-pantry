@@ -23,6 +23,14 @@ import { readLocalSyncMeta } from "@/lib/household-sync";
 import { flushHouseholdPush, pullAndMergeOnLogin } from "@/lib/run-household-sync";
 import { loadSyncCreds } from "@/lib/sync-session";
 import { getPlatform } from "@/platform";
+import {
+  loadAccounts,
+  loadFamilyMembers,
+  memberStatusLabel,
+  CURRENT_USER_KEY,
+  type FamilyAccount,
+} from "@/lib/family";
+import type { FamilyMember } from "@/types/pantry";
 
 export function SettingsDrawer({
   open,
@@ -79,6 +87,19 @@ export function SettingsDrawer({
     lastPulledAt?: string;
     lastError?: string;
   }>({ backend: "…", durable: false });
+
+  const [accounts, setAccounts] = useState<FamilyAccount[]>([]);
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    try {
+      setAccounts(loadAccounts());
+      setMembers(loadFamilyMembers());
+      setCurrentAccountId(localStorage.getItem(CURRENT_USER_KEY));
+    } catch {}
+  }, [open, syncInfo.lastPulledAt, syncInfo.lastPushedAt]);
 
   useEffect(() => {
     if (!open) return;

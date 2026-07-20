@@ -1,7 +1,6 @@
-// Friġġ PWA Service Worker — offline shell + asset caching
-// Bump CACHE_NAME whenever we need clients to drop stale app shells
-// (e.g. after removing temporary UI like the old BUILD CHECK banner).
-const CACHE_NAME = "friggg-v3-2026-07-20";
+// Friġġ PWA Service Worker — offline shell + static icons only.
+// Bump CACHE_NAME on every intentional deploy that must drop old shells.
+const CACHE_NAME = "friggg-v4-no-banner-2026-07-20";
 const ASSETS = [
   "/manifest.json",
   "/favicon.ico",
@@ -10,7 +9,6 @@ const ASSETS = [
   "/icons/apple-touch-icon.png",
 ];
 
-// Install: pre-cache static icons only (not HTML — avoids freezing old app UI)
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -18,7 +16,12 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// Activate: delete every previous cache (including friggg-v2-1col with BUILD CHECK era)
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -28,7 +31,6 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first for navigations + JS/CSS; cache-first only for icons/static
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -44,6 +46,7 @@ self.addEventListener("fetch", (event) => {
     url.pathname === "/" ||
     url.pathname.startsWith("/assets/");
 
+  // Always prefer network for app code so old UI shells cannot stick
   if (isNavigate || isAppCode) {
     event.respondWith(
       fetch(request)
@@ -53,7 +56,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Icons / manifest: cache-first
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;

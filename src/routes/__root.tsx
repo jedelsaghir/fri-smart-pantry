@@ -188,32 +188,44 @@ function RootComponent() {
     return new QueryClient();
   }, [routeCtx]);
 
-  // Register service worker for PWA + basic offline support
+  // Register service worker for PWA + force-refresh when a new SW is waiting
   useEffect(() => {
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      const registerSW = async () => {
-        try {
-          const reg = await navigator.serviceWorker.register("/sw.js");
-          // Optional: listen for updates
-          reg.addEventListener("updatefound", () => {
-            const newWorker = reg.installing;
-            if (newWorker) {
-              newWorker.addEventListener("statechange", () => {
-                if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-                  // New content available; could show a toast in real app
-                }
-              });
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const registerSW = async () => {
+      try {
+        // Drop any legacy Cache Storage shells that still held old UI
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(
+            keys
+              .filter((k) => k.startsWith("friggg-") && k !== "friggg-v4-no-banner-2026-07-20")
+              .map((k) => caches.delete(k))
+          );
+        }
+
+        const reg = await navigator.serviceWorker.register("/sw.js");
+        // If an updated worker is already waiting, activate it now
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+        reg.addEventListener("updatefound", () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener("statechange", () => {
+            if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+              newWorker.postMessage({ type: "SKIP_WAITING" });
             }
           });
-        } catch (err) {
-          // SW registration failed (e.g. http in dev sometimes) — safe to ignore for demo
-          console.log("SW registration skipped", err);
-        }
-      };
-      // Delay slightly so initial load is fast
-      const t = setTimeout(registerSW, 800);
-      return () => clearTimeout(t);
-    }
+        });
+        await reg.update();
+      } catch {
+        // SW registration failed (e.g. http in dev) — ignore
+      }
+    };
+
+    const t = setTimeout(registerSW, 400);
+    return () => clearTimeout(t);
   }, []);
 
   return (

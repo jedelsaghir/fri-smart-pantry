@@ -5,7 +5,11 @@
 export function firstNameFromDisplayName(name: string | undefined | null): string {
   const n = (name || "").trim();
   if (!n || /^your name$/i.test(n) || n === "You") return "there";
+  // Never greet with legacy demo seeds
+  const lower = n.toLowerCase();
+  if (lower === "elena" || lower === "elena borg" || lower === "alex") return "there";
   const first = n.split(/\s+/)[0];
+  if (/^elena$/i.test(first)) return "there";
   return first || "there";
 }
 

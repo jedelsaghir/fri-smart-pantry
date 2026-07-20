@@ -18,16 +18,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { FamilyMember, ActivityLogEntry } from "@/types/pantry";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import {
   buildInviteUrl,
@@ -36,6 +26,7 @@ import {
   generateInviteCode,
   memberStatusLabel,
 } from "@/lib/family";
+import { APP_BUILD } from "@/lib/app-build";
 
 const AVATAR_EMOJIS = [
   "👤",
@@ -156,16 +147,17 @@ export function ManageFamilyPage({
     resetAddForm();
   };
 
-  const canRemoveMember = (member: FamilyMember) =>
-    !member.isYou && member.status !== "owner";
+  const canRemoveMember = (member: FamilyMember) => {
+    if (member.isYou) return false;
+    if (member.status === "owner") return false;
+    // pending + joined (and any other non-owner status) can be removed
+    return true;
+  };
 
   const requestRemove = (member: FamilyMember) => {
     if (!canRemoveMember(member)) {
       toast.error("Can't remove", {
-        description:
-          member.isYou || member.status === "owner"
-            ? "You can't remove the account owner."
-            : "This member can't be removed.",
+        description: "You can't remove the account owner.",
       });
       return;
     }
@@ -173,19 +165,28 @@ export function ManageFamilyPage({
     setPendingRemove(member);
   };
 
-  const confirmRemove = () => {
-    const target = pendingRemoveRef.current ?? pendingRemove;
+  const cancelRemove = () => {
     pendingRemoveRef.current = null;
     setPendingRemove(null);
-    if (!target) return;
+  };
+
+  const confirmRemove = () => {
+    const target = pendingRemoveRef.current ?? pendingRemove;
+    if (!target) {
+      cancelRemove();
+      return;
+    }
     if (!canRemoveMember(target)) {
       toast.error("Can't remove", {
         description: "You can't remove the account owner.",
       });
+      cancelRemove();
       return;
     }
+    // Call parent first, then clear UI — no Radix dialog race
     onRemoveMember(target.id);
     const wasPending = target.status === "pending";
+    cancelRemove();
     toast.success(wasPending ? "Invite cancelled" : "Member removed", {
       description: wasPending
         ? `${target.name}'s pending invite was deleted.`
@@ -778,83 +779,92 @@ export function ManageFamilyPage({
         </div>
       )}
 
-      {/* Clear activity log */}
-      <AlertDialog open={confirmClearActivity} onOpenChange={setConfirmClearActivity}>
-        <AlertDialogContent className="z-[110] max-w-[min(22rem,calc(100vw-2rem))] rounded-3xl border-border/50">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-[22px] tracking-[-0.02em]">
+      {/* Clear activity — plain modal (no Radix Action race) */}
+      {confirmClearActivity && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+            aria-label="Dismiss"
+            onClick={() => setConfirmClearActivity(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-3xl border border-border/40 bg-background p-5 shadow-2xl">
+            <p className="font-display text-[20px] font-medium tracking-[-0.02em]">
               Clear recent activity?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[14px] leading-relaxed">
-              This removes all {activityLog.length} household activity{" "}
-              {activityLog.length === 1 ? "entry" : "entries"} from this device. New actions will
-              start a fresh log.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel className="rounded-2xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                onClearActivity?.();
-                setConfirmClearActivity(false);
-                toast.success("Activity cleared", {
-                  description: "Recent activity list is empty.",
-                });
-              }}
-            >
-              Clear all
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </p>
+            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">
+              Removes all {activityLog.length} household activity{" "}
+              {activityLog.length === 1 ? "entry" : "entries"} from this device.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                className="flex-1 rounded-2xl border py-3 text-sm font-semibold active:bg-secondary/60"
+                onClick={() => setConfirmClearActivity(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl bg-destructive py-3 text-sm font-semibold text-destructive-foreground active:scale-[0.98]"
+                onClick={() => {
+                  onClearActivity?.();
+                  setConfirmClearActivity(false);
+                  toast.success("Activity cleared", {
+                    description: "Recent activity list is empty.",
+                  });
+                }}
+              >
+                Clear all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Remove confirmation — pending invites and active members */}
-      <AlertDialog
-        open={!!pendingRemove}
-        onOpenChange={(open) => {
-          if (!open) {
-            // Don't clear ref here — confirmRemove may still need it after Action click
-            setPendingRemove(null);
-          }
-        }}
-      >
-        <AlertDialogContent className="z-[110] max-w-[min(22rem,calc(100vw-2rem))] rounded-3xl border-border/50">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-[22px] tracking-[-0.02em]">
-              {pendingRemove?.status === "pending"
-                ? `Cancel invite for ${pendingRemove?.name}?`
-                : `Remove ${pendingRemove?.name}?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[14px] leading-relaxed">
-              {pendingRemove?.status === "pending"
+      {/* Remove member — plain modal; works for pending + active */}
+      {pendingRemove && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+            aria-label="Dismiss"
+            onClick={cancelRemove}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-3xl border border-border/40 bg-background p-5 shadow-2xl">
+            <p className="font-display text-[20px] font-medium tracking-[-0.02em]">
+              {pendingRemove.status === "pending"
+                ? `Cancel invite for ${pendingRemove.name}?`
+                : `Remove ${pendingRemove.name}?`}
+            </p>
+            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">
+              {pendingRemove.status === "pending"
                 ? "Their pending invite will be deleted. You can create a new invite later."
                 : "They will lose access to this shared pantry. You can invite them again later."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel
-              className="rounded-2xl"
-              onClick={() => {
-                pendingRemoveRef.current = null;
-              }}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                // Ensure we run remove before dialog unmount clears UI state
-                e.preventDefault();
-                confirmRemove();
-              }}
-              className="rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {pendingRemove?.status === "pending" ? "Cancel invite" : "Remove"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                className="flex-1 rounded-2xl border py-3 text-sm font-semibold active:bg-secondary/60"
+                onClick={cancelRemove}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl bg-destructive py-3 text-sm font-semibold text-destructive-foreground active:scale-[0.98]"
+                onClick={confirmRemove}
+              >
+                {pendingRemove.status === "pending" ? "Cancel invite" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="pointer-events-none fixed bottom-2 right-3 z-0 text-[9px] text-muted-foreground/40">
+        build {APP_BUILD}
+      </p>
     </div>
   );
 }

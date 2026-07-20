@@ -139,7 +139,19 @@ export function PantryScreen() {
           accountId: prev.accountId,
         })
       );
-      // Keep household "You" row in sync with the signed-in display name
+      // Keep current account + household "You" row in sync (greeting reads account first)
+      if (prev.accountId) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+          const accounts = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(accounts)) {
+            const next = accounts.map((a: { id?: string }) =>
+              a.id === prev.accountId ? { ...a, name, email, emoji } : a
+            );
+            localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(next));
+          }
+        } catch {}
+      }
       setFamilyMembers((members) =>
         members.map((m) =>
           m.isYou || m.status === "owner" ? { ...m, name, emoji, email } : m
@@ -148,7 +160,9 @@ export function PantryScreen() {
     } catch {}
     applyProfile({ name, email, emoji });
     setEditingProfile(false);
-    toast.success("Profile updated");
+    toast.success("Profile updated", {
+      description: `Greeting will use ${name.split(/\s+/)[0] || name}.`,
+    });
   };
 
   const toggleNotifications = async (checked: boolean) => {

@@ -17,6 +17,7 @@ import {
   downloadBackupJson,
   parseAndValidateBackup,
 } from "@/lib/backup";
+import { APP_BUILD } from "@/lib/app-build";
 
 export function SettingsDrawer({
   open,
@@ -274,8 +275,11 @@ export function SettingsDrawer({
             </div>
           </div>
 
-          <div className="text-[11px] text-muted-foreground px-1 pt-1">
-            Friġġ v1 • Demo multi-user · data stays on this device (not cloud-synced).
+          <div className="text-[11px] text-muted-foreground px-1 pt-1 space-y-1">
+            <p>Friġġ · build {APP_BUILD} · data stays on this device.</p>
+            <p>
+              If you still see WhatsApp invite buttons, re-sync from GitHub main and hard-refresh.
+            </p>
           </div>
 
           <button

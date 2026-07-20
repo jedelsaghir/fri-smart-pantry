@@ -163,22 +163,59 @@ export type StoredProfile = {
   accountId?: string;
 };
 
+/** Old demo display names that must never win the dashboard greeting */
+export function isLegacyDemoDisplayName(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return (
+    n === "elena" ||
+    n === "elena borg" ||
+    n === "alex" ||
+    n === "you" ||
+    n === "your name" ||
+    n === "demo" ||
+    n === "user"
+  );
+}
+
+/** Derive a human name from email local-part when profile is still a demo seed */
+export function displayNameFromEmail(email: string): string {
+  const local = email.split("@")[0]?.trim() || "";
+  if (!local) return "";
+  const cleaned = local.replace(/[._+\-]+/g, " ").replace(/\d+/g, " ").trim();
+  if (!cleaned) return local.charAt(0).toUpperCase() + local.slice(1);
+  return cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function sanitizeProfileName(name: string, email: string): string {
+  const trimmed = name.trim();
+  if (trimmed && !isLegacyDemoDisplayName(trimmed)) return trimmed;
+  const fromEmail = displayNameFromEmail(email);
+  if (fromEmail && !isLegacyDemoDisplayName(fromEmail)) return fromEmail;
+  return "";
+}
+
 /**
  * Resolve the signed-in user's profile for greetings / settings.
  * Prefer current account (login source of truth), then PROFILE, then isYou member.
- * Never invents a demo name like "Elena".
+ * Strips legacy demo names (Elena, etc.) so they never stick as the greeting.
  */
 export function loadStoredProfile(): StoredProfile {
   const empty: StoredProfile = { name: "", email: "", emoji: "👤" };
   if (typeof window === "undefined") return empty;
 
+  let candidate: StoredProfile | null = null;
+
   try {
     const accountId = localStorage.getItem(CURRENT_USER_KEY);
     if (accountId) {
       const account = loadAccounts().find((a) => a.id === accountId);
-      if (account?.name?.trim()) {
-        return {
-          name: account.name.trim(),
+      if (account) {
+        candidate = {
+          name: account.name?.trim() || "",
           email: account.email || "",
           emoji: account.emoji || "👤",
           memberId: account.memberId,
@@ -188,35 +225,70 @@ export function loadStoredProfile(): StoredProfile {
     }
   } catch {}
 
-  try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<StoredProfile>;
-      if (parsed && typeof parsed.name === "string" && parsed.name.trim()) {
-        return {
-          name: parsed.name.trim(),
-          email: typeof parsed.email === "string" ? parsed.email : "",
-          emoji: (typeof parsed.emoji === "string" && parsed.emoji.trim()) || "👤",
-          memberId: typeof parsed.memberId === "string" ? parsed.memberId : undefined,
-          accountId: typeof parsed.accountId === "string" ? parsed.accountId : undefined,
+  if (!candidate) {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<StoredProfile>;
+        if (parsed && typeof parsed === "object") {
+          candidate = {
+            name: typeof parsed.name === "string" ? parsed.name.trim() : "",
+            email: typeof parsed.email === "string" ? parsed.email : "",
+            emoji: (typeof parsed.emoji === "string" && parsed.emoji.trim()) || "👤",
+            memberId: typeof parsed.memberId === "string" ? parsed.memberId : undefined,
+            accountId: typeof parsed.accountId === "string" ? parsed.accountId : undefined,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  if (!candidate) {
+    try {
+      const you = loadFamilyMembers().find((m) => m.isYou || m.status === "owner");
+      if (you) {
+        candidate = {
+          name: you.name?.trim() || "",
+          email: you.email || "",
+          emoji: you.emoji || "👤",
+          memberId: you.id,
         };
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  try {
-    const you = loadFamilyMembers().find((m) => m.isYou || m.status === "owner");
-    if (you?.name?.trim() && you.name !== "You") {
-      return {
-        name: you.name.trim(),
-        email: you.email || "",
-        emoji: you.emoji || "👤",
-        memberId: you.id,
-      };
-    }
-  } catch {}
+  if (!candidate) return empty;
 
-  return empty;
+  const name = sanitizeProfileName(candidate.name, candidate.email);
+  const resolved: StoredProfile = {
+    ...candidate,
+    name,
+    emoji: candidate.emoji || "👤",
+  };
+
+  // Persist cleaned name so Elena/demo seeds do not return after refresh
+  if (name && name !== candidate.name.trim()) {
+    try {
+      localStorage.setItem(
+        PROFILE_KEY,
+        JSON.stringify({
+          name: resolved.name,
+          email: resolved.email,
+          emoji: resolved.emoji,
+          memberId: resolved.memberId,
+          accountId: resolved.accountId,
+        })
+      );
+      if (resolved.accountId) {
+        const accounts = loadAccounts().map((a) =>
+          a.id === resolved.accountId ? { ...a, name: resolved.name, emoji: resolved.emoji } : a
+        );
+        saveAccounts(accounts);
+      }
+    } catch {}
+  }
+
+  return resolved;
 }
 
 export function loadFamilyMembers(): FamilyMember[] {

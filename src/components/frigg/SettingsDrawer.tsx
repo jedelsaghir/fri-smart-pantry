@@ -269,6 +269,62 @@ export function SettingsDrawer({
             </div>
           </div>
 
+          {/* Active accounts */}
+          <div className="elevated-card rounded-3xl p-4 space-y-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="font-semibold">Active accounts</div>
+              <div className="text-[11px] text-muted-foreground tabular-nums">
+                {accounts.length} on this device
+              </div>
+            </div>
+            {accounts.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No accounts yet on this device. Sign in on another device with the same email to sync.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {accounts.map((acct) => {
+                  const member = members.find((m) => m.id === acct.memberId);
+                  const role = member ? memberStatusLabel(member.status) : "Member";
+                  const isYou = acct.id === currentAccountId;
+                  return (
+                    <li
+                      key={acct.id}
+                      className="flex items-center gap-3 rounded-2xl bg-secondary/50 px-3 py-2.5"
+                    >
+                      <div className="text-2xl shrink-0" aria-hidden>
+                        {acct.emoji || member?.emoji || "👤"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-semibold">
+                            {acct.name || "Unnamed"}
+                          </span>
+                          {isYou && (
+                            <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-foreground">
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {acct.email}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-[11px] font-medium text-muted-foreground">
+                        {role}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {syncInfo.lastPulledAt && (
+              <p className="text-[11px] text-muted-foreground">
+                Last synced {new Date(syncInfo.lastPulledAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+
           {/* Alerts */}
           <div className="elevated-card rounded-3xl p-4 flex items-center justify-between gap-3">
             <div className="min-w-0">

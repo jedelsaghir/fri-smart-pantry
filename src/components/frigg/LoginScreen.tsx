@@ -12,6 +12,7 @@ import {
   type PendingInviteContext,
 } from "@/lib/family";
 import { pullAndMergeOnLogin } from "@/lib/run-household-sync";
+import { acceptMemberInvite, resolveInviteFromCloud } from "@/lib/member-invite";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -35,38 +36,76 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
 
   const emojiOptions = ["👩‍🍳", "👤", "🧑‍🌾", "👨‍🍳", "🌿", "🧒", "👨", "👩"];
 
-  // Resolve invite from URL or forced simulation
+  // Resolve invite from URL / local demo / cloud registry (unique per member e.g. Krista)
   useEffect(() => {
-    const code = forcedInviteCode || readInviteCodeFromLocation();
-    if (code) {
-      const ctx = getInviteContext(code);
-      if (ctx) {
+    let cancelled = false;
+    (async () => {
+      const code = forcedInviteCode || readInviteCodeFromLocation();
+      const applyCtx = (ctx: PendingInviteContext) => {
+        if (cancelled) return;
         setInvite(ctx);
         setMode("signup");
         setName(ctx.memberName);
         setProfileEmoji(ctx.memberEmoji || "👤");
         try {
-          localStorage.setItem(STORAGE_KEYS.PENDING_INVITE, code);
+          localStorage.setItem(STORAGE_KEYS.PENDING_INVITE, ctx.code);
         } catch {}
-      } else if (forcedInviteCode) {
-        toast.error("Invite not found", { description: "This member invite is no longer valid." });
-        onClearForcedInvite?.();
-      }
-    } else {
-      try {
-        const pending = localStorage.getItem(STORAGE_KEYS.PENDING_INVITE);
-        if (pending) {
-          const ctx = getInviteContext(pending);
-          if (ctx) {
-            setInvite(ctx);
-            setMode("signup");
-            setName(ctx.memberName);
-            setProfileEmoji(ctx.memberEmoji || "👤");
+      };
+
+      if (code) {
+        // 1) Same-device / owner simulation
+        const local = getInviteContext(code);
+        if (local) {
+          applyCtx(local);
+        } else {
+          // 2) Cross-device: resolve Krista’s invite from cloud by unique code
+          const cloud = await resolveInviteFromCloud(code);
+          if (cloud) {
+            applyCtx({
+              code: cloud.code,
+              memberId: cloud.memberId,
+              memberName: cloud.memberName,
+              memberEmoji: cloud.memberEmoji,
+              householdName: cloud.householdName,
+            });
+          } else if (forcedInviteCode) {
+            toast.error("Invite not found", {
+              description: "This member invite is no longer valid or not published yet.",
+            });
+            onClearForcedInvite?.();
+          } else {
+            toast.error("Invite not found", {
+              description:
+                "Ask the household owner to open Manage Family → Copy invite link again (publishes to cloud).",
+            });
           }
         }
-      } catch {}
-    }
-    setInviteChecked(true);
+      } else {
+        try {
+          const pending = localStorage.getItem(STORAGE_KEYS.PENDING_INVITE);
+          if (pending) {
+            const local = getInviteContext(pending);
+            if (local) applyCtx(local);
+            else {
+              const cloud = await resolveInviteFromCloud(pending);
+              if (cloud) {
+                applyCtx({
+                  code: cloud.code,
+                  memberId: cloud.memberId,
+                  memberName: cloud.memberName,
+                  memberEmoji: cloud.memberEmoji,
+                  householdName: cloud.householdName,
+                });
+              }
+            }
+          }
+        } catch {}
+      }
+      if (!cancelled) setInviteChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [forcedInviteCode, onClearForcedInvite]);
 
   const resetAuthForm = () => {
@@ -92,23 +131,54 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
       return;
     }
 
+    const displayName = name.trim() || invite.memberName;
+    const emoji = profileEmoji || invite.memberEmoji;
+
+    // Prefer cloud accept: links this email to the unique member slot (Krista) + loads household
+    toast.loading("Joining household…", { id: "invite-join" });
+    const cloudJoin = await acceptMemberInvite({
+      code: invite.code,
+      email,
+      password,
+      name: displayName,
+      emoji,
+    });
+    toast.dismiss("invite-join");
+
+    if (cloudJoin.ok) {
+      onClearForcedInvite?.();
+      clearInviteFromUrl();
+      try {
+        localStorage.removeItem(STORAGE_KEYS.PENDING_INVITE);
+      } catch {}
+      toast.success("Welcome to the household", {
+        description: `You're signed in as ${displayName} in ${invite.householdName}.`,
+      });
+      onLogin();
+      window.setTimeout(() => window.location.reload(), 80);
+      return;
+    }
+
+    // Same-device fallback (owner device still has the pending member row)
     const result = acceptInviteAndCreateAccount({
       inviteCode: invite.code,
       email,
       password,
-      name: name.trim() || invite.memberName,
-      emoji: profileEmoji || invite.memberEmoji,
+      name: displayName,
+      emoji,
     });
 
     if (!result.ok) {
-      toast.error("Couldn't join", { description: result.error });
+      toast.error("Couldn't join", {
+        description: cloudJoin.error || result.error,
+      });
       return;
     }
 
     onClearForcedInvite?.();
     await finishWithCloudSync(email, password, {
       successTitle: "Welcome to the household",
-      successBody: `You're in ${invite.householdName}. Syncing across devices…`,
+      successBody: `You're in ${invite.householdName} as ${displayName}.`,
     });
   };
 

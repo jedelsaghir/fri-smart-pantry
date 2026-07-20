@@ -27,6 +27,9 @@ import {
   memberStatusLabel,
 } from "@/lib/family";
 import { APP_BUILD } from "@/lib/app-build";
+import { ensureMemberInviteCode, publishMemberInvite } from "@/lib/member-invite";
+import { loadSyncCreds } from "@/lib/sync-session";
+import { flushHouseholdPush } from "@/lib/run-household-sync";
 
 const AVATAR_EMOJIS = [
   "👤",
@@ -195,20 +198,50 @@ export function ManageFamilyPage({
   };
 
   const ensureInviteCode = (member: FamilyMember): FamilyMember => {
-    if (member.inviteCode) return member;
-    const code = generateInviteCode();
-    onUpdateMember?.(member.id, {
-      inviteCode: code,
-      status: member.status === "owner" ? "owner" : member.status,
-    });
-    return { ...member, inviteCode: code };
+    const withCode = ensureMemberInviteCode(member);
+    if (withCode.inviteCode !== member.inviteCode) {
+      onUpdateMember?.(member.id, {
+        inviteCode: withCode.inviteCode,
+        status: member.status === "owner" ? "owner" : member.status || "pending",
+      });
+    }
+    return withCode;
+  };
+
+  /** Persist unique code + register on cloud so Krista’s link works on her device */
+  const prepareMemberInvite = async (member: FamilyMember): Promise<FamilyMember | null> => {
+    const withCode = ensureInviteCode(member);
+    // Let parent state catch up
+    await flushHouseholdPush();
+    const creds = loadSyncCreds();
+    if (creds) {
+      const pub = await publishMemberInvite({
+        member: withCode,
+        householdName,
+        ownerCreds: creds,
+      });
+      if (!pub.ok) {
+        toast.message("Link ready on this device", {
+          description:
+            pub.reason ||
+            "Cloud invite publish failed — Krista can still use the link after you Sync now.",
+        });
+      }
+    } else {
+      toast.message("Sign in again to publish cloud invites", {
+        description: "The link is unique to this member; cloud publish needs your session.",
+      });
+    }
+    return withCode;
   };
 
   const openInviteSheet = (member: FamilyMember, mode: "share" | "qr" = "share") => {
-    const withCode = ensureInviteCode(member);
-    setInviteSheetMember(withCode);
-    setInviteSheetMode(mode);
-    setCopied(false);
+    void (async () => {
+      const withCode = (await prepareMemberInvite(member)) || ensureInviteCode(member);
+      setInviteSheetMember(withCode);
+      setInviteSheetMode(mode);
+      setCopied(false);
+    })();
   };
 
   const copyText = async (text: string): Promise<boolean> => {
@@ -233,23 +266,25 @@ export function ManageFamilyPage({
     }
   };
 
-  /** Copy invite link for a member (from row or sheet) — user sends via WhatsApp/etc themselves */
+  /** Copy invite link unique to this member (e.g. Krista only) */
   const copyMemberInviteLink = async (member: FamilyMember) => {
-    const withCode = ensureInviteCode(member);
+    const withCode = (await prepareMemberInvite(member)) || ensureInviteCode(member);
     const url = buildInviteUrl(withCode.inviteCode);
     const ok = await copyText(url);
     if (ok) {
       setCopied(true);
       setCopiedMemberId(withCode.id);
-      toast.success("Invite link copied", {
-        description: "Paste it in WhatsApp, Messages, email — wherever you invite them.",
+      toast.success(`Invite link for ${withCode.name}`, {
+        description:
+          "Unique to this profile — when they sign up with their email they join as this member.",
       });
       setTimeout(() => {
         setCopied(false);
         setCopiedMemberId(null);
       }, 2200);
     } else {
-      openInviteSheet(withCode, "share");
+      setInviteSheetMember(withCode);
+      setInviteSheetMode("share");
       toast.error("Couldn't copy automatically", {
         description: "Long-press the link in the sheet to copy.",
       });

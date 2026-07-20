@@ -115,9 +115,10 @@ Re-open a D-* row when scheduling real infrastructure work.
 |----|--------|-----|
 | N-1 | done | Platform adoption: OCR scan path, push permission + notify on Alerts open |
 | N-2 | done | Removed dead `usePantry` internals (qty helpers / moveToFreezer / etc.) |
-| N-3 | partial | `AlertsDrawer` extracted; Settings/Family still in `PantryScreen` |
+| N-3 | done | `AlertsDrawer`, `SettingsDrawer`, `FamilyDrawer` extracted from `PantryScreen` |
 | N-4 | done | Shopping list upsert via `sameProduct` (`lib/shopping.ts`) |
 | N-9 | done | Scan uses only `getPlatform().ocr` (no duplicate mock generator) |
+| M-1 | done | Mobile: `min-h-dvh`, touch-manipulation, 16px inputs (no iOS zoom), content-visibility cards, safe-area nav/FAB, lazy Financials + memo, lazy images |
 
 **Architecture for D-***:** `src/platform/` — see `src/platform/README.md`. Optional later: repositories if leaving localStorage; no Redux required yet.
 
@@ -131,6 +132,8 @@ Re-open a D-* row when scheduling real infrastructure work.
 | 2026-07-19 | P0-1…P0-6 | Implemented: qty-0 confirm, profile edit, in-app alerts pref + Alerts drawer, shopping list persist, scan demo label. |
 | 2026-07-19 | P1-1…P1-9, P2-1…P2-10, D-1…D-4 | P1 product completeness + P2 polish; D-* marked wontfix with README/docs. |
 | 2026-07-19 | R-1…R-16, R-19; platform/ | Re-audit fixes + platform architecture for D-1…D-4. |
+| 2026-07-19 | N-1…N-4, N-9 | Dead hook cleanup, shopping sameProduct, OCR-only platform, push hook, AlertsDrawer. |
+| 2026-07-20 | N-3, M-1 | Settings/Family drawers extracted; mobile performance & touch UX. |
 
 ---
 

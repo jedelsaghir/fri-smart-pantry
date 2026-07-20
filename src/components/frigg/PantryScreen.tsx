@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Switch } from "@/components/ui/switch";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { GlassHeader } from "./GlassHeader";
 import { StorageTabs } from "./StorageTabs";
 import { ItemCard } from "./ItemCard";
@@ -10,7 +9,6 @@ import { BottomNav } from "./BottomNav";
 import { ScanFab } from "./ScanFab";
 import { ReceiptScanFlow } from "./ReceiptScanFlow";
 import { toast } from "sonner";
-import { FinancialsScreen } from "./FinancialsScreen";
 import { LoginScreen } from "./LoginScreen";
 import { ShoppingListView } from "./ShoppingListView";
 import { RecipesView, countRecipeAvailability, canMakeRecipeFully } from "./RecipesView";
@@ -18,18 +16,8 @@ import { ALL_RECIPES } from "@/data/recipes";
 import { applyIncomingToStorage, deductIngredients, sameProduct } from "@/lib/pantry-ops";
 import { upsertShoppingListItem } from "@/lib/shopping";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
-import { applyBackupToLocalStorage, buildBackupFromLocalStorage, downloadBackupJson } from "@/lib/backup";
 import { getPlatform } from "@/platform";
-import { ArrowRight, X, Users, Plus } from "lucide-react";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerClose,
-} from "@/components/ui/drawer";
+import { Plus } from "lucide-react";
 import type {
   StorageKey,
   ActiveView,
@@ -48,10 +36,16 @@ import {
 import { useReceipts } from "@/hooks/useReceipts";
 import { useItemCatalog } from "@/hooks/useItemCatalog";
 import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
-import { ItemDatabaseSection } from "./ItemDatabaseSection";
 import { PantryAddSheet } from "./PantryAddSheet";
 import { AlertsDrawer } from "./AlertsDrawer";
+import { SettingsDrawer } from "./SettingsDrawer";
+import { FamilyDrawer } from "./FamilyDrawer";
 import { ManageFamilyPage } from "./ManageFamilyPage";
+
+const FinancialsScreen = lazy(() =>
+  import("./FinancialsScreen").then((m) => ({ default: m.FinancialsScreen }))
+);
+
 import {
   buildInviteUrl,
   createMemberId,
@@ -896,7 +890,7 @@ export function PantryScreen() {
     items.fridge.length + items.freezer.length + items.pantry.length;
 
   return (
-    <div className="relative min-h-screen pb-32 bg-background">
+    <div className="relative min-h-dvh pb-32 bg-background touch-manipulation">
       {showManageFamily && (
         <ManageFamilyPage
           householdName={householdName}
@@ -941,7 +935,7 @@ export function PantryScreen() {
         alertsCount={alertsCount}
       />
 
-      <main className="px-5 pt-5">
+      <main className="mobile-main px-5 pt-5 pb-2">
         {isListView ? (
           <ShoppingListView
             shoppingList={shoppingList}
@@ -1055,7 +1049,17 @@ export function PantryScreen() {
         ) : isFinancesView ? (
 
           // === FINANCIALS / MONEY VIEW - receipts + charts ===
-          <FinancialsScreen receipts={receipts} onDeleteReceipt={handleDeleteReceipt} onAddReceipt={addReceipt} />
+          <Suspense
+            fallback={
+              <div className="py-16 text-center text-sm text-muted-foreground">Loading finances…</div>
+            }
+          >
+            <FinancialsScreen
+              receipts={receipts}
+              onDeleteReceipt={handleDeleteReceipt}
+              onAddReceipt={addReceipt}
+            />
+          </Suspense>
         ) : (
           // === PANTRY VIEW ===
           <>
@@ -1188,235 +1192,56 @@ export function PantryScreen() {
         }}
       />
 
-      {/* Settings Drawer — premium polished */}
-      <Drawer open={showSettings} onOpenChange={setShowSettings}>
-        <DrawerContent className="max-w-md mx-auto">
-          <DrawerHeader className="text-left pb-1">
-            <DrawerTitle>Settings</DrawerTitle>
-            <DrawerDescription>Account, household &amp; preferences</DrawerDescription>
-          </DrawerHeader>
-
-          <div className="px-5 pb-3 space-y-4 text-sm">
-            {/* Profile — editable (P0-2) */}
-            <div className="elevated-card rounded-3xl p-4">
-              {editingProfile ? (
-                <div className="space-y-3">
-                  <div className="flex gap-2">
-                    <input
-                      value={profileDraft.emoji}
-                      onChange={(e) =>
-                        setProfileDraft((d) => ({ ...d, emoji: e.target.value }))
-                      }
-                      className="h-11 w-14 rounded-2xl border border-border/50 bg-background/80 text-center text-xl"
-                      aria-label="Emoji"
-                      maxLength={4}
-                    />
-                    <input
-                      value={profileDraft.name}
-                      onChange={(e) =>
-                        setProfileDraft((d) => ({ ...d, name: e.target.value }))
-                      }
-                      className="h-11 min-w-0 flex-1 rounded-2xl border border-border/50 bg-background/80 px-3 font-semibold"
-                      aria-label="Full name"
-                    />
-                  </div>
-                  <input
-                    value={profileDraft.email}
-                    onChange={(e) =>
-                      setProfileDraft((d) => ({ ...d, email: e.target.value }))
-                    }
-                    type="email"
-                    className="h-11 w-full rounded-2xl border border-border/50 bg-background/80 px-3 text-sm"
-                    aria-label="Email"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingProfile(false)}
-                      className="flex-1 rounded-2xl border py-2.5 text-xs font-semibold active:bg-secondary/60"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveProfile}
-                      className="flex-1 rounded-2xl bg-brand py-2.5 text-xs font-semibold text-brand-foreground active:scale-[0.985]"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl">{userEmoji}</div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold truncate">{userFullName}</div>
-                    <div className="text-xs text-muted-foreground truncate">{userEmail}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileDraft({
-                        name: userFullName,
-                        email: userEmail,
-                        emoji: userEmoji,
-                      });
-                      setEditingProfile(true);
-                    }}
-                    className="text-xs px-3 py-1 rounded-full border active:bg-secondary font-semibold"
-                  >
-                    Edit
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Household */}
-            <div className="elevated-card rounded-3xl p-4 space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold">Household</div>
-                  <div className="text-sm truncate">
-                    {householdName} • {familyMembers.length} member{familyMembers.length === 1 ? "" : "s"}
-                  </div>
-                </div>
-                <button
-                  onClick={openManageFamily}
-                  className="shrink-0 text-xs px-3 py-1.5 rounded-full border font-semibold active:bg-secondary"
-                >
-                  Manage
-                </button>
-              </div>
-              <div className="text-[11px] text-muted-foreground pt-1">Shared pantry • activity visible to family</div>
-            </div>
-
-            {/* In-app alerts preference (P0-3) — not push notifications */}
-            <div className="elevated-card rounded-3xl p-4 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-semibold">In-app alerts</div>
-                <div className="text-xs text-muted-foreground">
-                  Expiry &amp; low stock in the Alerts panel (bell). Push not available yet.
-                </div>
-              </div>
-              <Switch
-                checked={notificationsEnabled}
-                onCheckedChange={toggleNotifications}
-                aria-label="Toggle in-app alerts"
-              />
-            </div>
-
-            {/* PWA Install */}
-            <div className="elevated-card rounded-3xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">Install app</div>
-                  <div className="text-xs text-muted-foreground">Add Friġġ to your home screen</div>
-                </div>
-                <button
-                  onClick={() => {
-                    if (installPromptEvent) {
-                      handleInstall();
-                      setShowSettings(false);
-                    } else {
-                      setShowSettings(false);
-                      setShowInstallBanner(true);
-                      toast("Look for the prompt", { description: "Or use your browser menu → Add to Home Screen" });
-                    }
-                  }}
-                  className="text-xs px-3.5 py-1.5 rounded-2xl bg-brand text-brand-foreground font-semibold active:scale-[0.985]"
-                >
-                  Install
-                </button>
-              </div>
-            </div>
-
-            {/* Dark Mode toggle - premium calm dark */}
-            <div className="elevated-card rounded-3xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold">Dark mode</div>
-                <div className="text-xs text-muted-foreground">Calm evening palette</div>
-              </div>
-              <Switch checked={isDark} onCheckedChange={toggleDarkMode} aria-label="Toggle dark mode" />
-            </div>
-
-            {/* Backup export / import (P2-8) */}
-            <div className="elevated-card rounded-3xl p-4 space-y-2">
-              <div className="font-semibold">Backup</div>
-              <div className="text-xs text-muted-foreground">
-                Export or restore pantry, receipts, shopping list, database &amp; family (local only).
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      downloadBackupJson(buildBackupFromLocalStorage());
-                      toast.success("Backup downloaded");
-                    } catch {
-                      toast.error("Could not export backup");
-                    }
-                  }}
-                  className="flex-1 rounded-2xl border py-2.5 text-xs font-semibold active:bg-secondary/60"
-                >
-                  Export JSON
-                </button>
-                <label className="flex-1">
-                  <input
-                    type="file"
-                    accept="application/json,.json"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = "";
-                      if (!file) return;
-                      try {
-                        const text = await file.text();
-                        const data = JSON.parse(text);
-                        const { parseAndValidateBackup } = await import("@/lib/backup");
-                        const valid = parseAndValidateBackup(data);
-                        applyBackupToLocalStorage(valid);
-                        toast.success("Backup restored", {
-                          description: "Reloading to apply all data…",
-                        });
-                        window.location.reload();
-                      } catch (err) {
-                        toast.error("Invalid backup file", {
-                          description: err instanceof Error ? err.message : "Could not restore",
-                        });
-                      }
-                    }}
-                  />
-                  <span className="flex w-full cursor-pointer items-center justify-center rounded-2xl bg-secondary/70 py-2.5 text-xs font-semibold active:bg-secondary">
-                    Import JSON
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            {/* About + misc */}
-            <div className="text-[11px] text-muted-foreground px-1 pt-1">
-              Friġġ v1 • Demo multi-user · data stays on this device (not cloud-synced).
-            </div>
-
-            <button
-              onClick={() => {
-                setShowSettings(false);
-                doLogout();
-                toast("Signed out", { description: "See you soon." });
-              }}
-              className="mt-1 w-full rounded-3xl border py-3 text-sm font-semibold text-destructive active:bg-secondary/60"
-            >
-              Log out
-            </button>
-          </div>
-
-          <DrawerFooter className="pt-1 pb-6">
-            <DrawerClose asChild>
-              <button className="w-full rounded-3xl py-3.5 text-sm font-semibold border active:bg-secondary/60">Done</button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+      <SettingsDrawer
+        open={showSettings}
+        onOpenChange={(open) => {
+          setShowSettings(open);
+          if (!open) setEditingProfile(false);
+        }}
+        userFullName={userFullName}
+        userEmail={userEmail}
+        userEmoji={userEmoji}
+        householdName={householdName}
+        memberCount={familyMembers.length}
+        isDark={isDark}
+        notificationsEnabled={notificationsEnabled}
+        editingProfile={editingProfile}
+        profileDraft={profileDraft}
+        hasInstallPrompt={!!installPromptEvent}
+        onStartEditProfile={() => {
+          setProfileDraft({
+            name: userFullName,
+            email: userEmail,
+            emoji: userEmoji,
+          });
+          setEditingProfile(true);
+        }}
+        onCancelEditProfile={() => setEditingProfile(false)}
+        onProfileDraftChange={setProfileDraft}
+        onSaveProfile={saveProfile}
+        onToggleNotifications={toggleNotifications}
+        onToggleDarkMode={toggleDarkMode}
+        onManageFamily={() => {
+          setShowSettings(false);
+          openManageFamily();
+        }}
+        onInstall={() => {
+          handleInstall();
+          setShowSettings(false);
+        }}
+        onShowInstallHint={() => {
+          setShowSettings(false);
+          setShowInstallBanner(true);
+          toast("Look for the prompt", {
+            description: "Or use your browser menu → Add to Home Screen",
+          });
+        }}
+        onLogout={() => {
+          setShowSettings(false);
+          doLogout();
+          toast("Signed out", { description: "See you soon." });
+        }}
+      />
 
       <AlertsDrawer
         open={showAlerts}
@@ -1425,76 +1250,15 @@ export function PantryScreen() {
         alertItems={alertItems}
       />
 
-      {/* Family / Activity Drawer */}
-      <Drawer open={showFamilyDrawer} onOpenChange={setShowFamilyDrawer}>
-        <DrawerContent className="max-w-md mx-auto">
-          <DrawerHeader className="text-left">
-            <DrawerTitle>Household</DrawerTitle>
-            <DrawerDescription>
-              {householdName} • {familyMembers.length} member{familyMembers.length === 1 ? "" : "s"}
-            </DrawerDescription>
-          </DrawerHeader>
-
-          <div className="px-5 pb-4 space-y-6">
-            {/* Members list */}
-            <div>
-              <div className="text-sm font-semibold mb-2">Members</div>
-              <div className="space-y-2">
-                {familyMembers.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => {
-                      simulateFamilyUpdate(m.name);
-                      setShowFamilyDrawer(false);
-                    }}
-                    className="w-full flex items-center gap-3 rounded-2xl bg-secondary/60 px-4 py-3 text-left active:bg-secondary/80 transition"
-                  >
-                    <div className="text-2xl">{m.emoji}</div>
-                    <div className="flex-1">
-                      <div className="font-medium">{m.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {m.isYou ? "Online now" : "Active recently"}
-                      </div>
-                    </div>
-                    <div className="text-xs text-[var(--color-fresh)]">Tap to simulate</div>
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-2">Tap a member to simulate them updating the shared pantry.</p>
-            </div>
-
-            {/* Activity log */}
-            <div>
-              <div className="text-sm font-semibold mb-2">Recent activity</div>
-              <div className="space-y-2 text-sm">
-                {activityLog.length === 0 ? (
-                  <div className="text-muted-foreground">No activity yet.</div>
-                ) : (
-                  activityLog.slice(0, 5).map((entry, i) => (
-                    <div key={i} className="flex gap-2 rounded-xl bg-secondary/50 px-3 py-2">
-                      <span className="font-medium shrink-0">{entry.user}</span>
-                      <span className="text-foreground/80">{entry.action}</span>
-                      <span className="ml-auto text-[10px] text-muted-foreground">{entry.time}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          <DrawerFooter className="gap-2">
-            <button
-              onClick={openManageFamily}
-              className="w-full rounded-3xl py-3.5 text-sm font-semibold bg-brand text-brand-foreground active:scale-[0.985] transition"
-            >
-              Manage Family
-            </button>
-            <button onClick={() => setShowFamilyDrawer(false)} className="w-full rounded-3xl py-3 text-sm font-semibold border active:bg-secondary/60">
-              Done
-            </button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+      <FamilyDrawer
+        open={showFamilyDrawer}
+        onOpenChange={setShowFamilyDrawer}
+        householdName={householdName}
+        members={familyMembers}
+        activityLog={activityLog}
+        onSimulateMember={simulateFamilyUpdate}
+        onManageFamily={openManageFamily}
+      />
 
       {/* Item Details Drawer — rename, tappable numbers, date expiry, price */}
       <ItemDetailsDrawer

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, memo } from "react";
 import {
   PieChart,
   Pie,
@@ -44,7 +44,7 @@ const CATEGORY_COLORS = [
   "#7a8a9a",
 ];
 
-export function FinancialsScreen({
+function FinancialsScreenInner({
   receipts,
   onDeleteReceipt,
   onAddReceipt,
@@ -424,6 +424,8 @@ export function FinancialsScreen({
                         src={r.imageDataUrl}
                         alt=""
                         className="size-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <div className="grid size-full place-items-center text-muted-foreground">
@@ -589,12 +591,14 @@ export function FinancialsScreen({
               <X className="size-5" />
             </button>
           </div>
-          <div className="flex flex-1 items-center justify-center p-4 overflow-auto">
+          <div className="flex flex-1 items-center justify-center p-4 overflow-auto overscroll-contain">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={selected.imageDataUrl}
               alt={`Receipt from ${selected.store}`}
               className="max-h-full max-w-full object-contain rounded-lg"
+              decoding="async"
+              loading="eager"
             />
           </div>
         </div>
@@ -602,3 +606,6 @@ export function FinancialsScreen({
     </div>
   );
 }
+
+export const FinancialsScreen = memo(FinancialsScreenInner);
+FinancialsScreen.displayName = "FinancialsScreen";

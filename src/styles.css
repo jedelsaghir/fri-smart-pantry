@@ -267,6 +267,68 @@
   min-width: 44px;
 }
 
+/* ---------------------------------------------------------------------------
+   Mobile performance & UX
+   --------------------------------------------------------------------------- */
+html {
+  /* Avoid rubber-band fighting fixed bottom nav on iOS */
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  /* Faster taps on mobile (remove 300ms delay where still relevant) */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Safe areas for notched phones */
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.mobile-main {
+  /* Leave room for bottom nav; prevent scroll chaining issues */
+  overscroll-behavior-y: contain;
+  min-height: 0;
+}
+
+/* Prefer dvh on mobile browsers with dynamic toolbars */
+.min-h-dvh {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Prevent iOS zoom-on-focus: keep form controls ≥ 16px */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+@media (min-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: inherit;
+  }
+}
+
+/* Long lists: skip offscreen paint work where supported */
+.pantry-item-row,
+.elevated-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+
+/* Receipt thumbnails */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* 1-column pantry cards — always full width */
 .pantry-item-row,
 .pantry-item-card {
@@ -285,4 +347,12 @@
   max-width: 100% !important;
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  /* Touch-friendly tab hit area on small screens */
+  min-height: 3.25rem;
+}
+
+/* Bottom nav: isolate compositing for smoother scroll under fixed chrome */
+nav.fixed {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }

@@ -4,7 +4,7 @@
  */
 
 import type { OcrDetectResult, OcrProvider } from "@/platform/types";
-import { getOcrServerStatus, ocrReceiptFromImage } from "@/server/ocr-receipt";
+import { getOcrServerStatus, ocrReceiptFromImage } from "@/lib/ocr-receipt.functions";
 import { prepareImageForOcr } from "@/lib/ocr-image";
 
 function cameraSupported(): boolean {

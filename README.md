@@ -33,7 +33,7 @@ Do not use this build for real sensitive credentials without hardening auth.
 
 See [`src/platform/README.md`](src/platform/README.md). Adapters:
 
-- **Sync** — **wired**: `sync-cloud` + `src/server/household-sync.ts`
+- **Sync** — **wired**: `sync-cloud` + `src/lib/household-sync.functions.ts`
 - **OCR** — **wired**: camera + server vision (`ocr-xai`). Set `XAI_API_KEY` on the host.
 - **Push** — optional browser Notification if granted
 - **Invites** — localStorage codes only (D-4)

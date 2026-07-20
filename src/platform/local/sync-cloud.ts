@@ -14,7 +14,7 @@ import {
   getHouseholdSyncStatus,
   pullHouseholdSync,
   pushHouseholdSync,
-} from "@/server/household-sync";
+} from "@/lib/household-sync.functions";
 
 export type CloudSyncProvider = SyncProvider & {
   pullHousehold(creds: SyncCreds): Promise<HouseholdSyncSnapshot | null>;

@@ -7,10 +7,18 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
 } from "recharts";
 import { ChevronRight, FileText, Image as ImageIcon, Trash2, X } from "lucide-react";
 import type { StoredReceipt } from "@/types/pantry";
-import { formatReceiptDate } from "@/lib/receipts";
+import {
+  buildMockReceiptImage,
+  createReceiptId,
+  formatReceiptDate,
+} from "@/lib/receipts";
 import {
   Drawer,
   DrawerClose,
@@ -19,6 +27,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
 
 interface CategoryData {
   name: string;
@@ -37,12 +46,18 @@ const CATEGORY_COLORS = [
 export function FinancialsScreen({
   receipts,
   onDeleteReceipt,
+  onAddReceipt,
 }: {
   receipts: StoredReceipt[];
   onDeleteReceipt?: (id: string) => void;
+  onAddReceipt?: (receipt: StoredReceipt) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [logStore, setLogStore] = useState("Lidl");
+  const [logTotal, setLogTotal] = useState("");
+  const [logNote, setLogNote] = useState("");
 
   const selected = useMemo(
     () => receipts.find((r) => r.id === selectedId) ?? null,
@@ -79,20 +94,124 @@ export function FinancialsScreen({
     fill: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
   }));
 
+  const storeData = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of receipts) {
+      map.set(r.store, (map.get(r.store) || 0) + r.total);
+    }
+    return [...map.entries()]
+      .map(([store, amount]) => ({ store, amount: Math.round(amount * 100) / 100 }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6);
+  }, [receipts]);
+
+  const submitLogPurchase = () => {
+    const total = Math.max(0, parseFloat(logTotal.replace(",", ".")) || 0);
+    if (!logStore.trim() || total <= 0) return;
+    const now = new Date().toISOString();
+    const store = logStore.trim();
+    const receipt: StoredReceipt = {
+      id: createReceiptId(),
+      date: now,
+      store,
+      total,
+      currency: "EUR",
+      imageDataUrl: buildMockReceiptImage({
+        store,
+        date: new Date().toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }),
+        items: [{ name: logNote.trim() || "Purchase", qty: 1, unit: "x", price: total }],
+        total,
+      }),
+      items: [
+        {
+          id: `line-${Date.now()}`,
+          name: logNote.trim() || "Manual purchase",
+          qty: 1,
+          unit: "x",
+          emoji: "🧾",
+          price: total,
+          category: "Other",
+        },
+      ],
+      createdAt: now,
+      note: logNote.trim() || undefined,
+    };
+    onAddReceipt?.(receipt);
+    setLogOpen(false);
+    setLogTotal("");
+    setLogNote("");
+  };
+
   return (
     <div className="space-y-6 pb-4">
       {/* Hero total */}
       <div className="elevated-card rounded-3xl p-6">
-        <div className="text-sm font-medium text-muted-foreground tracking-[0.01em]">
-          Total from saved receipts
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-muted-foreground tracking-[0.01em]">
+              Total from saved receipts
+            </div>
+            <div className="mt-1 font-display text-[42px] leading-none font-medium tracking-[-0.025em] text-foreground">
+              €{totalFormatted}
+            </div>
+            <div className="mt-3 text-xs text-muted-foreground">
+              {receipts.length} receipt{receipts.length === 1 ? "" : "s"}
+              {storeCount > 0 ? ` · ${storeCount} store${storeCount === 1 ? "" : "s"}` : ""}
+            </div>
+          </div>
+          {onAddReceipt && (
+            <button
+              type="button"
+              onClick={() => setLogOpen(true)}
+              className="shrink-0 rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition"
+            >
+              + Log purchase
+            </button>
+          )}
         </div>
-        <div className="mt-1 font-display text-[42px] leading-none font-medium tracking-[-0.025em] text-foreground">
-          €{totalFormatted}
-        </div>
-        <div className="mt-3 text-xs text-muted-foreground">
-          {receipts.length} receipt{receipts.length === 1 ? "" : "s"}
-          {storeCount > 0 ? ` · ${storeCount} store${storeCount === 1 ? "" : "s"}` : ""}
-        </div>
+        {logOpen && (
+          <div className="mt-4 space-y-2 border-t border-border/40 pt-4">
+            <Input
+              value={logStore}
+              onChange={(e) => setLogStore(e.target.value)}
+              placeholder="Store"
+              className="h-11 rounded-2xl"
+            />
+            <Input
+              value={logTotal}
+              onChange={(e) => setLogTotal(e.target.value)}
+              placeholder="Total €"
+              inputMode="decimal"
+              className="h-11 rounded-2xl"
+            />
+            <Input
+              value={logNote}
+              onChange={(e) => setLogNote(e.target.value)}
+              placeholder="Note (optional)"
+              className="h-11 rounded-2xl"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setLogOpen(false)}
+                className="flex-1 rounded-2xl border py-2.5 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitLogPurchase}
+                className="flex-1 rounded-2xl bg-brand py-2.5 text-sm font-semibold text-brand-foreground"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Category breakdown from real receipts */}
@@ -155,6 +274,37 @@ export function FinancialsScreen({
                 );
               })}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* By store — real data (P2-5) */}
+      {storeData.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center justify-between px-1">
+            <div className="text-sm font-semibold tracking-[0.005em] text-foreground/90">
+              By store
+            </div>
+          </div>
+          <div className="elevated-card rounded-3xl p-4">
+            <div className="h-[180px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={storeData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <XAxis dataKey="store" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(value: number) => [`€${Number(value).toFixed(2)}`, ""]}
+                    contentStyle={{
+                      backgroundColor: "var(--color-card)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Bar dataKey="amount" fill="#4a7c59" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       )}

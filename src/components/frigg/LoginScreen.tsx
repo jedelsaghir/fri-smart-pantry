@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   acceptInviteAndCreateAccount,
   clearInviteFromUrl,
@@ -44,7 +45,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
         setName(ctx.memberName);
         setProfileEmoji(ctx.memberEmoji || "👤");
         try {
-          localStorage.setItem("friggg-pending-invite", code);
+          localStorage.setItem(STORAGE_KEYS.PENDING_INVITE, code);
         } catch {}
       } else if (forcedInviteCode) {
         toast.error("Invite not found", { description: "This member invite is no longer valid." });
@@ -52,7 +53,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
       }
     } else {
       try {
-        const pending = localStorage.getItem("friggg-pending-invite");
+        const pending = localStorage.getItem(STORAGE_KEYS.PENDING_INVITE);
         if (pending) {
           const ctx = getInviteContext(pending);
           if (ctx) {
@@ -78,7 +79,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
     clearInviteFromUrl();
     onClearForcedInvite?.();
     try {
-      localStorage.removeItem("friggg-pending-invite");
+      localStorage.removeItem(STORAGE_KEYS.PENDING_INVITE);
     } catch {}
   };
 
@@ -146,7 +147,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
       description: `Welcome to Friġġ, ${displayName.split(" ")[0]}.`,
     });
     try {
-      localStorage.setItem("friggg-logged-in", "true");
+      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
     } catch {}
     registerOwnerAccount(displayName, email, password, profileEmoji, householdName);
     setOnboardStep(null);
@@ -475,7 +476,7 @@ function registerOwnerAccount(
   householdName: string
 ) {
   try {
-    const accountsRaw = localStorage.getItem("friggg-accounts");
+    const accountsRaw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
     const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
     const accountId = `acct-${Date.now()}`;
     const memberId = "you";
@@ -490,15 +491,15 @@ function registerOwnerAccount(
     const next = Array.isArray(accounts)
       ? [...accounts.filter((a: { email?: string }) => a.email !== account.email), account]
       : [account];
-    localStorage.setItem("friggg-accounts", JSON.stringify(next));
-    localStorage.setItem("friggg-current-user-id", accountId);
-    localStorage.setItem("friggg-household", householdName);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(next));
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, accountId);
+    localStorage.setItem(STORAGE_KEYS.HOUSEHOLD, householdName);
     localStorage.setItem(
-      "friggg-profile",
+      STORAGE_KEYS.PROFILE,
       JSON.stringify({ name: displayName, emoji, email: account.email, memberId, accountId })
     );
 
-    const membersRaw = localStorage.getItem("friggg-family-members");
+    const membersRaw = localStorage.getItem(STORAGE_KEYS.FAMILY_MEMBERS);
     let members = membersRaw ? JSON.parse(membersRaw) : null;
     if (!Array.isArray(members) || members.length === 0) {
       members = [
@@ -522,6 +523,6 @@ function registerOwnerAccount(
           : { isYou: false }),
       }));
     }
-    localStorage.setItem("friggg-family-members", JSON.stringify(members));
+    localStorage.setItem(STORAGE_KEYS.FAMILY_MEMBERS, JSON.stringify(members));
   } catch {}
 }

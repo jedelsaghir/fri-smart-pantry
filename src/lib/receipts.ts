@@ -1,6 +1,8 @@
 import type { ReceiptLineItem, StoredReceipt, StorageKey } from "@/types/pantry";
 
-export const RECEIPTS_KEY = "friggg-receipts";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+
+export const RECEIPTS_KEY = STORAGE_KEYS.RECEIPTS;
 
 const STORES = ["Lidl", "Tesco", "Sainsbury's", "Aldi", "Local market"];
 
@@ -30,6 +32,15 @@ export function categoryForName(name: string): string {
   return "Other";
 }
 
+/** Sensible default price basis from item unit */
+export function defaultPriceUnit(unit: string): string {
+  const u = unit.toLowerCase().trim();
+  if (u === "g" || u === "kg") return "100g";
+  if (u === "ml") return "100ml";
+  if (u === "l") return "L";
+  return unit;
+}
+
 export function estimateLinePrice(name: string, qty: number): number {
   const lower = name.toLowerCase();
   let unit = 1.99;
@@ -47,6 +58,14 @@ export function estimateLinePrice(name: string, qty: number): number {
   else if (lower.includes("avocado")) unit = 0.89;
   const line = unit * Math.max(1, qty > 20 ? qty / 100 : qty);
   return Math.round(line * 100) / 100;
+}
+
+/** Unit price for pantry latestPrice (not always full line total) */
+export function estimateUnitPrice(name: string, qty: number, unit: string): number {
+  const line = estimateLinePrice(name, qty);
+  const q = Math.max(1, qty > 20 ? qty / 100 : qty);
+  const per = line / q;
+  return Math.round(per * 100) / 100;
 }
 
 /** Simple receipt-looking SVG as a data URL (works offline, no network) */

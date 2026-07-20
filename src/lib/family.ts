@@ -1,12 +1,14 @@
 import type { FamilyMember, FamilyMemberStatus } from "@/types/pantry";
 
-export const FAMILY_MEMBERS_KEY = "friggg-family-members";
-export const HOUSEHOLD_KEY = "friggg-household";
-export const PROFILE_KEY = "friggg-profile";
-export const LOGGED_IN_KEY = "friggg-logged-in";
-export const CURRENT_USER_KEY = "friggg-current-user-id";
-export const ACCOUNTS_KEY = "friggg-accounts";
-export const PENDING_INVITE_KEY = "friggg-pending-invite";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+
+export const FAMILY_MEMBERS_KEY = STORAGE_KEYS.FAMILY_MEMBERS;
+export const HOUSEHOLD_KEY = STORAGE_KEYS.HOUSEHOLD;
+export const PROFILE_KEY = STORAGE_KEYS.PROFILE;
+export const LOGGED_IN_KEY = STORAGE_KEYS.LOGGED_IN;
+export const CURRENT_USER_KEY = STORAGE_KEYS.CURRENT_USER;
+export const ACCOUNTS_KEY = STORAGE_KEYS.ACCOUNTS;
+export const PENDING_INVITE_KEY = STORAGE_KEYS.PENDING_INVITE;
 
 export type FamilyAccount = {
   id: string;

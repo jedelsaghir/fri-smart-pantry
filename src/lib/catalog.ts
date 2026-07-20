@@ -1,13 +1,15 @@
 import type { CatalogItem, CatalogMergeGroup, PantryItem } from "@/types/pantry";
 
-export const CATALOG_KEY = "friggg-item-catalog";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+
+export const CATALOG_KEY = STORAGE_KEYS.CATALOG;
 
 export function normalizeItemName(name: string): string {
   return name
     .toLowerCase()
-    .trim()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function createCatalogId(): string {

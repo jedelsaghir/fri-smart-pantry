@@ -4,7 +4,7 @@ Derived from the full repo audit. Work top-down (P0 → P1 → P2).
 
 **Status key:** `todo` · `in_progress` · `done` · `wontfix`
 
-**Last updated:** 2026-07-19
+**Last updated:** 2026-07-19 (P1/P2/D-* batch)
 
 ---
 
@@ -25,15 +25,15 @@ Derived from the full repo audit. Work top-down (P0 → P1 → P2).
 
 | ID | Status | Area | Fix | Acceptance criteria |
 |----|--------|------|-----|---------------------|
-| P1-1 | todo | Pantry | **Merge qty on add** when same `name` + `unit` + `storage` (scan, manual add, family sim, mark purchased). | No duplicate rows for identical identity; qty increases. |
-| P1-2 | todo | Finances | **Manual “Log purchase”** (store, total, optional lines, optional photo). | Creates `StoredReceipt`; appears in list; updates totals. |
-| P1-3 | todo | Recipes | **Header stats from real data** (count of recipes in filter / can-make), not magic `6` / `3`. | Numbers match filtered list. |
-| P1-4 | todo | Recipes | **Confirm before cook** deducts ingredients; show what will be deducted; optional undo. | Cancel leaves pantry unchanged. |
-| P1-5 | todo | Shopping | **Add to list from Database / pantry** (not only regenerate). | User can pick catalog or pantry item into shopping list. |
-| P1-6 | todo | Shopping | **Warn before Regenerate** if list non-empty (confirm dialog). | Cancel keeps current list. |
-| P1-7 | todo | Activity | **Persist activity log** (cap length, e.g. 50). | Survives refresh. |
-| P1-8 | todo | Receipts | **Write scan line prices → pantry `latestPrice`** when items added (best-effort match). | Matched pantry items show price after scan. |
-| P1-9 | todo | Architecture | **Split `PantryScreen`** into view modules (List, Recipes, Settings drawers, etc.). | Behavior unchanged; main file much smaller. |
+| P1-1 | done | Pantry | **Merge qty on add** when same `name` + `unit` + `storage` (scan, manual add, family sim, mark purchased). | No duplicate rows for identical identity; qty increases. |
+| P1-2 | done | Finances | **Manual “Log purchase”** (store, total, optional lines, optional photo). | Creates `StoredReceipt`; appears in list; updates totals. |
+| P1-3 | done | Recipes | **Header stats from real data** (count of recipes in filter / can-make), not magic `6` / `3`. | Numbers match filtered list. |
+| P1-4 | done | Recipes | **Confirm before cook** deducts ingredients; show what will be deducted; optional undo. | Cancel leaves pantry unchanged. |
+| P1-5 | done | Shopping | **Add to list from Database / pantry** (not only regenerate). | User can pick catalog or pantry item into shopping list. |
+| P1-6 | done | Shopping | **Warn before Regenerate** if list non-empty (confirm dialog). | Cancel keeps current list. |
+| P1-7 | done | Activity | **Persist activity log** (cap length, e.g. 50). | Survives refresh. |
+| P1-8 | done | Receipts | **Write scan line prices → pantry `latestPrice`** when items added (best-effort match). | Matched pantry items show price after scan. |
+| P1-9 | done | Architecture | **Split `PantryScreen`** into view modules (List, Recipes, Settings drawers, etc.). | Behavior unchanged; main file much smaller. |
 
 ---
 
@@ -41,16 +41,16 @@ Derived from the full repo audit. Work top-down (P0 → P1 → P2).
 
 | ID | Status | Area | Fix | Acceptance criteria |
 |----|--------|------|-----|---------------------|
-| P2-1 | todo | UI kit | **Document or trim unused `src/components/ui/*`** (calendar, sidebar, etc.). Prefer document “scaffold only” over mass delete unless desired. | README or comment lists used vs scaffold; no confusion. |
-| P2-2 | todo | Hooks | **Remove unused exports / destructures:** `updateItemQty`, `setItemQty`, `updateItemName`, `updateItemPrice`, `moveToFreezer` if unused; `skipMergeGroup` no-op; unused `lowStockCount` / `updateQty` destructures; dead `attentionTone` local. | No unused dead API surface in screen. |
-| P2-3 | todo | lib | **Centralize localStorage keys** — use `HOUSEHOLD_KEY` / shared constants everywhere (LoginScreen string literals). | Single source of keys. |
-| P2-4 | todo | Catalog merge | **Pick primary** when merging (user selects which name wins). | Not only longest-name heuristic. |
-| P2-5 | todo | Finances | **Restore or replace trends / by-store** charts using real receipt data. | Charts reflect saved receipts. |
-| P2-6 | todo | a11y | Family avatar strip: use `button`, keyboard focus. | Passes basic keyboard use. |
-| P2-7 | todo | Copy | Replace hardcoded **“July 2026”** with current month/year. | Dynamic label. |
-| P2-8 | todo | Data | **Export / import backup** (JSON of pantry + catalog + receipts + list). | Round-trip restore works. |
-| P2-9 | todo | Security (prod path) | Never ship plain-text passwords; document demo-only auth. | README security note; no false “secure account” claims. |
-| P2-10 | todo | Tests | Unit tests for catalog merge, name normalize, receipt build, shopping generate. | CI or `npm test` covers pure helpers. |
+| P2-1 | done | UI kit | **Document or trim unused `src/components/ui/*`** (calendar, sidebar, etc.). Prefer document “scaffold only” over mass delete unless desired. | README or comment lists used vs scaffold; no confusion. |
+| P2-2 | done | Hooks | **Remove unused exports / destructures:** `updateItemQty`, `setItemQty`, `updateItemName`, `updateItemPrice`, `moveToFreezer` if unused; `skipMergeGroup` no-op; unused `lowStockCount` / `updateQty` destructures; dead `attentionTone` local. | No unused dead API surface in screen. |
+| P2-3 | done | lib | **Centralize localStorage keys** — use `HOUSEHOLD_KEY` / shared constants everywhere (LoginScreen string literals). | Single source of keys. |
+| P2-4 | done | Catalog merge | **Pick primary** when merging (user selects which name wins). | Not only longest-name heuristic. |
+| P2-5 | done | Finances | **Restore or replace trends / by-store** charts using real receipt data. | Charts reflect saved receipts. |
+| P2-6 | done | a11y | Family avatar strip: use `button`, keyboard focus. | Passes basic keyboard use. |
+| P2-7 | done | Copy | Replace hardcoded **“July 2026”** with current month/year. | Dynamic label. |
+| P2-8 | done | Data | **Export / import backup** (JSON of pantry + catalog + receipts + list). | Round-trip restore works. |
+| P2-9 | done | Security (prod path) | Never ship plain-text passwords; document demo-only auth. | README security note; no false “secure account” claims. |
+| P2-10 | done | Tests | Unit tests for catalog merge, name normalize, receipt build, shopping generate. | CI or `npm test` covers pure helpers. |
 
 ---
 
@@ -60,12 +60,12 @@ Track as product decisions, not accidental bugs:
 
 | ID | Status | Item | Notes |
 |----|--------|------|-------|
-| D-1 | open | Real multi-user cloud sync | Requires backend |
-| D-2 | open | Real camera + OCR | Requires API/model |
-| D-3 | open | Push notifications | Requires service + permissions |
-| D-4 | open | Real WhatsApp join across devices | Requires backend invite validation |
+| D-1 | wontfix | Real multi-user cloud sync | **Deferred:** needs backend + auth. Local simulation only. Documented in README. |
+| D-2 | wontfix | Real camera + OCR | **Deferred:** needs camera API + ML/OCR. Demo detection labeled (P0-6). |
+| D-3 | wontfix | Push notifications | **Deferred:** needs push service. In-app Alerts panel covers local attention (P0-3/5). |
+| D-4 | wontfix | Real WhatsApp join across devices | **Deferred:** invite URLs open WhatsApp; join is same-device localStorage only. |
 
-When implementing P0-6, keep demo paths until D-2 is scheduled.
+Re-open a D-* row when scheduling real infrastructure work.
 
 ---
 
@@ -90,6 +90,7 @@ When implementing P0-6, keep demo paths until D-2 is scheduled.
 |------|-----|------|
 | 2026-07-19 | — | List created from full repo audit. |
 | 2026-07-19 | P0-1…P0-6 | Implemented: qty-0 confirm, profile edit, in-app alerts pref + Alerts drawer, shopping list persist, scan demo label. |
+| 2026-07-19 | P1-1…P1-9, P2-1…P2-10, D-1…D-4 | P1 product completeness + P2 polish; D-* marked wontfix with README/docs. |
 
 ---
 

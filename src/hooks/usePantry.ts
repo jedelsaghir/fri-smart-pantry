@@ -10,6 +10,14 @@ import type {
   DetailsItemState,
   AddedBanner,
 } from "@/types/pantry";
+import { applyIncomingToStorage, applyPriceToMatchingItems } from "@/lib/pantry-ops";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { defaultPriceUnit as priceUnitFromUnit, estimateLinePrice } from "@/lib/receipts";
+
+// Re-export for existing imports from usePantry
+export function defaultPriceUnit(unit: string): string {
+  return priceUnitFromUnit(unit);
+}
 
 // ---------------------------------------------------------------------------
 // Seed data + shelf-life helpers (pure; no React)
@@ -29,15 +37,6 @@ export const SEED: PantryItemsByStorage = {
   ],
   pantry: [],
 };
-
-/** Sensible default price basis from item unit */
-export function defaultPriceUnit(unit: string): string {
-  const u = unit.toLowerCase().trim();
-  if (u === "g" || u === "kg") return "100g";
-  if (u === "ml") return "100ml";
-  if (u === "l") return "L";
-  return unit;
-}
 
 export function getDefaultMinStock(name: string): number {
   const lower = name.toLowerCase();
@@ -156,7 +155,7 @@ export function usePantry(options: UsePantryOptions = {}) {
   const [items, setItems] = useState<PantryItemsByStorage>(() => {
     if (typeof window === "undefined") return SEED;
     try {
-      const saved = localStorage.getItem("friggg-items");
+      const saved = localStorage.getItem(STORAGE_KEYS.ITEMS);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === "object" && parsed.fridge) return parsed;
@@ -167,7 +166,7 @@ export function usePantry(options: UsePantryOptions = {}) {
 
   useEffect(() => {
     try {
-      localStorage.setItem("friggg-items", JSON.stringify(items));
+      localStorage.setItem(STORAGE_KEYS.ITEMS, JSON.stringify(items));
     } catch {}
   }, [items]);
 
@@ -419,33 +418,43 @@ export function usePantry(options: UsePantryOptions = {}) {
 
   const closeItemDetails = useCallback(() => setDetailsItem(null), []);
 
-  /** Core: add scanned items (can target any storage) */
+  /**
+   * Core: add scanned items (can target any storage).
+   * P1-1: merge qty when name+unit match in same storage.
+   * P1-8: set latestPrice on matching items.
+   */
   const addScannedItems = useCallback(
     (scanned: ScannedItemInput[], options: { silent?: boolean } = {}) => {
       if (scanned.length === 0) return;
 
-      const newItemsByStorage: Partial<Record<StorageKey, PantryItem[]>> = {};
-
-      scanned.forEach((s) => {
-        const target = s.storage;
-        const newItem: PantryItem = {
-          id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          name: s.name,
-          qty: s.qty,
-          unit: s.unit,
-          emoji: s.emoji,
-          daysLeft: getDefaultDaysLeft(s.name, target),
-          minStock: getDefaultMinStock(s.name),
-        };
-
-        if (!newItemsByStorage[target]) newItemsByStorage[target] = [];
-        newItemsByStorage[target]!.push(newItem);
-      });
-
       setItems((prev) => {
-        const next = { ...prev };
-        (Object.keys(newItemsByStorage) as StorageKey[]).forEach((storage) => {
-          next[storage] = [...(next[storage] || []), ...(newItemsByStorage[storage] || [])];
+        let next = { ...prev };
+        scanned.forEach((s, index) => {
+          const target = s.storage;
+          const unitPrice = estimateLinePrice(s.name, s.qty);
+          // Prefer per-unit display for countables; line total for bulk weight already estimated
+          const latestPrice =
+            s.unit === "g" || s.unit === "kg" || s.unit === "ml"
+              ? Math.round((unitPrice / Math.max(1, s.qty / 100)) * 100) / 100
+              : Math.round((unitPrice / Math.max(1, s.qty)) * 100) / 100;
+          const newItem: PantryItem = {
+            id: `item-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
+            name: s.name,
+            qty: s.qty,
+            unit: s.unit,
+            emoji: s.emoji,
+            daysLeft: getDefaultDaysLeft(s.name, target),
+            minStock: getDefaultMinStock(s.name),
+            latestPrice,
+            priceUnit: defaultPriceUnit(s.unit),
+          };
+          next = applyIncomingToStorage(next, target, newItem, { mergePrice: true });
+          next = applyPriceToMatchingItems(
+            next,
+            { name: s.name, unit: s.unit },
+            latestPrice,
+            defaultPriceUnit(s.unit)
+          );
         });
         return next;
       });

@@ -12,6 +12,12 @@ import { ReceiptScanFlow } from "./ReceiptScanFlow";
 import { toast } from "sonner";
 import { FinancialsScreen } from "./FinancialsScreen";
 import { LoginScreen } from "./LoginScreen";
+import { ShoppingListView } from "./ShoppingListView";
+import { RecipesView, countRecipeAvailability, canMakeRecipeFully } from "./RecipesView";
+import { ALL_RECIPES } from "@/data/recipes";
+import { applyIncomingToStorage } from "@/lib/pantry-ops";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { applyBackupToLocalStorage, buildBackupFromLocalStorage, downloadBackupJson } from "@/lib/backup";
 import { ArrowRight, X, Users, Plus } from "lucide-react";
 import {
   Drawer,
@@ -59,7 +65,7 @@ export function PantryScreen() {
   const [activeView, setActiveView] = useState<ActiveView>("pantry");
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") return false;
-    try { return localStorage.getItem("friggg-logged-in") === "true"; } catch { return false; }
+    try { return localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === "true"; } catch { return false; }
   });
   const [forcedInviteCode, setForcedInviteCode] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -86,7 +92,7 @@ export function PantryScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
     try {
-      const v = localStorage.getItem("friggg-notifications");
+      const v = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
       if (v === null) return true;
       return v === "true";
     } catch {
@@ -100,7 +106,7 @@ export function PantryScreen() {
   );
   useEffect(() => {
     try {
-      const p = localStorage.getItem("friggg-profile");
+      const p = localStorage.getItem(STORAGE_KEYS.PROFILE);
       if (p) {
         const parsed = JSON.parse(p);
         if (parsed?.name) {
@@ -120,7 +126,7 @@ export function PantryScreen() {
     const emoji = profileDraft.emoji.trim() || "👤";
     try {
       localStorage.setItem(
-        "friggg-profile",
+        STORAGE_KEYS.PROFILE,
         JSON.stringify({ name, email, emoji })
       );
     } catch {}
@@ -135,7 +141,7 @@ export function PantryScreen() {
   const toggleNotifications = (checked: boolean) => {
     setNotificationsEnabled(checked);
     try {
-      localStorage.setItem("friggg-notifications", String(checked));
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, String(checked));
     } catch {}
     toast.message(checked ? "Alerts on" : "Alerts off", {
       description: checked
@@ -147,7 +153,7 @@ export function PantryScreen() {
   // Dark mode (respects system + persisted, clean calm dark theme)
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {
-    const saved = localStorage.getItem("friggg-theme");
+    const saved = localStorage.getItem(STORAGE_KEYS.THEME);
     const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     const shouldBeDark = saved ? saved === "dark" : prefersDark;
     setIsDark(shouldBeDark);
@@ -163,10 +169,10 @@ export function PantryScreen() {
     setIsDark(next);
     if (next) {
       document.documentElement.classList.add("dark");
-      localStorage.setItem("friggg-theme", "dark");
+      localStorage.setItem(STORAGE_KEYS.THEME, "dark");
     } else {
       document.documentElement.classList.remove("dark");
-      localStorage.setItem("friggg-theme", "light");
+      localStorage.setItem(STORAGE_KEYS.THEME, "light");
     }
   };
 
@@ -184,28 +190,48 @@ export function PantryScreen() {
     if (!isAuthenticated) return;
     setFamilyMembers(loadFamilyMembers());
     try {
-      const p = localStorage.getItem("friggg-profile");
+      const p = localStorage.getItem(STORAGE_KEYS.PROFILE);
       if (p) {
         const parsed = JSON.parse(p);
         if (parsed?.name) setUserName(parsed.name.split(" ")[0] || "Elena");
       }
-      const h = localStorage.getItem("friggg-household");
-      if (h) setHouseholdName(h);
+      setHouseholdName(loadHouseholdName("The Borg family"));
     } catch {}
   }, [isAuthenticated]);
 
-  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([
-    { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
-    { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
-    { user: "You", action: "moved chicken to freezer", time: "3h ago" },
-  ]);
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>(() => {
+    if (typeof window === "undefined") {
+      return [
+        { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
+        { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
+        { user: "You", action: "moved chicken to freezer", time: "3h ago" },
+      ];
+    }
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ACTIVITY_LOG);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed as ActivityLogEntry[];
+      }
+    } catch {}
+    return [
+      { user: "Elena", action: "added 2L Whole milk", time: "2m ago" },
+      { user: "Alex", action: "used 3 eggs for breakfast", time: "1h ago" },
+      { user: "You", action: "moved chicken to freezer", time: "3h ago" },
+    ];
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOG, JSON.stringify(activityLog.slice(0, 50)));
+    } catch {}
+  }, [activityLog]);
   const [showFamilyDrawer, setShowFamilyDrawer] = useState(false);
   const [showManageFamily, setShowManageFamily] = useState(false);
 
   const addActivity = useCallback((user: string, action: string) => {
     setActivityLog((prev) => [
       { user, action, time: "just now" },
-      ...prev.slice(0, 4), // keep last 5 total
+      ...prev.slice(0, 49),
     ]);
   }, []);
 
@@ -271,8 +297,8 @@ export function PantryScreen() {
       setShowFamilyDrawer(false);
       setShowSettings(false);
       try {
-        localStorage.removeItem("friggg-logged-in");
-        localStorage.setItem("friggg-pending-invite", code);
+        localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
+        localStorage.setItem(STORAGE_KEYS.PENDING_INVITE, code);
         // Keep pantry data so joiners see the same shared inventory
       } catch {}
       setIsAuthenticated(false);
@@ -300,10 +326,6 @@ export function PantryScreen() {
     addedBanner,
     setAddedBanner,
     expiringSoon,
-    lowStockCount,
-    updateQty,
-    updateMinStock,
-    updateDaysLeft,
     patchItem,
     removeItem,
     restoreItem,
@@ -399,10 +421,7 @@ export function PantryScreen() {
         daysLeft: getDefaultDaysLeft(input.name, active),
         minStock: input.minStock || getDefaultMinStock(input.name),
       };
-      setItems((prev) => ({
-        ...prev,
-        [active]: [...prev[active], newItem],
-      }));
+      setItems((prev) => applyIncomingToStorage(prev, active, newItem));
       rememberPantryItem(newItem, "pantry_add");
       addActivity("You", `added ${input.qty} ${input.unit} ${input.name}`);
       toast.success("Added to pantry", { description: newItem.name });
@@ -433,15 +452,15 @@ export function PantryScreen() {
 
   // Persist auth for seamless PWA / reload / offline experience
   const doLogin = () => {
-    try { localStorage.setItem("friggg-logged-in", "true"); } catch {}
+    try { localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true"); } catch {}
     setForcedInviteCode(null);
     setFamilyMembers(loadFamilyMembers());
     setIsAuthenticated(true);
   };
   const doLogout = () => {
     try {
-      localStorage.removeItem("friggg-logged-in");
-      localStorage.removeItem("friggg-current-user-id");
+      localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
     } catch {}
     setIsAuthenticated(false);
   };
@@ -454,7 +473,7 @@ export function PantryScreen() {
     const handler = (e: Event) => {
       e.preventDefault();
       setInstallPromptEvent(e);
-      const dismissed = localStorage.getItem("friggg-install-dismissed");
+      const dismissed = localStorage.getItem(STORAGE_KEYS.INSTALL_DISMISSED);
       if (!dismissed) {
         // small delay so not jarring on first load
         setTimeout(() => setShowInstallBanner(true), 1200);
@@ -479,7 +498,7 @@ export function PantryScreen() {
 
   const dismissInstall = () => {
     setShowInstallBanner(false);
-    localStorage.setItem("friggg-install-dismissed", String(Date.now()));
+    localStorage.setItem(STORAGE_KEYS.INSTALL_DISMISSED, String(Date.now()));
   };
 
   // Recipes state
@@ -495,27 +514,17 @@ export function PantryScreen() {
     const demo = demoItems[Math.floor(Math.random() * demoItems.length)];
     const targetStorage: StorageKey = Math.random() > 0.6 ? "fridge" : "pantry";
 
-    setItems((prev) => {
-      const next = { ...prev };
-      const existing = next[targetStorage].find((i) => i.name.toLowerCase() === demo.name.toLowerCase());
-      if (existing) {
-        existing.qty += demo.qty;
-      } else {
-        next[targetStorage] = [
-          ...next[targetStorage],
-          {
-            id: `fam-${Date.now()}`,
-            name: demo.name,
-            qty: demo.qty,
-            unit: demo.unit,
-            emoji: demo.emoji,
-            daysLeft: getDefaultDaysLeft(demo.name, targetStorage),
-            minStock: getDefaultMinStock(demo.name),
-          },
-        ];
-      }
-      return next;
-    });
+    setItems((prev) =>
+      applyIncomingToStorage(prev, targetStorage, {
+        id: `fam-${Date.now()}`,
+        name: demo.name,
+        qty: demo.qty,
+        unit: demo.unit,
+        emoji: demo.emoji,
+        daysLeft: getDefaultDaysLeft(demo.name, targetStorage),
+        minStock: getDefaultMinStock(demo.name),
+      })
+    );
 
     rememberPantryItem(
       {
@@ -540,7 +549,7 @@ export function PantryScreen() {
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => {
     if (typeof window === "undefined") return [];
     try {
-      const raw = localStorage.getItem("friggg-shopping-list");
+      const raw = localStorage.getItem(STORAGE_KEYS.SHOPPING_LIST);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) return parsed as ShoppingListItem[];
@@ -550,7 +559,7 @@ export function PantryScreen() {
   });
   useEffect(() => {
     try {
-      localStorage.setItem("friggg-shopping-list", JSON.stringify(shoppingList));
+      localStorage.setItem(STORAGE_KEYS.SHOPPING_LIST, JSON.stringify(shoppingList));
     } catch {}
   }, [shoppingList]);
 
@@ -633,17 +642,37 @@ export function PantryScreen() {
     if (purchased.length === 0) return;
 
     setItems((prev) => {
-      const next = { ...prev };
+      let next = { ...prev };
       purchased.forEach((p) => {
-        // Try to find matching item in any storage and increase qty
+        let merged = false;
         (Object.keys(next) as StorageKey[]).forEach((storage) => {
-          next[storage] = next[storage].map((item) => {
-            if (item.name.toLowerCase() === p.name.toLowerCase()) {
-              return { ...item, qty: item.qty + p.qty };
-            }
-            return item;
-          });
+          const has = next[storage].some(
+            (item) => item.name.toLowerCase() === p.name.toLowerCase()
+          );
+          if (has) {
+            next = {
+              ...next,
+              [storage]: next[storage].map((item) =>
+                item.name.toLowerCase() === p.name.toLowerCase()
+                  ? { ...item, qty: item.qty + p.qty }
+                  : item
+              ),
+            };
+            merged = true;
+          }
         });
+        if (!merged) {
+          const incoming = {
+            id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: p.name,
+            qty: p.qty,
+            unit: p.unit,
+            emoji: p.emoji,
+            daysLeft: getDefaultDaysLeft(p.name, "fridge"),
+            minStock: getDefaultMinStock(p.name),
+          };
+          next = applyIncomingToStorage(next, "fridge", incoming);
+        }
       });
       return next;
     });
@@ -744,124 +773,16 @@ export function PantryScreen() {
   })();
   const alertsCount = notificationsEnabled ? alertItems.length : 0;
 
-  // For list view we show different header stats
-  const headerTotal = isListView
-    ? listCount
-    : isRecipesView
-      ? 6
-      : isFinancesView
-        ? receipts.length
-        : current.length;
-  const headerAttention = isListView
-    ? checkedCount
-    : isRecipesView
-      ? 3
-      : isFinancesView
-        ? new Set(receipts.map((r) => r.store)).size
-        : expiringSoon;
+  // === RECIPES DATA & HELPERS (P1-3 real stats) ===
+  const allRecipes: Recipe[] = ALL_RECIPES;
+  const getMatchingCount = (recipe: Recipe) => countRecipeAvailability(items, recipe);
+  const canMakeRecipe = (recipe: Recipe) => canMakeRecipeFully(items, recipe);
 
-  // === RECIPES DATA & HELPERS ===
-
-  const allRecipes: Recipe[] = [
-    {
-      id: "r1",
-      name: "Scrambled Eggs",
-      emoji: "🍳",
-      time: "10 min",
-      servings: 2,
-      ingredients: [
-        { name: "Free-range eggs", qty: 3, unit: "pcs" },
-        { name: "Whole milk", qty: 0.1, unit: "L" },
-      ],
-      category: "Breakfast",
-    },
-    {
-      id: "r2",
-      name: "Greek Yogurt Bowl",
-      emoji: "🥣",
-      time: "5 min",
-      servings: 1,
-      ingredients: [
-        { name: "Greek yogurt", qty: 1, unit: "tub" },
-        { name: "Baby spinach", qty: 0.5, unit: "bag" },
-      ],
-      category: "Breakfast",
-    },
-    {
-      id: "r3",
-      name: "Cherry Tomato Salad",
-      emoji: "🥗",
-      time: "8 min",
-      servings: 2,
-      ingredients: [
-        { name: "Cherry tomatoes", qty: 1, unit: "pack" },
-        { name: "Baby spinach", qty: 1, unit: "bag" },
-      ],
-      category: "Lunch",
-    },
-    {
-      id: "r4",
-      name: "Cheesy Omelette",
-      emoji: "🧀",
-      time: "12 min",
-      servings: 2,
-      ingredients: [
-        { name: "Free-range eggs", qty: 4, unit: "pcs" },
-        { name: "Aged cheddar", qty: 50, unit: "g" },
-        { name: "Whole milk", qty: 0.05, unit: "L" },
-      ],
-      category: "Breakfast",
-    },
-    {
-      id: "r5",
-      name: "Spinach Chicken Stir",
-      emoji: "🍗",
-      time: "20 min",
-      servings: 3,
-      ingredients: [
-        { name: "Chicken thighs", qty: 300, unit: "g" },
-        { name: "Baby spinach", qty: 1, unit: "bag" },
-      ],
-      category: "Dinner",
-    },
-    {
-      id: "r6",
-      name: "Tomato Cheese Toast",
-      emoji: "🍞",
-      time: "7 min",
-      servings: 2,
-      ingredients: [
-        { name: "Cherry tomatoes", qty: 0.5, unit: "pack" },
-        { name: "Aged cheddar", qty: 40, unit: "g" },
-      ],
-      category: "Snack",
-    },
-  ];
-
-  // Check how many ingredients you have enough of across all storages
-  const getMatchingCount = (recipe: Recipe): number => {
-    return recipe.ingredients.filter((ing) => {
-      const lower = ing.name.toLowerCase();
-      return (["fridge", "freezer", "pantry"] as StorageKey[]).some((storage) =>
-        items[storage].some(
-          (item) =>
-            item.name.toLowerCase() === lower &&
-            item.qty >= ing.qty
-        )
-      );
-    }).length;
-  };
-
-  const canMakeRecipe = (recipe: Recipe): boolean => getMatchingCount(recipe) === recipe.ingredients.length;
-
-  // Get recipes filtered and sorted by relevance (matching ingredients desc)
   const getFilteredRecipes = (): Recipe[] => {
     let filtered = [...allRecipes];
-
     if (recipeFilter === "canMake") {
       filtered = filtered.filter(canMakeRecipe);
     } else if (recipeFilter === "expiring") {
-      // Prioritize recipes using items with low daysLeft
       const expiringNames = new Set(
         (["fridge", "freezer", "pantry"] as StorageKey[]).flatMap((s) =>
           items[s].filter((i) => i.daysLeft <= 3).map((i) => i.name.toLowerCase())
@@ -871,48 +792,83 @@ export function PantryScreen() {
         r.ingredients.some((ing) => expiringNames.has(ing.name.toLowerCase()))
       );
     }
-
-    // Sort by how many ingredients you have (most relevant first)
     return filtered.sort((a, b) => getMatchingCount(b) - getMatchingCount(a));
   };
 
   const filteredRecipes = getFilteredRecipes();
+  const recipeIdeasCount = filteredRecipes.length;
+  const recipeReadyCount = filteredRecipes.filter(canMakeRecipe).length;
 
-  // "Used in Recipe" - deduct ingredients from pantry (any storage)
+  const headerTotal = isListView
+    ? listCount
+    : isRecipesView
+      ? recipeIdeasCount
+      : isFinancesView
+        ? receipts.length
+        : current.length;
+  const headerAttention = isListView
+    ? checkedCount
+    : isRecipesView
+      ? recipeReadyCount
+      : isFinancesView
+        ? new Set(receipts.map((r) => r.store)).size
+        : expiringSoon;
+
+  const financesMonthLabel = new Date().toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
+
+  // "Used in Recipe" - confirm then deduct (P1-4)
   const cookRecipe = (recipe: Recipe) => {
-    const used: string[] = [];
+    const preview = recipe.ingredients
+      .map((ing) => `${ing.qty} ${ing.unit} ${ing.name}`)
+      .join(", ");
+    requestConfirm({
+      title: `Cook ${recipe.name}?`,
+      description: `This will deduct from your pantry where stock allows: ${preview}.`,
+      confirmLabel: "Cook & deduct",
+      onConfirm: () => {
+        const used: string[] = [];
+        const snapshot = JSON.parse(JSON.stringify(items)) as typeof items;
 
-    setItems((prev) => {
-      const next = { ...prev };
-      (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage]
-          .map((item) => {
-            const match = recipe.ingredients.find(
-              (ing) => ing.name.toLowerCase() === item.name.toLowerCase()
-            );
-            if (match && item.qty >= match.qty) {
-              const newQty = Math.max(0, item.qty - match.qty);
-              if (newQty < item.qty) used.push(item.name);
-              return { ...item, qty: newQty };
-            }
-            return item;
-          })
-          .filter((i) => i.qty > 0);
-      });
-      return next;
+        setItems((prev) => {
+          const next = { ...prev };
+          (Object.keys(next) as StorageKey[]).forEach((storage) => {
+            next[storage] = next[storage]
+              .map((item) => {
+                const match = recipe.ingredients.find(
+                  (ing) => ing.name.toLowerCase() === item.name.toLowerCase()
+                );
+                if (match && item.qty >= match.qty) {
+                  const newQty = Math.max(0, item.qty - match.qty);
+                  if (newQty < item.qty) used.push(item.name);
+                  return { ...item, qty: newQty };
+                }
+                return item;
+              })
+              .filter((i) => i.qty > 0);
+          });
+          return next;
+        });
+
+        if (used.length > 0) {
+          toast.success(`Used in ${recipe.name}`, {
+            description: `Deducted: ${used.join(", ")}`,
+            action: {
+              label: "Undo",
+              onClick: () => setItems(snapshot),
+            },
+            duration: 5000,
+          });
+          addActivity("You", `cooked ${recipe.name}`);
+          setActiveView("pantry");
+          setActive("fridge");
+        } else {
+          toast("Not enough ingredients", { description: "Some items are low." });
+        }
+      },
     });
-
-    if (used.length > 0) {
-      toast.success(`Used in ${recipe.name}`, {
-        description: `Deducted: ${used.join(", ")}`,
-      });
-      addActivity("You", `cooked ${recipe.name}`);
-      // Auto switch to pantry to see updated stock
-      setActiveView("pantry");
-      setActive("fridge");
-    } else {
-      toast("Not enough ingredients", { description: "Some items are low." });
-    }
   };
 
   if (showSplash) {
@@ -975,7 +931,7 @@ export function PantryScreen() {
         expiringSoon={headerAttention}
         totalItems={headerTotal}
         title={isListView ? "Shopping List" : isRecipesView ? "Recipes" : isFinancesView ? "Finances" : "Your Friġġ"}
-        subtitle={isListView ? "Restock smart" : isRecipesView ? "Cook with what you have" : isFinancesView ? "July 2026" : `Good morning, ${userName}`}
+        subtitle={isListView ? "Restock smart" : isRecipesView ? "Cook with what you have" : isFinancesView ? financesMonthLabel : `Good morning, ${userName}`}
         totalLabel={isFinancesView ? "receipts" : isRecipesView ? "ideas" : undefined}
         attentionLabel={
           isListView ? "checked" : isFinancesView ? "stores" : isRecipesView ? "ready" : undefined
@@ -991,275 +947,129 @@ export function PantryScreen() {
 
       <main className="px-5 pt-5">
         {isListView ? (
-          // === SHOPPING LIST VIEW - premium polished ===
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="text-sm text-muted-foreground">Shopping List</div>
-                <div className="font-display text-[28px] leading-tight font-medium tracking-[-0.015em]">
-                  {listCount} item{listCount === 1 ? "" : "s"}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={exportShoppingList}
-                  className="rounded-2xl border px-3.5 py-2 text-sm font-semibold active:bg-secondary/60 transition"
-                >
-                  Share
-                </button>
-                <button
-                  onClick={generateShoppingList}
-                  className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition"
-                >
-                  Regenerate
-                </button>
-              </div>
-            </div>
-
-            {shoppingList.length === 0 ? (
-              <div className="mt-12 text-center">
-                <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-secondary/70 text-3xl">🛒</div>
-                <p className="mt-4 font-display text-xl text-foreground">Your list is empty</p>
-                <p className="mt-1 text-sm text-muted-foreground max-w-[240px] mx-auto">
-                  Tap the button below to intelligently fill it.
-                </p>
-                <button
-                  onClick={generateShoppingList}
-                  className="mt-6 w-full flex items-center justify-center gap-2 rounded-3xl bg-[color-mix(in_oklab,var(--color-brand)_8%,var(--color-card))] border border-[color-mix(in_oklab,var(--color-brand)_25%,transparent)] py-3 text-sm font-semibold text-foreground active:scale-[0.985] transition"
-                >
-                  🛒 Generate Shopping List
-                  {suggestedCount > 0 && (
-                    <span className="ml-1 rounded-full bg-[color-mix(in_oklab,var(--color-brand)_18%,transparent)] px-2 py-px text-[11px] font-bold tabular-nums">
-                      {suggestedCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            ) : (
-              <>
-                <ul className="space-y-3 mt-2">
-                  {shoppingList.map((item) => (
-                    <li
-                      key={item.id}
-                      className="elevated-card flex items-center gap-4 rounded-3xl px-4 py-4"
-                    >
-                      <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-secondary text-2xl">
-                        {item.emoji}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-[15px] tracking-[-0.01em]">{item.name}</p>
-                        <p className="text-[12px] text-muted-foreground mt-0.5">
-                          Buy {item.qty} {item.unit}
-                        </p>
-                      </div>
-
-                      {/* Qty controls + checkbox */}
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center rounded-full bg-secondary/70 p-0.5">
-                          <button
-                            onClick={() => updateShoppingQty(item.id, -1)}
-                            className="touch-target grid size-8 place-items-center rounded-full active:bg-background/60"
-                          >
-                            –
-                          </button>
-                          <span className="w-7 text-center text-sm font-semibold tabular-nums">
-                            {item.qty}
-                          </span>
-                          <button
-                            onClick={() => updateShoppingQty(item.id, +1)}
-                            className="touch-target grid size-8 place-items-center rounded-full active:bg-background/60"
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        <button
-                          onClick={() => toggleShoppingItem(item.id)}
-                          className={`touch-target grid size-9 place-items-center rounded-2xl border text-lg transition ${
-                            item.checked
-                              ? "bg-brand text-brand-foreground border-brand"
-                              : "bg-card border-border/60"
-                          }`}
-                          aria-label={item.checked ? "Uncheck" : "Check off"}
-                        >
-                          {item.checked ? "✓" : ""}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={() => {
-                      if (checkedCount === 0) return;
-                      requestConfirm({
-                        title: "Mark as purchased?",
-                        description: `Move ${checkedCount} checked item${checkedCount === 1 ? "" : "s"} into your pantry and clear them from the list.`,
-                        confirmLabel: "Mark purchased",
-                        onConfirm: markPurchased,
-                      });
-                    }}
-                    disabled={checkedCount === 0}
-                    className="flex-1 rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] disabled:opacity-50 transition"
-                  >
-                    Mark {checkedCount || ""} as purchased
-                  </button>
-                  <button
-                    onClick={() => {
-                      const n = shoppingList.filter((i) => i.checked).length;
-                      if (n === 0) {
-                        requestConfirm({
-                          title: "Clear shopping list?",
-                          description: "Remove all items from the current shopping list. Your Database is not affected.",
-                          confirmLabel: "Clear list",
-                          destructive: true,
-                          onConfirm: () => setShoppingList([]),
-                        });
-                        return;
-                      }
-                      requestConfirm({
-                        title: "Clear checked items?",
-                        description: `Remove ${n} checked item${n === 1 ? "" : "s"} from the shopping list.`,
-                        confirmLabel: "Clear",
-                        destructive: true,
-                        onConfirm: () => removeFromShoppingList(),
-                      });
-                    }}
-                    className="rounded-3xl border px-4 py-3.5 text-sm font-medium active:bg-secondary/60"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    onClick={exportShoppingList}
-                    className="rounded-3xl border px-4 py-3.5 text-sm font-medium active:bg-secondary/60"
-                    aria-label="Share shopping list"
-                  >
-                    Share
-                  </button>
-                </div>
-              </>
-            )}
-
-            <ItemDatabaseSection
-              catalog={catalog}
-              mergeGroups={mergeGroups}
-              onAdd={(input) => {
-                addCatalogItem(input);
-                toast.success("Added to Database", { description: input.name });
-              }}
-              onUpdate={updateCatalogItem}
-              onRemove={removeCatalogItem}
-              onMerge={(group, primaryId) => {
-                applyMerge(group, primaryId);
-                toast.success("Merged", { description: "Duplicates combined in Database." });
-              }}
-              onRequestDelete={(item: CatalogItem) => {
+          <ShoppingListView
+            shoppingList={shoppingList}
+            listCount={listCount}
+            checkedCount={checkedCount}
+            suggestedCount={suggestedCount}
+            catalog={catalog}
+            mergeGroups={mergeGroups}
+            onExport={exportShoppingList}
+            onRegenerate={() => {
+              if (shoppingList.length > 0) {
                 requestConfirm({
-                  title: `Delete ${item.name}?`,
-                  description: "Remove this item from the Database. Pantry stock is not deleted.",
-                  confirmLabel: "Delete",
+                  title: "Regenerate shopping list?",
+                  description: "This replaces your current list with suggestions from pantry needs.",
+                  confirmLabel: "Regenerate",
                   destructive: true,
-                  onConfirm: () => removeCatalogItem(item.id),
+                  onConfirm: generateShoppingList,
                 });
-              }}
-            />
-          </>
-        ) : isRecipesView ? (
-          // === RECIPES VIEW - suggestions, filters, use ingredients ===
-          <div className="space-y-5">
-            {/* Filter pills - premium segmented */}
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {[
-                { key: "all", label: "All ideas" },
-                { key: "canMake", label: "Can make now" },
-                { key: "expiring", label: "Use expiring" },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setRecipeFilter(f.key as "all" | "canMake" | "expiring")}
-                  className={`rounded-2xl px-4 py-1.5 text-sm font-semibold whitespace-nowrap transition active:scale-[0.985] ${
-                    recipeFilter === f.key
-                      ? "bg-brand text-brand-foreground"
-                      : "bg-secondary/70 text-foreground/80 active:bg-secondary"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {filteredRecipes.length === 0 ? (
-              <div className="mt-12 text-center">
-                <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-secondary/70 text-3xl">🍳</div>
-                <p className="mt-4 font-display text-xl text-foreground">No matches yet</p>
-                <p className="mt-1 text-sm text-muted-foreground max-w-[240px] mx-auto">
-                  Add more items to your pantry or switch filters.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredRecipes.map((recipe) => {
-                  const matchCount = getMatchingCount(recipe);
-                  const totalIngs = recipe.ingredients.length;
-                  const canMake = matchCount === totalIngs;
-
-                  return (
-                    <div key={recipe.id} className="elevated-card rounded-3xl px-4 py-4">
-                      <div className="flex items-start gap-3">
-                        <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-secondary text-2xl">
-                          {recipe.emoji}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <p className="font-semibold text-[15px] tracking-[-0.01em]">{recipe.name}</p>
-                            <span className="text-[11px] text-muted-foreground">{recipe.time} · {recipe.servings} serv</span>
-                          </div>
-
-                          <div className="mt-2 text-[12px] text-muted-foreground">
-                            {recipe.ingredients.map((ing, idx) => (
-                              <span key={idx} className="mr-2">
-                                {ing.qty} {ing.unit} {ing.name}
-                                {idx < recipe.ingredients.length - 1 ? " · " : ""}
-                              </span>
-                            ))}
-                          </div>
-
-                          <div className="mt-2 flex items-center gap-2">
-                            <span
-                              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                                canMake
-                                  ? "bg-[color-mix(in_oklab,var(--color-fresh)_15%,var(--color-card))] text-[var(--color-fresh)]"
-                                  : "bg-secondary/60 text-foreground/70"
-                              }`}
-                            >
-                              {canMake ? "Ready to cook" : `${matchCount}/${totalIngs} ingredients`}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">{recipe.category}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => cookRecipe(recipe)}
-                        className="mt-3 w-full rounded-3xl border py-2.5 text-sm font-semibold active:bg-secondary/60 transition disabled:opacity-50"
-                        disabled={matchCount === 0}
-                      >
-                        {canMake ? "Cook this recipe" : "Use what I have"}
-                      </button>
-                    </div>
+              } else {
+                generateShoppingList();
+              }
+            }}
+            onUpdateQty={updateShoppingQty}
+            onToggle={toggleShoppingItem}
+            onMarkPurchased={() => {
+              if (checkedCount === 0) return;
+              requestConfirm({
+                title: "Mark as purchased?",
+                description: `Move ${checkedCount} checked item${checkedCount === 1 ? "" : "s"} into your pantry and clear them from the list.`,
+                confirmLabel: "Mark purchased",
+                onConfirm: markPurchased,
+              });
+            }}
+            onClear={() => {
+              const n = shoppingList.filter((i) => i.checked).length;
+              if (n === 0) {
+                requestConfirm({
+                  title: "Clear shopping list?",
+                  description: "Remove all items from the current shopping list. Your Database is not affected.",
+                  confirmLabel: "Clear list",
+                  destructive: true,
+                  onConfirm: () => setShoppingList([]),
+                });
+                return;
+              }
+              requestConfirm({
+                title: "Clear checked items?",
+                description: `Remove ${n} checked item${n === 1 ? "" : "s"} from the shopping list.`,
+                confirmLabel: "Clear",
+                destructive: true,
+                onConfirm: () => removeFromShoppingList(),
+              });
+            }}
+            onAddFromCatalog={(c) => {
+              setShoppingList((prev) => {
+                const existing = prev.find((i) => i.name.toLowerCase() === c.name.toLowerCase());
+                if (existing) {
+                  return prev.map((i) =>
+                    i.id === existing.id ? { ...i, qty: i.qty + 1 } : i
                   );
-                })}
-              </div>
-            )}
-
-            <p className="text-center text-[11px] text-muted-foreground pt-2">
-              Recipes update automatically from your current pantry stock.
-            </p>
-          </div>
+                }
+                return [
+                  ...prev,
+                  {
+                    id: `shop-cat-${c.id}-${Date.now()}`,
+                    name: c.name,
+                    qty: 1,
+                    unit: c.unit,
+                    emoji: c.emoji,
+                    checked: false,
+                  },
+                ];
+              });
+              toast.success("Added to list", { description: c.name });
+            }}
+            onAddManualToList={(name, unit, emoji, qty) => {
+              setShoppingList((prev) => [
+                ...prev,
+                {
+                  id: `shop-manual-${Date.now()}`,
+                  name,
+                  qty,
+                  unit,
+                  emoji,
+                  checked: false,
+                },
+              ]);
+              addCatalogItem({ name, unit, emoji });
+              toast.success("Added to list", { description: name });
+            }}
+            onCatalogAdd={(input) => {
+              addCatalogItem(input);
+              toast.success("Added to Database", { description: input.name });
+            }}
+            onCatalogUpdate={updateCatalogItem}
+            onCatalogRemove={removeCatalogItem}
+            onCatalogMerge={(group, primaryId) => {
+              applyMerge(group, primaryId);
+              toast.success("Merged", { description: "Duplicates combined in Database." });
+            }}
+            onCatalogRequestDelete={(item) => {
+              requestConfirm({
+                title: `Delete ${item.name}?`,
+                description: "Remove this item from the Database. Pantry stock is not deleted.",
+                confirmLabel: "Delete",
+                destructive: true,
+                onConfirm: () => removeCatalogItem(item.id),
+              });
+            }}
+          />
+        ) : isRecipesView ? (
+          <RecipesView
+            items={items}
+            recipeFilter={recipeFilter}
+            onFilterChange={setRecipeFilter}
+            filteredRecipes={filteredRecipes}
+            countAvailable={getMatchingCount}
+            canMakeFully={canMakeRecipe}
+            onCook={cookRecipe}
+          />
         ) : isFinancesView ? (
+
           // === FINANCIALS / MONEY VIEW - receipts + charts ===
-          <FinancialsScreen receipts={receipts} onDeleteReceipt={handleDeleteReceipt} />
+          <FinancialsScreen receipts={receipts} onDeleteReceipt={handleDeleteReceipt} onAddReceipt={addReceipt} />
         ) : (
           // === PANTRY VIEW ===
           <>
@@ -1543,9 +1353,59 @@ export function PantryScreen() {
               <Switch checked={isDark} onCheckedChange={toggleDarkMode} aria-label="Toggle dark mode" />
             </div>
 
+            {/* Backup export / import (P2-8) */}
+            <div className="elevated-card rounded-3xl p-4 space-y-2">
+              <div className="font-semibold">Backup</div>
+              <div className="text-xs text-muted-foreground">
+                Export or restore pantry, receipts, shopping list, database &amp; family (local only).
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      downloadBackupJson(buildBackupFromLocalStorage());
+                      toast.success("Backup downloaded");
+                    } catch {
+                      toast.error("Could not export backup");
+                    }
+                  }}
+                  className="flex-1 rounded-2xl border py-2.5 text-xs font-semibold active:bg-secondary/60"
+                >
+                  Export JSON
+                </button>
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      try {
+                        const text = await file.text();
+                        const data = JSON.parse(text);
+                        applyBackupToLocalStorage(data);
+                        toast.success("Backup restored", {
+                          description: "Reload the app to see all changes.",
+                        });
+                        window.location.reload();
+                      } catch {
+                        toast.error("Invalid backup file");
+                      }
+                    }}
+                  />
+                  <span className="flex w-full cursor-pointer items-center justify-center rounded-2xl bg-secondary/70 py-2.5 text-xs font-semibold active:bg-secondary">
+                    Import JSON
+                  </span>
+                </label>
+              </div>
+            </div>
+
             {/* About + misc */}
             <div className="text-[11px] text-muted-foreground px-1 pt-1">
-              Friġġ v1 • Calm pantry for families. Data stays on your device.
+              Friġġ v1 • Demo multi-user · data stays on this device (not cloud-synced).
             </div>
 
             <button

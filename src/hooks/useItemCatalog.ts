@@ -86,10 +86,6 @@ export function useItemCatalog() {
     setCatalog((prev) => mergeCatalogGroup(prev, primaryId, group.memberIds));
   }, []);
 
-  const skipMergeGroup = useCallback((_groupId: string) => {
-    // no-op persistence; UI tracks skipped groups locally
-  }, []);
-
   const suggest = useCallback(
     (query: string, limit = 8) => searchCatalog(catalog, query, limit),
     [catalog]
@@ -111,7 +107,6 @@ export function useItemCatalog() {
     removeCatalogItem,
     mergeGroups,
     applyMerge,
-    skipMergeGroup,
     suggest,
   };
 }

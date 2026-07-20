@@ -14,6 +14,20 @@ Track quantities, set minimum stock levels, edit expiration dates, and move item
 
 Everything stays private on your device. Works beautifully as a Progressive Web App — install it for a native app-like experience, even offline.
 
+## Security & demo limits (read this)
+
+Friġġ is a **local-first demo**. There is **no cloud backend**.
+
+| Area | Reality |
+|------|---------|
+| Accounts / passwords | Stored **in plain text** in `localStorage` for simulation only — **not** production-grade auth |
+| Household “sharing” | Same-device simulation (invite links / WhatsApp open real apps; join does not sync across phones via a server) |
+| Receipt scan | **Demo detection** — sample line items; library photos are stored but not OCR’d |
+| Push notifications | Not implemented — in-app Alerts panel only |
+| Data | Export/import JSON backup from Settings; no automatic multi-device sync |
+
+Do not use this build for real sensitive credentials or true multi-household production.
+
 ## Key Features
 
 - **Smart Inventory Tracking** — Premium single-column cards for fridge, freezer, and pantry. Calm list shows emoji, name, status, days left, and quantity; tap for quantity/min stock controls and move actions.

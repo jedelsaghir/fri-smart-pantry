@@ -41,6 +41,7 @@ export function ItemDatabaseSection({
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeIndex, setMergeIndex] = useState(0);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
+  const [selectedPrimaryId, setSelectedPrimaryId] = useState<string | null>(null);
 
   const activeGroups = useMemo(
     () => mergeGroups.filter((g) => !skipped.has(g.id)),
@@ -51,6 +52,7 @@ export function ItemDatabaseSection({
   const groupMembers = currentGroup
     ? catalog.filter((c) => currentGroup.memberIds.includes(c.id))
     : [];
+  const primaryId = selectedPrimaryId ?? currentGroup?.primaryId ?? null;
 
   const startEdit = (item: CatalogItem) => {
     setEditingId(item.id);
@@ -82,16 +84,8 @@ export function ItemDatabaseSection({
   const openMerge = () => {
     setSkipped(new Set());
     setMergeIndex(0);
+    setSelectedPrimaryId(null);
     setMergeOpen(true);
-  };
-
-  const advanceMerge = () => {
-    if (mergeIndex + 1 < activeGroups.length) {
-      setMergeIndex((i) => i + 1);
-    } else {
-      setMergeOpen(false);
-      setMergeIndex(0);
-    }
   };
 
   return (
@@ -287,26 +281,28 @@ export function ItemDatabaseSection({
                     <p>These names look similar. Merge into one, or keep separate.</p>
                     <ul className="space-y-2">
                       {groupMembers.map((m) => (
-                        <li
-                          key={m.id}
-                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-foreground ${
-                            m.id === currentGroup.primaryId
-                              ? "bg-brand/15 ring-1 ring-brand/30"
-                              : "bg-secondary/60"
-                          }`}
-                        >
-                          <span className="text-lg">{m.emoji}</span>
-                          <span className="min-w-0 flex-1 font-medium">{m.name}</span>
-                          <span className="text-[11px] text-muted-foreground">{m.unit}</span>
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPrimaryId(m.id)}
+                            className={`flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-foreground transition ${
+                              m.id === primaryId
+                                ? "bg-brand/15 ring-1 ring-brand/30"
+                                : "bg-secondary/60 active:bg-secondary"
+                            }`}
+                          >
+                            <span className="text-lg">{m.emoji}</span>
+                            <span className="min-w-0 flex-1 font-medium">{m.name}</span>
+                            <span className="text-[11px] text-muted-foreground">{m.unit}</span>
+                            {m.id === primaryId && (
+                              <span className="text-[10px] font-semibold text-brand">Keep</span>
+                            )}
+                          </button>
                         </li>
                       ))}
                     </ul>
                     <p className="text-[12px]">
-                      Merge keeps{" "}
-                      <strong className="text-foreground">
-                        {groupMembers.find((m) => m.id === currentGroup.primaryId)?.name}
-                      </strong>{" "}
-                      and removes the others from the database.
+                      Tap a name to keep it. Merge removes the others from the database.
                     </p>
                   </>
                 ) : (
@@ -322,11 +318,10 @@ export function ItemDatabaseSection({
                   className="w-full rounded-2xl bg-brand text-brand-foreground"
                   onClick={(e) => {
                     e.preventDefault();
-                    onMerge(currentGroup, currentGroup.primaryId);
-                    // After merge, groups recompute; advance carefully
-                    setTimeout(() => {
-                      setMergeIndex(0);
-                    }, 0);
+                    if (!primaryId) return;
+                    onMerge(currentGroup, primaryId);
+                    setSelectedPrimaryId(null);
+                    setTimeout(() => setMergeIndex(0), 0);
                   }}
                 >
                   Merge as one
@@ -335,8 +330,8 @@ export function ItemDatabaseSection({
                   type="button"
                   className="w-full rounded-2xl border py-2.5 text-sm font-semibold active:bg-secondary/60"
                   onClick={() => {
-                    // Keep as separate individuals
                     setSkipped((prev) => new Set(prev).add(currentGroup.id));
+                    setSelectedPrimaryId(null);
                     setMergeIndex(0);
                   }}
                 >

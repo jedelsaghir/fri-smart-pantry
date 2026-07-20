@@ -26,7 +26,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [householdName, setHouseholdName] = useState("The Borg Family");
+  const [householdName, setHouseholdName] = useState("Family pantry");
   const [profileEmoji, setProfileEmoji] = useState("👩‍🍳");
   const [onboardStep, setOnboardStep] = useState<OnboardStep | null>(null);
   const [invite, setInvite] = useState<PendingInviteContext | null>(null);
@@ -201,7 +201,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
               />
 
               <div className="mt-3 flex flex-wrap gap-2 justify-center">
-                {["The Borg Family", "Smith Home", "Our Kitchen", "Green Household"].map((h, i) => (
+                {["Family pantry", "Our kitchen", "Home fridge", "Shared household"].map((h, i) => (
                   <button
                     key={i}
                     onClick={() => setHouseholdName(h)}
@@ -368,7 +368,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Elena Borg"
+                  placeholder="Sam Rivera"
                   className="w-full rounded-3xl bg-card border border-border/50 px-5 py-3.5 text-[15px] focus:outline-none focus:border-border/80"
                 />
               </div>

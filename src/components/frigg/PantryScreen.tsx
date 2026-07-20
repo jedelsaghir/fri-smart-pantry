@@ -53,10 +53,12 @@ import {
   generateInviteCode,
   loadFamilyMembers,
   loadHouseholdName,
+  loadStoredProfile,
   normalizeFamilyMember,
   saveFamilyMembers,
   saveHouseholdName,
 } from "@/lib/family";
+import { firstNameFromDisplayName, personalGreeting } from "@/lib/greeting";
 
 export function PantryScreen() {
   const [activeView, setActiveView] = useState<ActiveView>("pantry");
@@ -75,7 +77,22 @@ export function PantryScreen() {
     return () => clearTimeout(t);
   }, []);
 
-  // Profile (persisted)
+  // Profile (persisted) — always the signed-in user, never a demo "Elena"
+  const applyProfile = useCallback((profile: { name?: string; email?: string; emoji?: string }) => {
+    const name = (profile.name || "").trim();
+    const email = (profile.email || "").trim();
+    const emoji = (profile.emoji || "").trim() || "👤";
+    setUserFullName(name || "Your name");
+    setUserName(firstNameFromDisplayName(name || null));
+    setUserEmail(email);
+    setUserEmoji(emoji);
+    setProfileDraft({
+      name: name || "Your name",
+      email,
+      emoji,
+    });
+  }, []);
+
   const [userName, setUserName] = useState("there");
   const [userFullName, setUserFullName] = useState("Your name");
   const [userEmail, setUserEmail] = useState("");
@@ -99,38 +116,37 @@ export function PantryScreen() {
   const [showAlerts, setShowAlerts] = useState(false);
 
   const [householdName, setHouseholdName] = useState(() =>
-    typeof window === "undefined" ? "The Borg family" : loadHouseholdName("The Borg family")
+    typeof window === "undefined" ? "Family pantry" : loadHouseholdName("Family pantry")
   );
   useEffect(() => {
-    try {
-      const p = localStorage.getItem(STORAGE_KEYS.PROFILE);
-      if (p) {
-        const parsed = JSON.parse(p);
-        if (parsed?.name) {
-          setUserFullName(parsed.name);
-          setUserName(parsed.name.split(" ")[0] || "Elena");
-        }
-        if (parsed?.email) setUserEmail(parsed.email);
-        if (parsed?.emoji) setUserEmoji(parsed.emoji);
-      }
-      setHouseholdName(loadHouseholdName("The Borg family"));
-    } catch {}
-  }, []);
+    applyProfile(loadStoredProfile());
+    setHouseholdName(loadHouseholdName("Family pantry"));
+  }, [applyProfile]);
 
   const saveProfile = () => {
     const name = profileDraft.name.trim() || "Your name";
     const email = profileDraft.email.trim();
     const emoji = profileDraft.emoji.trim() || "👤";
     try {
+      const prev = loadStoredProfile();
       localStorage.setItem(
         STORAGE_KEYS.PROFILE,
-        JSON.stringify({ name, email, emoji })
+        JSON.stringify({
+          name,
+          email,
+          emoji,
+          memberId: prev.memberId,
+          accountId: prev.accountId,
+        })
+      );
+      // Keep household "You" row in sync with the signed-in display name
+      setFamilyMembers((members) =>
+        members.map((m) =>
+          m.isYou || m.status === "owner" ? { ...m, name, emoji, email } : m
+        )
       );
     } catch {}
-    setUserFullName(name);
-    setUserName(name.split(" ")[0] || name);
-    setUserEmail(email);
-    setUserEmoji(emoji);
+    applyProfile({ name, email, emoji });
     setEditingProfile(false);
     toast.success("Profile updated");
   };
@@ -191,19 +207,13 @@ export function PantryScreen() {
     saveFamilyMembers(familyMembers);
   }, [familyMembers]);
 
-  // Re-sync members after login (invite join updates localStorage)
+  // Re-sync profile + household after login / invite join
   useEffect(() => {
     if (!isAuthenticated) return;
     setFamilyMembers(loadFamilyMembers());
-    try {
-      const p = localStorage.getItem(STORAGE_KEYS.PROFILE);
-      if (p) {
-        const parsed = JSON.parse(p);
-        if (parsed?.name) setUserName(parsed.name.split(" ")[0] || "Elena");
-      }
-      setHouseholdName(loadHouseholdName("The Borg family"));
-    } catch {}
-  }, [isAuthenticated]);
+    applyProfile(loadStoredProfile());
+    setHouseholdName(loadHouseholdName("Family pantry"));
+  }, [isAuthenticated, applyProfile]);
 
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>(() => {
     if (typeof window === "undefined") return [];
@@ -916,7 +926,15 @@ export function PantryScreen() {
         expiringSoon={headerAttention}
         totalItems={headerTotal}
         title={isListView ? "Shopping List" : isRecipesView ? "Recipes" : isFinancesView ? "Finances" : "Your Friġġ"}
-        subtitle={isListView ? "Restock smart" : isRecipesView ? "Cook with what you have" : isFinancesView ? financesMonthLabel : `Good morning, ${userName}`}
+        subtitle={
+          isListView
+            ? "Restock smart"
+            : isRecipesView
+              ? "Cook with what you have"
+              : isFinancesView
+                ? financesMonthLabel
+                : personalGreeting(userFullName)
+        }
         totalLabel={isFinancesView ? "receipts" : isRecipesView ? "ideas" : undefined}
         attentionLabel={
           isListView ? "checked" : isFinancesView ? "stores" : isRecipesView ? "ready" : undefined

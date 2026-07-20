@@ -142,6 +142,7 @@ export function normalizeFamilyMember(raw: Partial<FamilyMember> & { id: string;
 }
 
 export function defaultFamilyMembers(): FamilyMember[] {
+  // Only the signed-in owner — never seed demo people (Elena/Alex, etc.)
   return [
     normalizeFamilyMember({
       id: "you",
@@ -151,23 +152,71 @@ export function defaultFamilyMembers(): FamilyMember[] {
       status: "owner",
       phone: "",
     }),
-    normalizeFamilyMember({
-      id: "elena",
-      name: "Elena",
-      emoji: "👩‍🍳",
-      status: "joined",
-      phone: "",
-      joinedAt: new Date().toISOString(),
-    }),
-    normalizeFamilyMember({
-      id: "alex",
-      name: "Alex",
-      emoji: "🧒",
-      status: "joined",
-      phone: "",
-      joinedAt: new Date().toISOString(),
-    }),
   ];
+}
+
+export type StoredProfile = {
+  name: string;
+  email: string;
+  emoji: string;
+  memberId?: string;
+  accountId?: string;
+};
+
+/**
+ * Resolve the signed-in user's profile for greetings / settings.
+ * Prefer current account (login source of truth), then PROFILE, then isYou member.
+ * Never invents a demo name like "Elena".
+ */
+export function loadStoredProfile(): StoredProfile {
+  const empty: StoredProfile = { name: "", email: "", emoji: "👤" };
+  if (typeof window === "undefined") return empty;
+
+  try {
+    const accountId = localStorage.getItem(CURRENT_USER_KEY);
+    if (accountId) {
+      const account = loadAccounts().find((a) => a.id === accountId);
+      if (account?.name?.trim()) {
+        return {
+          name: account.name.trim(),
+          email: account.email || "",
+          emoji: account.emoji || "👤",
+          memberId: account.memberId,
+          accountId: account.id,
+        };
+      }
+    }
+  } catch {}
+
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<StoredProfile>;
+      if (parsed && typeof parsed.name === "string" && parsed.name.trim()) {
+        return {
+          name: parsed.name.trim(),
+          email: typeof parsed.email === "string" ? parsed.email : "",
+          emoji: (typeof parsed.emoji === "string" && parsed.emoji.trim()) || "👤",
+          memberId: typeof parsed.memberId === "string" ? parsed.memberId : undefined,
+          accountId: typeof parsed.accountId === "string" ? parsed.accountId : undefined,
+        };
+      }
+    }
+  } catch {}
+
+  try {
+    const you = loadFamilyMembers().find((m) => m.isYou || m.status === "owner");
+    if (you?.name?.trim() && you.name !== "You") {
+      return {
+        name: you.name.trim(),
+        email: you.email || "",
+        emoji: you.emoji || "👤",
+        memberId: you.id,
+      };
+    }
+  } catch {}
+
+  return empty;
 }
 
 export function loadFamilyMembers(): FamilyMember[] {

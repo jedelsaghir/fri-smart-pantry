@@ -24,7 +24,7 @@ export function GlassHeader({
   totalItems,
   expiringSoon,
   title = "Your Friġġ",
-  subtitle = "Good morning, Elena",
+  subtitle = "Welcome",
   totalLabel,
   attentionLabel,
   attentionTone,

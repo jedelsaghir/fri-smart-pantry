@@ -331,7 +331,7 @@ export function ManageFamilyPage({
                     }}
                     autoFocus
                     maxLength={48}
-                    placeholder="e.g. The Borg family"
+                    placeholder="e.g. Family pantry"
                     aria-label="Household name"
                     className="h-11 rounded-2xl border-border/50 bg-background/80 text-[16px] font-semibold tracking-[-0.02em]"
                   />

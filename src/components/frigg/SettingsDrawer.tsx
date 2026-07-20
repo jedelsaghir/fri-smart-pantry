@@ -22,15 +22,8 @@ import { APP_BUILD } from "@/lib/app-build";
 import { readLocalSyncMeta } from "@/lib/household-sync";
 import { flushHouseholdPush, pullAndMergeOnLogin } from "@/lib/run-household-sync";
 import { loadSyncCreds } from "@/lib/sync-session";
+import { listLocalAccounts, wipeAllFriggLocalData } from "@/lib/reset-app";
 import { getPlatform } from "@/platform";
-import {
-  loadAccounts,
-  loadFamilyMembers,
-  memberStatusLabel,
-  CURRENT_USER_KEY,
-  type FamilyAccount,
-} from "@/lib/family";
-import type { FamilyMember } from "@/types/pantry";
 
 export function SettingsDrawer({
   open,
@@ -80,6 +73,7 @@ export function SettingsDrawer({
   onLogout: () => void;
 }) {
   const [syncBusy, setSyncBusy] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
   const [syncInfo, setSyncInfo] = useState<{
     backend: string;
     durable: boolean;
@@ -87,19 +81,6 @@ export function SettingsDrawer({
     lastPulledAt?: string;
     lastError?: string;
   }>({ backend: "…", durable: false });
-
-  const [accounts, setAccounts] = useState<FamilyAccount[]>([]);
-  const [members, setMembers] = useState<FamilyMember[]>([]);
-  const [currentAccountId, setCurrentAccountId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    try {
-      setAccounts(loadAccounts());
-      setMembers(loadFamilyMembers());
-      setCurrentAccountId(localStorage.getItem(CURRENT_USER_KEY));
-    } catch {}
-  }, [open, syncInfo.lastPulledAt, syncInfo.lastPushedAt]);
 
   useEffect(() => {
     if (!open) return;
@@ -269,62 +250,6 @@ export function SettingsDrawer({
             </div>
           </div>
 
-          {/* Active accounts */}
-          <div className="elevated-card rounded-3xl p-4 space-y-3">
-            <div className="flex items-baseline justify-between gap-3">
-              <div className="font-semibold">Active accounts</div>
-              <div className="text-[11px] text-muted-foreground tabular-nums">
-                {accounts.length} on this device
-              </div>
-            </div>
-            {accounts.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No accounts yet on this device. Sign in on another device with the same email to sync.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {accounts.map((acct) => {
-                  const member = members.find((m) => m.id === acct.memberId);
-                  const role = member ? memberStatusLabel(member.status) : "Member";
-                  const isYou = acct.id === currentAccountId;
-                  return (
-                    <li
-                      key={acct.id}
-                      className="flex items-center gap-3 rounded-2xl bg-secondary/50 px-3 py-2.5"
-                    >
-                      <div className="text-2xl shrink-0" aria-hidden>
-                        {acct.emoji || member?.emoji || "👤"}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-semibold">
-                            {acct.name || "Unnamed"}
-                          </span>
-                          {isYou && (
-                            <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-foreground">
-                              You
-                            </span>
-                          )}
-                        </div>
-                        <div className="truncate text-[11px] text-muted-foreground">
-                          {acct.email}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-[11px] font-medium text-muted-foreground">
-                        {role}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {syncInfo.lastPulledAt && (
-              <p className="text-[11px] text-muted-foreground">
-                Last synced {new Date(syncInfo.lastPulledAt).toLocaleString()}
-              </p>
-            )}
-          </div>
-
           {/* Alerts */}
           <div className="elevated-card rounded-3xl p-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -477,6 +402,57 @@ export function SettingsDrawer({
             >
               {syncBusy ? "Syncing…" : "Sync now"}
             </button>
+          </div>
+
+          {/* Danger: wipe everything on this device */}
+          <div className="elevated-card rounded-3xl p-4 space-y-2 border border-destructive/25">
+            <div className="font-semibold text-destructive">Start fresh</div>
+            <p className="text-xs text-muted-foreground leading-snug">
+              Delete all accounts, pantry, receipts, and household data on{" "}
+              <span className="font-medium text-foreground">this device</span>. You will return to
+              the login screen. Repeat on each device (PC and iOS) if both have old data.
+            </p>
+            {!confirmWipe ? (
+              <button
+                type="button"
+                onClick={() => setConfirmWipe(true)}
+                className="touch-target w-full rounded-2xl border border-destructive/40 py-2.5 text-xs font-semibold text-destructive active:bg-destructive/10"
+              >
+                Delete all accounts &amp; data…
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[12px] font-medium text-destructive">
+                  This cannot be undone on this device.
+                  {listLocalAccounts().length > 0
+                    ? ` ${listLocalAccounts().length} account(s) will be removed.`
+                    : " No accounts stored (or already empty)."}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmWipe(false)}
+                    className="touch-target flex-1 rounded-2xl border py-2.5 text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { removedKeys } = wipeAllFriggLocalData();
+                      toast.success("All data wiped", {
+                        description: `Cleared ${removedKeys.length} keys. Starting fresh…`,
+                      });
+                      onOpenChange(false);
+                      window.setTimeout(() => window.location.reload(), 300);
+                    }}
+                    className="touch-target flex-1 rounded-2xl bg-destructive py-2.5 text-xs font-semibold text-destructive-foreground"
+                  >
+                    Wipe everything
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="text-[11px] text-muted-foreground px-1 pt-1 space-y-1">

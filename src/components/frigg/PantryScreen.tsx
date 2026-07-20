@@ -262,8 +262,13 @@ export function PantryScreen() {
     (id: string) => {
       setFamilyMembers((prev) => {
         const target = prev.find((m) => m.id === id);
+        // Allow removing pending invites and joined members; never the owner / self
         if (!target || target.isYou || target.status === "owner") return prev;
-        addActivity("You", `removed ${target.name} from the household`);
+        const action =
+          target.status === "pending"
+            ? `cancelled invite for ${target.name}`
+            : `removed ${target.name} from the household`;
+        addActivity("You", action);
         return prev.filter((m) => m.id !== id);
       });
     },

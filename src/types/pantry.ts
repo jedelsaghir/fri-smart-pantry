@@ -127,7 +127,7 @@ export type FamilyMember = {
   id: string;
   name: string;
   emoji: string;
-  /** Phone digits for WhatsApp invites (E.164 or local) */
+  /** Optional phone (display only; invites are shareable links) */
   phone?: string;
   /** Unique code embedded in invite links */
   inviteCode: string;

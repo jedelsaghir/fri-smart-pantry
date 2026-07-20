@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Plus,
@@ -8,7 +8,6 @@ import {
   Package,
   Users,
   Activity,
-  MessageCircle,
   QrCode,
   Copy,
   Check,
@@ -32,7 +31,6 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   buildInviteUrl,
-  buildWhatsAppInviteLink,
   buildQrImageUrl,
   formatPhoneDisplay,
   generateInviteCode,
@@ -100,9 +98,13 @@ export function ManageFamilyPage({
   const [newPhone, setNewPhone] = useState("");
   const [newEmoji, setNewEmoji] = useState(DEFAULT_EMOJI);
   const [pendingRemove, setPendingRemove] = useState<FamilyMember | null>(null);
+  /** Survives AlertDialog close race so Remove always applies (pending + joined) */
+  const pendingRemoveRef = useRef<FamilyMember | null>(null);
   const [inviteSheetMember, setInviteSheetMember] = useState<FamilyMember | null>(null);
   const [inviteSheetMode, setInviteSheetMode] = useState<"share" | "qr">("share");
   const [copied, setCopied] = useState(false);
+  /** Which member row last copied a link (for button label) */
+  const [copiedMemberId, setCopiedMemberId] = useState<string | null>(null);
   const [editingHousehold, setEditingHousehold] = useState(false);
   const [householdDraft, setHouseholdDraft] = useState(householdName);
 
@@ -145,66 +147,113 @@ export function ManageFamilyPage({
       status: "pending",
     });
     toast.success("Invite ready", {
-      description: `Add ${trimmed}, then share WhatsApp or QR so they can create an account.`,
+      description: `Copy the invite link and send it to ${trimmed} however you like.`,
     });
     resetAddForm();
   };
 
-  const confirmRemove = () => {
-    if (!pendingRemove) return;
-    if (pendingRemove.isYou || pendingRemove.status === "owner") {
-      toast.error("Can't remove yourself", { description: "You are the account owner." });
-      setPendingRemove(null);
+  const canRemoveMember = (member: FamilyMember) =>
+    !member.isYou && member.status !== "owner";
+
+  const requestRemove = (member: FamilyMember) => {
+    if (!canRemoveMember(member)) {
+      toast.error("Can't remove", {
+        description:
+          member.isYou || member.status === "owner"
+            ? "You can't remove the account owner."
+            : "This member can't be removed.",
+      });
       return;
     }
-    onRemoveMember(pendingRemove.id);
-    toast.success("Member removed", { description: `${pendingRemove.name} left the household.` });
+    pendingRemoveRef.current = member;
+    setPendingRemove(member);
+  };
+
+  const confirmRemove = () => {
+    const target = pendingRemoveRef.current ?? pendingRemove;
+    pendingRemoveRef.current = null;
     setPendingRemove(null);
+    if (!target) return;
+    if (!canRemoveMember(target)) {
+      toast.error("Can't remove", {
+        description: "You can't remove the account owner.",
+      });
+      return;
+    }
+    onRemoveMember(target.id);
+    const wasPending = target.status === "pending";
+    toast.success(wasPending ? "Invite cancelled" : "Member removed", {
+      description: wasPending
+        ? `${target.name}'s pending invite was deleted.`
+        : `${target.name} was removed from the household.`,
+    });
+  };
+
+  const ensureInviteCode = (member: FamilyMember): FamilyMember => {
+    if (member.inviteCode) return member;
+    const code = generateInviteCode();
+    onUpdateMember?.(member.id, {
+      inviteCode: code,
+      status: member.status === "owner" ? "owner" : member.status,
+    });
+    return { ...member, inviteCode: code };
   };
 
   const openInviteSheet = (member: FamilyMember, mode: "share" | "qr" = "share") => {
-    if (!member.inviteCode) {
-      const code = generateInviteCode();
-      onUpdateMember?.(member.id, { inviteCode: code, status: member.status === "owner" ? "owner" : member.status });
-      setInviteSheetMember({ ...member, inviteCode: code });
-    } else {
-      setInviteSheetMember(member);
-    }
+    const withCode = ensureInviteCode(member);
+    setInviteSheetMember(withCode);
     setInviteSheetMode(mode);
     setCopied(false);
   };
 
-  const handleWhatsApp = (member: FamilyMember) => {
-    // Ensure member has an invite code before sharing
-    let code = member.inviteCode;
-    if (!code) {
-      code = generateInviteCode();
-      onUpdateMember?.(member.id, { inviteCode: code });
+  const copyText = async (text: string): Promise<boolean> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        return ok;
+      } catch {
+        return false;
+      }
     }
-    const link = buildWhatsAppInviteLink({
-      phone: member.phone,
-      householdName,
-      inviteCode: code,
-      inviteeName: member.name,
-    });
-    window.open(link, "_blank", "noopener,noreferrer");
-    toast.success("Opening WhatsApp", {
-      description: member.phone?.trim()
-        ? `Invite for ${member.name} is ready to send.`
-        : "Pick a contact in WhatsApp — the invite message is pre-filled.",
-    });
+  };
+
+  /** Copy invite link for a member (from row or sheet) — user sends via WhatsApp/etc themselves */
+  const copyMemberInviteLink = async (member: FamilyMember) => {
+    const withCode = ensureInviteCode(member);
+    const url = buildInviteUrl(withCode.inviteCode);
+    const ok = await copyText(url);
+    if (ok) {
+      setCopied(true);
+      setCopiedMemberId(withCode.id);
+      toast.success("Invite link copied", {
+        description: "Paste it in WhatsApp, Messages, email — wherever you invite them.",
+      });
+      setTimeout(() => {
+        setCopied(false);
+        setCopiedMemberId(null);
+      }, 2200);
+    } else {
+      openInviteSheet(withCode, "share");
+      toast.error("Couldn't copy automatically", {
+        description: "Long-press the link in the sheet to copy.",
+      });
+    }
   };
 
   const copyInviteLink = async () => {
-    if (!inviteUrl) return;
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-      toast.success("Link copied", { description: "Paste it anywhere to invite them." });
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Couldn't copy", { description: "Long-press the link to copy." });
-    }
+    if (!inviteSheetMember) return;
+    await copyMemberInviteLink(inviteSheetMember);
   };
 
   const startEditHousehold = () => {
@@ -404,12 +453,16 @@ export function ManageFamilyPage({
                               : member.email || "Household member"}
                       </p>
                     </div>
-                    {!member.isYou && member.status !== "owner" && (
+                    {canRemoveMember(member) && (
                       <button
                         type="button"
-                        aria-label={`Remove ${member.name}`}
-                        onClick={() => setPendingRemove(member)}
-                        className="grid size-10 shrink-0 place-items-center rounded-2xl border border-border/50 text-destructive/80 active:scale-[0.96] active:bg-destructive/10 transition"
+                        aria-label={
+                          isPending
+                            ? `Cancel invite for ${member.name}`
+                            : `Remove ${member.name}`
+                        }
+                        onClick={() => requestRemove(member)}
+                        className="touch-target grid size-11 shrink-0 place-items-center rounded-2xl border border-destructive/35 bg-destructive/5 text-destructive active:scale-[0.96] active:bg-destructive/15 transition"
                       >
                         <Trash2 className="size-4" strokeWidth={2.25} />
                       </button>
@@ -417,19 +470,23 @@ export function ManageFamilyPage({
                   </div>
 
                   {canInvite && (
-                    <div className="mt-3 flex flex-col gap-2">
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                       <button
                         type="button"
-                        onClick={() => handleWhatsApp(member)}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-[#25D366]/15 px-3 py-2.5 text-[12px] font-semibold text-[#128C7E] dark:text-[#25D366] ring-1 ring-[#25D366]/25 active:scale-[0.98] transition"
+                        onClick={() => void copyMemberInviteLink(member)}
+                        className="flex w-full flex-1 items-center justify-center gap-1.5 rounded-2xl bg-brand/12 px-3 py-2.5 text-[12px] font-semibold text-brand ring-1 ring-brand/25 active:scale-[0.98] transition touch-manipulation"
                       >
-                        <MessageCircle className="size-3.5" strokeWidth={2.25} />
-                        WhatsApp
+                        {copiedMemberId === member.id ? (
+                          <Check className="size-3.5" strokeWidth={2.25} />
+                        ) : (
+                          <Copy className="size-3.5" strokeWidth={2.25} />
+                        )}
+                        {copiedMemberId === member.id ? "Copied" : "Copy invite link"}
                       </button>
                       <button
                         type="button"
                         onClick={() => openInviteSheet(member, "qr")}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-secondary/70 px-3 py-2.5 text-[12px] font-semibold text-foreground ring-1 ring-border/40 active:scale-[0.98] transition"
+                        className="flex w-full flex-1 items-center justify-center gap-1.5 rounded-2xl bg-secondary/70 px-3 py-2.5 text-[12px] font-semibold text-foreground ring-1 ring-border/40 active:scale-[0.98] transition touch-manipulation"
                       >
                         <QrCode className="size-3.5" strokeWidth={2.25} />
                         QR code
@@ -506,7 +563,7 @@ export function ManageFamilyPage({
 
               <div>
                 <label htmlFor="member-phone" className="mb-1.5 block text-[13px] font-semibold text-foreground">
-                  Phone <span className="font-normal text-muted-foreground">(for WhatsApp)</span>
+                  Phone <span className="font-normal text-muted-foreground">(optional)</span>
                 </label>
                 <Input
                   id="member-phone"
@@ -518,7 +575,7 @@ export function ManageFamilyPage({
                   className="h-12 rounded-2xl border-border/50 bg-secondary/40 px-4 text-[15px] shadow-none focus-visible:ring-[var(--color-fresh)]/40"
                 />
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Include country code for best WhatsApp delivery.
+                  Optional note for your household list — invites are sent via copy link.
                 </p>
               </div>
 
@@ -635,6 +692,7 @@ export function ManageFamilyPage({
               <div className="flex flex-col items-center py-2">
                 <div className="rounded-3xl bg-white p-4 shadow-inner ring-1 ring-border/30">
                   {qrUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={qrUrl}
                       alt={`QR invite for ${inviteSheetMember.name}`}
@@ -663,27 +721,20 @@ export function ManageFamilyPage({
                     {inviteUrl}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={copyInviteLink}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/60 py-3 text-sm font-semibold active:bg-secondary/60 transition"
-                >
-                  {copied ? <Check className="size-4 text-[var(--color-fresh)]" /> : <Copy className="size-4" />}
-                  {copied ? "Copied" : "Copy invite link"}
-                </button>
               </div>
             )}
 
             <button
               type="button"
-              onClick={() => {
-                handleWhatsApp(inviteSheetMember);
-              }}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25D366] py-3.5 text-sm font-semibold text-white active:scale-[0.985] transition"
+              onClick={() => void copyInviteLink()}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition touch-manipulation"
             >
-              <MessageCircle className="size-4" />
-              Invite via WhatsApp
+              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              {copied ? "Copied" : "Copy invite link"}
             </button>
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              Send the link yourself in WhatsApp, Messages, or email.
+            </p>
 
             {onSimulateAcceptInvite && inviteSheetMember.status === "pending" && (
               <button
@@ -702,24 +753,47 @@ export function ManageFamilyPage({
         </div>
       )}
 
-      {/* Remove confirmation */}
-      <AlertDialog open={!!pendingRemove} onOpenChange={(open) => !open && setPendingRemove(null)}>
-        <AlertDialogContent className="max-w-[min(22rem,calc(100vw-2rem))] rounded-3xl border-border/50">
+      {/* Remove confirmation — pending invites and active members */}
+      <AlertDialog
+        open={!!pendingRemove}
+        onOpenChange={(open) => {
+          if (!open) {
+            // Don't clear ref here — confirmRemove may still need it after Action click
+            setPendingRemove(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="z-[110] max-w-[min(22rem,calc(100vw-2rem))] rounded-3xl border-border/50">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display text-[22px] tracking-[-0.02em]">
-              Remove {pendingRemove?.name}?
+              {pendingRemove?.status === "pending"
+                ? `Cancel invite for ${pendingRemove?.name}?`
+                : `Remove ${pendingRemove?.name}?`}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-[14px] leading-relaxed">
-              Their invite and account access to this shared pantry will be revoked. You can invite them again later.
+              {pendingRemove?.status === "pending"
+                ? "Their pending invite will be deleted. You can create a new invite later."
+                : "They will lose access to this shared pantry. You can invite them again later."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2">
-            <AlertDialogCancel className="rounded-2xl">Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              className="rounded-2xl"
+              onClick={() => {
+                pendingRemoveRef.current = null;
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmRemove}
+              onClick={(e) => {
+                // Ensure we run remove before dialog unmount clears UI state
+                e.preventDefault();
+                confirmRemove();
+              }}
               className="rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Remove
+              {pendingRemove?.status === "pending" ? "Cancel invite" : "Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

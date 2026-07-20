@@ -285,11 +285,14 @@ export function ItemDetailsDrawer({
   onClose,
   onPatch,
   onMove,
+  onRequestDelete,
 }: {
   detailsItem: DetailsItemState | null;
   onClose: () => void;
   onPatch: (id: string, patch: Partial<PantryItem>) => void;
   onMove: (id: string, from: StorageKey, to: StorageKey) => void;
+  /** Confirm-gated delete (qty 0 / remove item) */
+  onRequestDelete?: (id: string) => void;
 }) {
   const open = !!detailsItem;
 
@@ -303,6 +306,7 @@ export function ItemDetailsDrawer({
             storage={detailsItem.storage}
             onPatch={onPatch}
             onMove={onMove}
+            onRequestDelete={onRequestDelete}
           />
         )}
       </DrawerContent>
@@ -315,11 +319,13 @@ function DetailsBody({
   storage,
   onPatch,
   onMove,
+  onRequestDelete,
 }: {
   item: PantryItem;
   storage: StorageKey;
   onPatch: (id: string, patch: Partial<PantryItem>) => void;
   onMove: (id: string, from: StorageKey, to: StorageKey) => void;
+  onRequestDelete?: (id: string) => void;
 }) {
   const status = getStatus(item.daysLeft);
   const isCurrent = (target: StorageKey) => storage === target;
@@ -471,14 +477,29 @@ function DetailsBody({
           </div>
           <TapNumberControl
             value={item.qty}
-            onChange={(qty) => onPatch(item.id, { qty })}
+            onChange={(qty) => {
+              if (qty <= 0) {
+                onRequestDelete?.(item.id);
+                return;
+              }
+              onPatch(item.id, { qty });
+            }}
             min={0}
             ariaLabel="quantity"
             valueClassName="text-2xl"
           />
           <p className="mt-1 px-0.5 text-[11px] text-muted-foreground">
-            Tap the number to type a value.
+            Tap the number to type. Setting quantity to 0 asks to delete the item.
           </p>
+          {onRequestDelete && (
+            <button
+              type="button"
+              onClick={() => onRequestDelete(item.id)}
+              className="mt-2 w-full rounded-2xl border border-destructive/30 py-2.5 text-sm font-semibold text-destructive active:bg-destructive/10 transition"
+            >
+              Delete item…
+            </button>
+          )}
         </div>
 
         {/* Expiration — real calendar date (no +/−) */}

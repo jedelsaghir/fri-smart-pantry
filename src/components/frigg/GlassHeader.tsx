@@ -14,6 +14,9 @@ interface Props {
   isShared?: boolean;
   onShowFamily?: () => void;
   onOpenSettings?: () => void;
+  /** Alerts / attention items (expiry, low stock) — not the family drawer */
+  onShowAlerts?: () => void;
+  alertsCount?: number;
 }
 
 export function GlassHeader({
@@ -29,18 +32,22 @@ export function GlassHeader({
   isShared,
   onShowFamily,
   onOpenSettings,
+  onShowAlerts,
+  alertsCount,
 }: Props) {
-  const showAttentionDot = expiringSoon > 0;
+  const alertTotal = alertsCount ?? expiringSoon;
+  const showAttentionDot = alertTotal > 0;
   const resolvedLabel = attentionLabel ?? "need attention";
   const resolvedTone = attentionTone ?? (expiringSoon > 0 ? "warn" : "calm");
 
   return (
     <header className="sticky top-0 z-40 glass">
       <div className="px-5 pb-4 pt-[max(1.35rem,env(safe-area-inset-top))]">
-        {/* Top row: household + shared indicator + avatars + notifications */}
+        {/* Top row: household + shared indicator + avatars + alerts */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onShowFamily}
               className="flex items-center gap-2 rounded-full bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold text-foreground/85 active:bg-secondary/80 transition"
             >
@@ -53,7 +60,12 @@ export function GlassHeader({
               </span>
             )}
             {familyMembers && familyMembers.length > 0 && (
-              <div className="flex items-center -space-x-1 ml-1" onClick={onShowFamily}>
+              <button
+                type="button"
+                className="flex items-center -space-x-1 ml-1 rounded-full"
+                onClick={onShowFamily}
+                aria-label="Open household"
+              >
                 {familyMembers.slice(0, 3).map((m, i) => (
                   <div
                     key={i}
@@ -68,22 +80,24 @@ export function GlassHeader({
                     +{familyMembers.length - 3}
                   </div>
                 )}
-              </div>
+              </button>
             )}
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
-              aria-label="Account"
+              type="button"
+              aria-label="Account settings"
               onClick={onOpenSettings}
               className="grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
             >
               <User className="size-4" />
             </button>
             <button
-              aria-label="Notifications"
+              type="button"
+              aria-label="Alerts"
               className="relative grid size-10 place-items-center rounded-full bg-secondary/60 text-foreground/75 active:bg-secondary/80 active:scale-[0.96] transition"
-              onClick={onShowFamily}
+              onClick={onShowAlerts}
             >
               <Bell className="size-4" />
               {showAttentionDot && (

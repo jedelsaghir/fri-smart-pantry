@@ -12,12 +12,12 @@ Derived from the full repo audit. Work top-down (P0 → P1 → P2).
 
 | ID | Status | Area | Fix | Acceptance criteria |
 |----|--------|------|-----|---------------------|
-| P0-1 | todo | Pantry | **Confirm before qty hits 0** (drawer / any qty path). Soft-archive or confirm instead of silent delete via `patchItem` / steppers. | Setting quantity to 0 always shows confirm; cancel leaves qty unchanged; confirm removes item (and still records catalog delete if applicable). |
-| P0-2 | todo | Settings | **Wire or remove Profile Edit.** Either open editable profile (name, email, emoji) persisted to `friggg-profile`, or remove the Edit button. | No dead control; profile shown matches stored profile (not hardcoded Elena only). |
-| P0-3 | todo | Settings | **Wire or remove Notifications toggle.** Persist preference; if no notification system yet, hide toggle and show “Coming soon” or implement local expiry reminders later. | Toggle either works + persists, or is not shown as a working control. |
-| P0-4 | todo | Shopping list | **Persist shopping list** to `localStorage` (e.g. `friggg-shopping-list`). Load on mount. | Refresh keeps list; regenerate/clear still behave correctly. |
-| P0-5 | todo | Header | **Bell control semantics.** Either open a real notifications panel, or relabel / change icon so it doesn’t claim “Notifications” while opening Family. | Label/action match; no misleading ARIA. |
-| P0-6 | todo | Receipt scan | **Label demo scan clearly** until camera/OCR are real (“Demo detection” / banner on capture). | User can tell Take Photo doesn’t read the image; Library still stores photo + mock lines. |
+| P0-1 | done | Pantry | **Confirm before qty hits 0** (drawer / any qty path). Soft-archive or confirm instead of silent delete via `patchItem` / steppers. | Setting quantity to 0 always shows confirm; cancel leaves qty unchanged; confirm removes item (and still records catalog delete if applicable). |
+| P0-2 | done | Settings | **Wire or remove Profile Edit.** Either open editable profile (name, email, emoji) persisted to `friggg-profile`, or remove the Edit button. | No dead control; profile shown matches stored profile (not hardcoded Elena only). |
+| P0-3 | done | Settings | **Wire or remove Notifications toggle.** Persist preference; if no notification system yet, hide toggle and show “Coming soon” or implement local expiry reminders later. | Toggle either works + persists, or is not shown as a working control. |
+| P0-4 | done | Shopping list | **Persist shopping list** to `localStorage` (e.g. `friggg-shopping-list`). Load on mount. | Refresh keeps list; regenerate/clear still behave correctly. |
+| P0-5 | done | Header | **Bell control semantics.** Either open a real notifications panel, or relabel / change icon so it doesn’t claim “Notifications” while opening Family. | Label/action match; no misleading ARIA. |
+| P0-6 | done | Receipt scan | **Label demo scan clearly** until camera/OCR are real (“Demo detection” / banner on capture). | User can tell Take Photo doesn’t read the image; Library still stores photo + mock lines. |
 
 ---
 
@@ -89,6 +89,7 @@ When implementing P0-6, keep demo paths until D-2 is scheduled.
 | Date | IDs | Note |
 |------|-----|------|
 | 2026-07-19 | — | List created from full repo audit. |
+| 2026-07-19 | P0-1…P0-6 | Implemented: qty-0 confirm, profile edit, in-app alerts pref + Alerts drawer, shopping list persist, scan demo label. |
 
 ---
 

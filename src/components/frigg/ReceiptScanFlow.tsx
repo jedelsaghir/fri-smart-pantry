@@ -259,6 +259,12 @@ export function ReceiptScanFlow({
         <div className="flex-1 overflow-y-auto px-5 py-6">
           {step === "capture" && (
             <div className="flex flex-col h-full">
+              {/* P0-6: demo detection is not real OCR */}
+              <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-[12px] leading-snug text-foreground/90">
+                <span className="font-semibold">Demo detection.</span>{" "}
+                Item lines are simulated for now. Photos from your library are stored; Take Photo does not use a live camera yet.
+              </div>
+
               {/* Camera viewfinder simulation */}
               <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="w-full max-w-[320px] aspect-[3/4] rounded-3xl border border-border/60 bg-secondary/30 flex flex-col items-center justify-center relative overflow-hidden">
@@ -268,7 +274,7 @@ export function ReceiptScanFlow({
                     </div>
                     <p className="text-base font-medium text-foreground">Point your camera at the receipt</p>
                     <p className="mt-1.5 text-sm text-muted-foreground">
-                      Make sure the text is clear and well lit
+                      Demo mode — detection uses sample items
                     </p>
                   </div>
 
@@ -301,7 +307,7 @@ export function ReceiptScanFlow({
                 </label>
 
                 <p className="text-center text-[11px] text-muted-foreground pt-1">
-                  We’ll detect items and add them automatically
+                  Demo: sample items are added automatically · photo saved when you pick from library
                 </p>
               </div>
             </div>

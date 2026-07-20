@@ -180,9 +180,10 @@ export function usePantry(options: UsePantryOptions = {}) {
     (id: string, delta: number) => {
       setItems((prev) => {
         const item = prev[active].find((i) => i.id === id);
-        const newItems = prev[active]
-          .map((i) => (i.id === id ? { ...i, qty: Math.max(0, i.qty + delta) } : i))
-          .filter((i) => i.qty > 0);
+        // Clamp qty to ≥ 1; deletion must use removeItem + confirm
+        const newItems = prev[active].map((i) =>
+          i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i
+        );
         if (item) {
           const verb = delta > 0 ? "added" : "used";
           onActivity?.("You", `${verb} ${Math.abs(delta)} ${item.unit} ${item.name}`);
@@ -195,12 +196,14 @@ export function usePantry(options: UsePantryOptions = {}) {
 
   /**
    * Patch any fields on an item across all storages and keep the open
-   * details drawer in sync (live save). Removes item if qty hits 0.
+   * details drawer in sync (live save).
+   * Qty is clamped to ≥ 1 — removal must go through removeItem + confirm (P0-1).
    */
   const patchItem = useCallback((id: string, patch: Partial<PantryItem>) => {
     const normalized: Partial<PantryItem> = { ...patch };
     if (typeof normalized.qty === "number") {
-      normalized.qty = Math.max(0, normalized.qty);
+      // Never auto-delete via qty; keep at least 1. Use removeItem to delete.
+      normalized.qty = Math.max(1, Math.floor(normalized.qty));
     }
     if (typeof normalized.minStock === "number") {
       normalized.minStock = Math.max(0, normalized.minStock);
@@ -233,21 +236,14 @@ export function usePantry(options: UsePantryOptions = {}) {
     setItems((prev) => {
       const next = { ...prev };
       (Object.keys(next) as StorageKey[]).forEach((storage) => {
-        next[storage] = next[storage]
-          .map((i) => (i.id === id ? apply(i) : i))
-          .filter((i) => i.qty > 0);
+        next[storage] = next[storage].map((i) => (i.id === id ? apply(i) : i));
       });
       return next;
     });
 
     setDetailsItem((prev) => {
       if (!prev || prev.item.id !== id) return prev;
-      const nextItem = apply(prev.item);
-      if (typeof normalized.qty === "number" && normalized.qty <= 0) {
-        setTimeout(() => setDetailsItem(null), 60);
-        return null;
-      }
-      return { ...prev, item: nextItem };
+      return { ...prev, item: apply(prev.item) };
     });
   }, []);
 
@@ -265,42 +261,35 @@ export function usePantry(options: UsePantryOptions = {}) {
     [patchItem]
   );
 
-  /** Cross-storage qty update used by details drawer (keeps drawer state in sync) */
-  const updateItemQty = useCallback(
-    (id: string, delta: number) => {
-      setItems((prev) => {
-        let currentQty: number | null = null;
-        for (const storage of Object.keys(prev) as StorageKey[]) {
-          const found = prev[storage].find((i) => i.id === id);
-          if (found) {
-            currentQty = found.qty;
-            break;
-          }
+  /** Cross-storage qty update (keeps drawer in sync). Qty clamped ≥ 1. */
+  const updateItemQty = useCallback((id: string, delta: number) => {
+    setItems((prev) => {
+      let currentQty: number | null = null;
+      for (const storage of Object.keys(prev) as StorageKey[]) {
+        const found = prev[storage].find((i) => i.id === id);
+        if (found) {
+          currentQty = found.qty;
+          break;
         }
-        if (currentQty === null) return prev;
-        const newQty = Math.max(0, currentQty + delta);
+      }
+      if (currentQty === null) return prev;
+      const newQty = Math.max(1, currentQty + delta);
 
-        const next = { ...prev };
-        (Object.keys(next) as StorageKey[]).forEach((storage) => {
-          next[storage] = next[storage]
-            .map((i) => (i.id === id ? { ...i, qty: newQty } : i))
-            .filter((i) => i.qty > 0);
-        });
-        return next;
+      const next = { ...prev };
+      (Object.keys(next) as StorageKey[]).forEach((storage) => {
+        next[storage] = next[storage].map((i) =>
+          i.id === id ? { ...i, qty: newQty } : i
+        );
       });
+      return next;
+    });
 
-      setDetailsItem((prev) => {
-        if (!prev || prev.item.id !== id) return prev;
-        const newQty = Math.max(0, prev.item.qty + delta);
-        if (newQty <= 0) {
-          setTimeout(() => setDetailsItem(null), 60);
-          return null;
-        }
-        return { ...prev, item: { ...prev.item, qty: newQty } };
-      });
-    },
-    []
-  );
+    setDetailsItem((prev) => {
+      if (!prev || prev.item.id !== id) return prev;
+      const newQty = Math.max(1, prev.item.qty + delta);
+      return { ...prev, item: { ...prev.item, qty: newQty } };
+    });
+  }, []);
 
   const updateItemName = useCallback(
     (id: string, name: string) => {

@@ -72,8 +72,29 @@ export function PantryScreen() {
     return () => clearTimeout(t);
   }, []);
 
-  // Simple profile from onboarding (demo)
+  // Profile (persisted)
   const [userName, setUserName] = useState("Elena");
+  const [userFullName, setUserFullName] = useState("Elena Borg");
+  const [userEmail, setUserEmail] = useState("elena@borg.family");
+  const [userEmoji, setUserEmoji] = useState("👩‍🍳");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    name: "Elena Borg",
+    email: "elena@borg.family",
+    emoji: "👩‍🍳",
+  });
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const v = localStorage.getItem("friggg-notifications");
+      if (v === null) return true;
+      return v === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [showAlerts, setShowAlerts] = useState(false);
+
   const [householdName, setHouseholdName] = useState(() =>
     typeof window === "undefined" ? "The Borg family" : loadHouseholdName("The Borg family")
   );
@@ -82,11 +103,46 @@ export function PantryScreen() {
       const p = localStorage.getItem("friggg-profile");
       if (p) {
         const parsed = JSON.parse(p);
-        if (parsed?.name) setUserName(parsed.name.split(" ")[0] || "Elena");
+        if (parsed?.name) {
+          setUserFullName(parsed.name);
+          setUserName(parsed.name.split(" ")[0] || "Elena");
+        }
+        if (parsed?.email) setUserEmail(parsed.email);
+        if (parsed?.emoji) setUserEmoji(parsed.emoji);
       }
       setHouseholdName(loadHouseholdName("The Borg family"));
     } catch {}
   }, []);
+
+  const saveProfile = () => {
+    const name = profileDraft.name.trim() || "Elena Borg";
+    const email = profileDraft.email.trim() || "you@family.com";
+    const emoji = profileDraft.emoji.trim() || "👤";
+    try {
+      localStorage.setItem(
+        "friggg-profile",
+        JSON.stringify({ name, email, emoji })
+      );
+    } catch {}
+    setUserFullName(name);
+    setUserName(name.split(" ")[0] || name);
+    setUserEmail(email);
+    setUserEmoji(emoji);
+    setEditingProfile(false);
+    toast.success("Profile updated");
+  };
+
+  const toggleNotifications = (checked: boolean) => {
+    setNotificationsEnabled(checked);
+    try {
+      localStorage.setItem("friggg-notifications", String(checked));
+    } catch {}
+    toast.message(checked ? "Alerts on" : "Alerts off", {
+      description: checked
+        ? "We’ll surface expiry and low-stock in the Alerts panel."
+        : "In-app alerts preference saved. Push notifications aren’t enabled yet.",
+    });
+  };
 
   // Dark mode (respects system + persisted, clean calm dark theme)
   const [isDark, setIsDark] = useState(false);
@@ -480,8 +536,23 @@ export function PantryScreen() {
     setActive(targetStorage);
   };
 
-  // Shopping list state (for the List tab)
-  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
+  // Shopping list state (persisted — P0-4)
+  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("friggg-shopping-list");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed as ShoppingListItem[];
+      }
+    } catch {}
+    return [];
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("friggg-shopping-list", JSON.stringify(shoppingList));
+    } catch {}
+  }, [shoppingList]);
 
   // Compute items that should be on the shopping list (below min or running low)
   const computeSuggestedItems = (): ShoppingListItem[] => {
@@ -640,6 +711,39 @@ export function PantryScreen() {
   const listCount = shoppingList.length;
   const checkedCount = shoppingList.filter((i) => i.checked).length;
 
+  // Alerts: expiring soon + low stock (for header bell)
+  const alertItems = (() => {
+    const rows: Array<{ id: string; emoji: string; name: string; reason: string; storage: StorageKey }> = [];
+    (["fridge", "freezer", "pantry"] as StorageKey[]).forEach((storage) => {
+      items[storage].forEach((item) => {
+        if (item.daysLeft <= 3) {
+          rows.push({
+            id: `${item.id}-exp`,
+            emoji: item.emoji,
+            name: item.name,
+            reason:
+              item.daysLeft <= 0
+                ? "Expired"
+                : item.daysLeft === 1
+                  ? "Use today"
+                  : `${item.daysLeft}d left`,
+            storage,
+          });
+        } else if (item.qty < (item.minStock ?? 2)) {
+          rows.push({
+            id: `${item.id}-low`,
+            emoji: item.emoji,
+            name: item.name,
+            reason: `Low stock (${item.qty} ${item.unit})`,
+            storage,
+          });
+        }
+      });
+    });
+    return rows;
+  })();
+  const alertsCount = notificationsEnabled ? alertItems.length : 0;
+
   // For list view we show different header stats
   const headerTotal = isListView
     ? listCount
@@ -655,7 +759,6 @@ export function PantryScreen() {
       : isFinancesView
         ? new Set(receipts.map((r) => r.store)).size
         : expiringSoon;
-  const attentionTone = isListView || isRecipesView || isFinancesView ? "calm" : (headerAttention > 0 ? "warn" : "calm");
 
   // === RECIPES DATA & HELPERS ===
 
@@ -882,6 +985,8 @@ export function PantryScreen() {
         isShared={true}
         onShowFamily={() => setShowFamilyDrawer(true)}
         onOpenSettings={() => setShowSettings(true)}
+        onShowAlerts={() => setShowAlerts(true)}
+        alertsCount={alertsCount}
       />
 
       <main className="px-5 pt-5">
@@ -1296,16 +1401,78 @@ export function PantryScreen() {
           </DrawerHeader>
 
           <div className="px-5 pb-3 space-y-4 text-sm">
-            {/* Profile */}
+            {/* Profile — editable (P0-2) */}
             <div className="elevated-card rounded-3xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="text-3xl">👩‍🍳</div>
-                <div className="flex-1">
-                  <div className="font-semibold">Elena Borg</div>
-                  <div className="text-xs text-muted-foreground">elena@borg.family</div>
+              {editingProfile ? (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      value={profileDraft.emoji}
+                      onChange={(e) =>
+                        setProfileDraft((d) => ({ ...d, emoji: e.target.value }))
+                      }
+                      className="h-11 w-14 rounded-2xl border border-border/50 bg-background/80 text-center text-xl"
+                      aria-label="Emoji"
+                      maxLength={4}
+                    />
+                    <input
+                      value={profileDraft.name}
+                      onChange={(e) =>
+                        setProfileDraft((d) => ({ ...d, name: e.target.value }))
+                      }
+                      className="h-11 min-w-0 flex-1 rounded-2xl border border-border/50 bg-background/80 px-3 font-semibold"
+                      aria-label="Full name"
+                    />
+                  </div>
+                  <input
+                    value={profileDraft.email}
+                    onChange={(e) =>
+                      setProfileDraft((d) => ({ ...d, email: e.target.value }))
+                    }
+                    type="email"
+                    className="h-11 w-full rounded-2xl border border-border/50 bg-background/80 px-3 text-sm"
+                    aria-label="Email"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingProfile(false)}
+                      className="flex-1 rounded-2xl border py-2.5 text-xs font-semibold active:bg-secondary/60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveProfile}
+                      className="flex-1 rounded-2xl bg-brand py-2.5 text-xs font-semibold text-brand-foreground active:scale-[0.985]"
+                    >
+                      Save
+                    </button>
+                  </div>
                 </div>
-                <button className="text-xs px-3 py-1 rounded-full border active:bg-secondary">Edit</button>
-              </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">{userEmoji}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold truncate">{userFullName}</div>
+                    <div className="text-xs text-muted-foreground truncate">{userEmail}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDraft({
+                        name: userFullName,
+                        email: userEmail,
+                        emoji: userEmoji,
+                      });
+                      setEditingProfile(true);
+                    }}
+                    className="text-xs px-3 py-1 rounded-full border active:bg-secondary font-semibold"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Household */}
@@ -1327,16 +1494,19 @@ export function PantryScreen() {
               <div className="text-[11px] text-muted-foreground pt-1">Shared pantry • activity visible to family</div>
             </div>
 
-            {/* Notifications */}
-            <div className="elevated-card rounded-3xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold">Notifications</div>
-                <div className="text-xs text-muted-foreground">Expiration alerts &amp; family updates</div>
+            {/* In-app alerts preference (P0-3) — not push notifications */}
+            <div className="elevated-card rounded-3xl p-4 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold">In-app alerts</div>
+                <div className="text-xs text-muted-foreground">
+                  Expiry &amp; low stock in the Alerts panel (bell). Push not available yet.
+                </div>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" className="sr-only peer" defaultChecked />
-                <div className="w-9 h-5 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--color-fresh)]" />
-              </label>
+              <Switch
+                checked={notificationsEnabled}
+                onCheckedChange={toggleNotifications}
+                aria-label="Toggle in-app alerts"
+              />
             </div>
 
             {/* PWA Install */}
@@ -1393,6 +1563,58 @@ export function PantryScreen() {
           <DrawerFooter className="pt-1 pb-6">
             <DrawerClose asChild>
               <button className="w-full rounded-3xl py-3.5 text-sm font-semibold border active:bg-secondary/60">Done</button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Alerts drawer (P0-5) — bell opens this, not family */}
+      <Drawer open={showAlerts} onOpenChange={setShowAlerts}>
+        <DrawerContent className="max-w-md mx-auto">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Alerts</DrawerTitle>
+            <DrawerDescription>
+              {notificationsEnabled
+                ? "Items that need attention in your pantry"
+                : "In-app alerts are off — turn them on in Settings"}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="px-5 pb-4 max-h-[50vh] overflow-y-auto">
+            {!notificationsEnabled ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                Enable <strong className="text-foreground">In-app alerts</strong> in Settings to see expiry and low stock here.
+              </p>
+            ) : alertItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                All clear — nothing expiring or low right now.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {alertItems.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-center gap-3 rounded-2xl bg-secondary/55 px-3 py-2.5 ring-1 ring-border/25"
+                  >
+                    <span className="text-2xl">{a.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{a.name}</p>
+                      <p className="text-[11px] text-muted-foreground capitalize">
+                        {a.storage} · {a.reason}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DrawerFooter className="pt-1 pb-6">
+            <DrawerClose asChild>
+              <button
+                type="button"
+                className="w-full rounded-3xl py-3.5 text-sm font-semibold border active:bg-secondary/60"
+              >
+                Done
+              </button>
             </DrawerClose>
           </DrawerFooter>
         </DrawerContent>
@@ -1475,6 +1697,7 @@ export function PantryScreen() {
         onClose={closeItemDetails}
         onPatch={patchItem}
         onMove={moveItem}
+        onRequestDelete={handleDeleteItem}
       />
     </div>
   );

@@ -41,7 +41,7 @@ import { AlertsDrawer } from "./AlertsDrawer";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { FamilyDrawer } from "./FamilyDrawer";
 import { ManageFamilyPage } from "./ManageFamilyPage";
-import { AdminSettingsPage } from "./AdminSettingsPage";
+import { GlobalAdminPanel } from "./GlobalAdminPanel";
 
 const FinancialsScreen = lazy(() =>
   import("./FinancialsScreen").then((m) => ({ default: m.FinancialsScreen }))
@@ -52,7 +52,6 @@ import {
   createMemberId,
   defaultFamilyMembers,
   generateInviteCode,
-  isCurrentUserOwner,
   loadFamilyMembers,
   loadHouseholdName,
   loadStoredProfile,
@@ -60,6 +59,7 @@ import {
   saveFamilyMembers,
   saveHouseholdName,
 } from "@/lib/family";
+import { isGlobalAppAdmin } from "@/lib/global-admin";
 import { firstNameFromDisplayName, personalGreeting } from "@/lib/greeting";
 import { scheduleHouseholdPush, logoutSyncSession, flushHouseholdPush } from "@/lib/run-household-sync";
 import { loadSyncCreds } from "@/lib/sync-session";
@@ -251,8 +251,9 @@ export function PantryScreen() {
   }, [activityLog]);
   const [showFamilyDrawer, setShowFamilyDrawer] = useState(false);
   const [showManageFamily, setShowManageFamily] = useState(false);
-  const [showAdminSettings, setShowAdminSettings] = useState(false);
-  const isAdmin = isCurrentUserOwner(familyMembers);
+  const [showGlobalAdmin, setShowGlobalAdmin] = useState(false);
+  /** Sole global App Admin email — not household owners or regular members */
+  const isGlobalAdmin = isGlobalAppAdmin(userEmail);
 
   const addActivity = useCallback((user: string, action: string) => {
     setActivityLog((prev) => [
@@ -321,16 +322,17 @@ export function PantryScreen() {
   const openManageFamily = useCallback(() => {
     setShowFamilyDrawer(false);
     setShowSettings(false);
-    setShowAdminSettings(false);
+    setShowGlobalAdmin(false);
     setShowManageFamily(true);
   }, []);
 
-  const openAdminSettings = useCallback(() => {
+  const openGlobalAdmin = useCallback(() => {
+    if (!isGlobalAppAdmin(userEmail)) return;
     setShowFamilyDrawer(false);
     setShowSettings(false);
     setShowManageFamily(false);
-    setShowAdminSettings(true);
-  }, []);
+    setShowGlobalAdmin(true);
+  }, [userEmail]);
 
   /** Demo: log out and open invite acceptance as the invited member */
   const simulateAcceptInvite = useCallback(
@@ -982,13 +984,16 @@ export function PantryScreen() {
         />
       )}
 
-      {showAdminSettings && isAdmin && (
-        <AdminSettingsPage
-          householdName={householdName}
-          members={familyMembers}
-          onBack={() => setShowAdminSettings(false)}
-          onRemoveMember={removeFamilyMember}
-          onUpdateMember={updateFamilyMember}
+      {showGlobalAdmin && isGlobalAdmin && (
+        <GlobalAdminPanel
+          onBack={() => setShowGlobalAdmin(false)}
+          onRegistryChanged={() => {
+            setFamilyMembers(loadFamilyMembers());
+          }}
+          onForceSignedOut={() => {
+            setShowGlobalAdmin(false);
+            doLogout();
+          }}
         />
       )}
 
@@ -1320,10 +1325,10 @@ export function PantryScreen() {
           setShowSettings(false);
           openManageFamily();
         }}
-        isAdmin={isAdmin}
-        onOpenAdminSettings={() => {
+        isGlobalAdmin={isGlobalAdmin}
+        onOpenGlobalAdmin={() => {
           setShowSettings(false);
-          openAdminSettings();
+          openGlobalAdmin();
         }}
         onInstall={() => {
           handleInstall();
@@ -1358,8 +1363,8 @@ export function PantryScreen() {
         activityLog={activityLog}
         onSimulateMember={simulateFamilyUpdate}
         onManageFamily={openManageFamily}
-        isAdmin={isAdmin}
-        onOpenAdminSettings={openAdminSettings}
+        isGlobalAdmin={isGlobalAdmin}
+        onOpenGlobalAdmin={openGlobalAdmin}
         onClearActivity={clearActivity}
       />
 

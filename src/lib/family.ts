@@ -524,6 +524,17 @@ export function signInWithAccount(
       isYou: m.id === account.memberId,
     }));
     saveFamilyMembers(members);
+    // Successful sign-in clears any simulated force-logout mark
+    try {
+      const key = "friggg-forced-logout-ids";
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const ids = JSON.parse(raw) as string[];
+        if (Array.isArray(ids) && ids.includes(account.id)) {
+          localStorage.setItem(key, JSON.stringify(ids.filter((id) => id !== account.id)));
+        }
+      }
+    } catch {}
   } catch {}
 
   return { ok: true, account };
@@ -542,12 +553,3 @@ export function memberStatusLabel(status: FamilyMemberStatus): string {
   }
 }
 
-/** True when the signed-in user is the household owner (admin). */
-export function isCurrentUserOwner(members?: FamilyMember[]): boolean {
-  const list = members ?? (typeof window !== "undefined" ? loadFamilyMembers() : []);
-  const you = list.find((m) => m.isYou);
-  if (you) return you.status === "owner";
-  // Legacy: single owner row with id "you" and no isYou flag yet
-  if (list.length === 1 && list[0].status === "owner" && list[0].id === "you") return true;
-  return false;
-}

@@ -41,6 +41,7 @@ import { AlertsDrawer } from "./AlertsDrawer";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { FamilyDrawer } from "./FamilyDrawer";
 import { ManageFamilyPage } from "./ManageFamilyPage";
+import { AdminSettingsPage } from "./AdminSettingsPage";
 
 const FinancialsScreen = lazy(() =>
   import("./FinancialsScreen").then((m) => ({ default: m.FinancialsScreen }))
@@ -51,6 +52,7 @@ import {
   createMemberId,
   defaultFamilyMembers,
   generateInviteCode,
+  isCurrentUserOwner,
   loadFamilyMembers,
   loadHouseholdName,
   loadStoredProfile,
@@ -249,6 +251,8 @@ export function PantryScreen() {
   }, [activityLog]);
   const [showFamilyDrawer, setShowFamilyDrawer] = useState(false);
   const [showManageFamily, setShowManageFamily] = useState(false);
+  const [showAdminSettings, setShowAdminSettings] = useState(false);
+  const isAdmin = isCurrentUserOwner(familyMembers);
 
   const addActivity = useCallback((user: string, action: string) => {
     setActivityLog((prev) => [
@@ -317,7 +321,15 @@ export function PantryScreen() {
   const openManageFamily = useCallback(() => {
     setShowFamilyDrawer(false);
     setShowSettings(false);
+    setShowAdminSettings(false);
     setShowManageFamily(true);
+  }, []);
+
+  const openAdminSettings = useCallback(() => {
+    setShowFamilyDrawer(false);
+    setShowSettings(false);
+    setShowManageFamily(false);
+    setShowAdminSettings(true);
   }, []);
 
   /** Demo: log out and open invite acceptance as the invited member */
@@ -970,6 +982,16 @@ export function PantryScreen() {
         />
       )}
 
+      {showAdminSettings && isAdmin && (
+        <AdminSettingsPage
+          householdName={householdName}
+          members={familyMembers}
+          onBack={() => setShowAdminSettings(false)}
+          onRemoveMember={removeFamilyMember}
+          onUpdateMember={updateFamilyMember}
+        />
+      )}
+
       <GlassHeader
         household={householdName}
         expiringSoon={headerAttention}
@@ -1298,6 +1320,11 @@ export function PantryScreen() {
           setShowSettings(false);
           openManageFamily();
         }}
+        isAdmin={isAdmin}
+        onOpenAdminSettings={() => {
+          setShowSettings(false);
+          openAdminSettings();
+        }}
         onInstall={() => {
           handleInstall();
           setShowSettings(false);
@@ -1331,6 +1358,8 @@ export function PantryScreen() {
         activityLog={activityLog}
         onSimulateMember={simulateFamilyUpdate}
         onManageFamily={openManageFamily}
+        isAdmin={isAdmin}
+        onOpenAdminSettings={openAdminSettings}
         onClearActivity={clearActivity}
       />
 

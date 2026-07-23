@@ -30,6 +30,9 @@ export function FamilyDrawer({
   activityLog,
   onSimulateMember,
   onManageFamily,
+  /** Owner-only admin entry */
+  isAdmin,
+  onOpenAdminSettings,
   onClearActivity,
 }: {
   open: boolean;
@@ -39,6 +42,8 @@ export function FamilyDrawer({
   activityLog: ActivityLogEntry[];
   onSimulateMember: (name: string) => void;
   onManageFamily: () => void;
+  isAdmin?: boolean;
+  onOpenAdminSettings?: () => void;
   onClearActivity?: () => void;
 }) {
   const [confirmClear, setConfirmClear] = useState(false);
@@ -128,6 +133,15 @@ export function FamilyDrawer({
             >
               Manage Family
             </button>
+            {isAdmin && onOpenAdminSettings && (
+              <button
+                type="button"
+                onClick={onOpenAdminSettings}
+                className="touch-target w-full rounded-3xl py-3.5 text-sm font-semibold border border-border/60 bg-secondary/50 active:scale-[0.985] active:bg-secondary/80 transition"
+              >
+                Admin Settings
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onOpenChange(false)}

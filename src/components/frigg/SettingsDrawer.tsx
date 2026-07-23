@@ -45,6 +45,9 @@ export function SettingsDrawer({
   onToggleNotifications,
   onToggleDarkMode,
   onManageFamily,
+  /** Owner-only: open Admin Settings (registered accounts) */
+  isAdmin,
+  onOpenAdminSettings,
   onInstall,
   onShowInstallHint,
   onLogout,
@@ -68,6 +71,8 @@ export function SettingsDrawer({
   onToggleNotifications: (checked: boolean) => void;
   onToggleDarkMode: (checked: boolean) => void;
   onManageFamily: () => void;
+  isAdmin?: boolean;
+  onOpenAdminSettings?: () => void;
   onInstall: () => void;
   onShowInstallHint: () => void;
   onLogout: () => void;
@@ -249,6 +254,27 @@ export function SettingsDrawer({
               Shared pantry • activity visible to family
             </div>
           </div>
+
+          {/* Admin Settings — owner only */}
+          {isAdmin && onOpenAdminSettings && (
+            <div className="elevated-card rounded-3xl p-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold">Admin Settings</div>
+                  <div className="text-xs text-muted-foreground">
+                    View all registered accounts, remove members, resend invites
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenAdminSettings}
+                  className="touch-target shrink-0 text-xs px-3.5 py-1.5 rounded-2xl bg-brand text-brand-foreground font-semibold active:scale-[0.985]"
+                >
+                  Open
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Alerts */}
           <div className="elevated-card rounded-3xl p-4 flex items-center justify-between gap-3">

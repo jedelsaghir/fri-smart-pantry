@@ -541,3 +541,13 @@ export function memberStatusLabel(status: FamilyMemberStatus): string {
       return status;
   }
 }
+
+/** True when the signed-in user is the household owner (admin). */
+export function isCurrentUserOwner(members?: FamilyMember[]): boolean {
+  const list = members ?? (typeof window !== "undefined" ? loadFamilyMembers() : []);
+  const you = list.find((m) => m.isYou);
+  if (you) return you.status === "owner";
+  // Legacy: single owner row with id "you" and no isYou flag yet
+  if (list.length === 1 && list[0].status === "owner" && list[0].id === "you") return true;
+  return false;
+}

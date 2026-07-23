@@ -1290,6 +1290,11 @@ export function PantryScreen() {
           addReceipt(receipt);
           addActivity("You", `saved receipt from ${receipt.store}`);
         }}
+        pantryItems={[...items.fridge, ...items.freezer, ...items.pantry].map((i) => ({
+          name: i.name,
+          unit: i.unit,
+        }))}
+        onNavigateToPantry={() => setActiveView("pantry")}
       />
 
       <SettingsDrawer

@@ -1,16 +1,22 @@
 /**
  * Merge OCR line items from multiple receipt photos.
  * Long receipts are captured in segments; overlapping lines are deduplicated.
- * Also matches scanned lines against existing pantry stock for review UX.
+ * Pantry matching delegated to src/lib/item-matching.ts (Levenshtein fuzzy).
  */
 
+import { coreItemName, namesLookSimilar, normalizeItemName } from "@/lib/catalog";
 import {
-  coreItemName,
-  nameSimilarityScore,
-  namesLookSimilar,
-  normalizeItemName,
-} from "@/lib/catalog";
-import { canonicalUnit, sameProduct, unitsMatch } from "@/lib/pantry-ops";
+  AUTO_UPDATE_OCR_CONFIDENCE,
+  EXACT_MATCH_THRESHOLD,
+  MATCH_THRESHOLD,
+  findBestItemMatch,
+  isStrongUpdateCandidate,
+  normalizeMatchName,
+  normalizeMatchUnit,
+  scoreItemAgainstPantry,
+  unitsCompatible,
+  type MatchablePantryItem,
+} from "@/lib/item-matching";
 import type { OcrDetectResult, OcrLineItem } from "@/platform/types";
 import type {
   DetectedItem,
@@ -20,16 +26,24 @@ import type {
   StorageKey,
 } from "@/types/pantry";
 
-export const AUTO_ADD_CONFIDENCE = 0.8;
+export const AUTO_ADD_CONFIDENCE = AUTO_UPDATE_OCR_CONFIDENCE;
 
-/** Minimum score to treat a pantry row as a match (exact or similar) */
-export const MATCH_SCORE_THRESHOLD = 0.62;
-/** Score floor for "exact" kind (clear same product) */
-export const EXACT_MATCH_SCORE = 0.92;
+/** @deprecated use MATCH_THRESHOLD from item-matching */
+export const MATCH_SCORE_THRESHOLD = MATCH_THRESHOLD;
+/** @deprecated use EXACT_MATCH_THRESHOLD from item-matching */
+export const EXACT_MATCH_SCORE = EXACT_MATCH_THRESHOLD;
 
 function itemKey(name: string, unit: string, qty = 1): string {
-  const core = coreItemName(name) || normalizeItemName(name);
-  return `${core}|${canonicalUnit(unit, qty)}`;
+  const core = normalizeMatchName(name) || coreItemName(name) || normalizeItemName(name);
+  return `${core}|${normalizeMatchUnit(unit, qty)}`;
+}
+
+function canonicalUnit(unit: string, qty = 1): string {
+  return normalizeMatchUnit(unit, qty);
+}
+
+function unitsMatch(a: string, b: string, qtyA = 1, qtyB = 1): boolean {
+  return unitsCompatible(a, b, qtyA, qtyB);
 }
 
 /** Prefer longer / more specific product names when merging overlaps */
@@ -177,79 +191,36 @@ export type FlatPantryRef = Pick<PantryItem, "id" | "name" | "unit" | "qty" | "e
 export type FlatPantryNameUnit = Pick<PantryItem, "name" | "unit">;
 
 /**
- * Score a scanned line against one pantry row.
- * Combines name similarity, unit normalization, and light qty agreement.
+ * Score a scanned line against one pantry row (wrapper → item-matching).
  */
 export function scorePantryCandidate(
   item: { name: string; unit: string; qty?: number },
   pantry: FlatPantryNameUnit & { qty?: number }
 ): { score: number; kind: PantryMatchInfo["kind"] } {
-  const nameScore = nameSimilarityScore(item.name, pantry.name);
-  if (nameScore < 0.4) {
-    return { score: 0, kind: "similar" };
-  }
-
-  const qty = item.qty ?? 1;
-  const pQty = pantry.qty ?? 1;
-  const sameUnit = unitsMatch(item.unit || "pcs", pantry.unit || "pcs", qty, pQty);
-  const exactName =
-    coreItemName(item.name) === coreItemName(pantry.name) ||
-    normalizeItemName(item.name) === normalizeItemName(pantry.name) ||
-    sameProduct(item, pantry);
-
-  let score = nameScore;
-
-  if (sameUnit) {
-    score = Math.min(1, score + 0.08);
-  } else {
-    // Different unit family is usually a different product (milk L vs eggs pcs)
-    score *= 0.55;
-  }
-
-  // Light quantity awareness: identical qty is a mild boost; huge mismatch mild penalty
-  if (Number.isFinite(qty) && Number.isFinite(pQty) && qty > 0 && pQty > 0 && sameUnit) {
-    const ratio = Math.min(qty, pQty) / Math.max(qty, pQty);
-    if (ratio >= 0.5) score = Math.min(1, score + 0.03);
-    else if (ratio < 0.15 && Math.max(qty, pQty) >= 10) score *= 0.96;
-  }
-
-  if (exactName && sameUnit) {
-    return { score: Math.max(score, 0.97), kind: "exact" };
-  }
-
-  const kind: PantryMatchInfo["kind"] =
-    score >= EXACT_MATCH_SCORE && sameUnit ? "exact" : "similar";
-
-  return { score: Math.min(1, score), kind };
+  const { score, kind } = scoreItemAgainstPantry(item, {
+    id: "tmp",
+    name: pantry.name,
+    unit: pantry.unit,
+    qty: pantry.qty ?? 0,
+    storage: "fridge",
+  });
+  return { score, kind };
 }
 
-/** Best pantry match for a scanned line, or null if none is strong enough */
+/** Best pantry match for a scanned line (wrapper → item-matching.findBestItemMatch) */
 export function findBestPantryMatch(
   item: { name: string; unit: string; qty?: number },
   pantry: FlatPantryRef[]
 ): PantryMatchInfo | null {
-  if (!pantry.length) return null;
-
-  let best: PantryMatchInfo | null = null;
-
-  for (const p of pantry) {
-    const { score, kind } = scorePantryCandidate(item, p);
-    if (score < MATCH_SCORE_THRESHOLD) continue;
-    if (!best || score > best.score) {
-      best = {
-        id: p.id,
-        name: p.name,
-        qty: p.qty,
-        unit: p.unit,
-        emoji: p.emoji || "🛒",
-        storage: p.storage,
-        score,
-        kind,
-      };
-    }
-  }
-
-  return best;
+  const rows: MatchablePantryItem[] = pantry.map((p) => ({
+    id: p.id,
+    name: p.name,
+    unit: p.unit,
+    qty: p.qty,
+    emoji: p.emoji,
+    storage: p.storage,
+  }));
+  return findBestItemMatch(item, rows);
 }
 
 /** True when the detected product already exists or looks very similar in the pantry */
@@ -258,33 +229,27 @@ export function matchesExistingPantry(
   pantry: Array<FlatPantryNameUnit | FlatPantryRef>
 ): boolean {
   if (!pantry.length) return false;
-  // Prefer full refs when available
   const full = pantry.filter((p): p is FlatPantryRef => "id" in p && "storage" in p);
   if (full.length) return findBestPantryMatch(item, full) != null;
 
   return pantry.some((p) => {
     const { score } = scorePantryCandidate(item, p);
-    return score >= MATCH_SCORE_THRESHOLD;
+    return score >= MATCH_THRESHOLD;
   });
 }
 
-function defaultDisposition(
-  match: PantryMatchInfo | null,
-  confidence: number
-): ReviewDisposition {
+function defaultDisposition(match: PantryMatchInfo | null): ReviewDisposition {
   if (!match) return "add_new";
-  // Clear high-confidence match → default to restocking (merge qty)
-  if (match.kind === "exact" && confidence >= AUTO_ADD_CONFIDENCE) return "merge";
-  if (match.kind === "exact") return "merge";
-  // Fuzzy / similar → still suggest merge but user can pick add_new
+  // Prefer restocking matched stock
   return "merge";
 }
 
 /**
  * Split merged detections into auto-add vs review.
- * - High confidence + no pantry match → auto-add
- * - Low confidence → review
- * - Any pantry match (exact or similar) → review with match + disposition
+ *
+ * - High conf + no match → auto-add (new item)
+ * - High conf + strong match → auto-update candidate (merge qty, silent)
+ * - Low conf or weaker match → Review (show matched item + Update / Add new)
  */
 export function splitAutoAndReview(
   items: DetectedItem[],
@@ -304,7 +269,6 @@ export function splitAutoAndReview(
       storage: (p as FlatPantryRef).storage || "fridge",
     }));
 
-  // Fallback: name/unit-only refs (tests / older callers)
   const nameOnly = fullPantry.length === 0;
 
   for (const item of items) {
@@ -314,7 +278,6 @@ export function splitAutoAndReview(
     if (fullPantry.length) {
       match = findBestPantryMatch(item, fullPantry);
     } else if (nameOnly) {
-      // Synthesize ids for scoring-only pantry lists
       const synthetic: FlatPantryRef[] = pantry.map((p, i) => ({
         id: `syn-${i}`,
         name: p.name,
@@ -324,22 +287,26 @@ export function splitAutoAndReview(
         storage: "fridge" as StorageKey,
       }));
       match = findBestPantryMatch(item, synthetic);
-      // Don't attach synthetic match ids for merge targets without real ids
-      if (match && match.id.startsWith("syn-")) {
-        // Keep match for review UX when we only have name/unit; disposition still works as add_new default if id is synthetic
-        // Tests only check routing — real UI always passes ids from PantryScreen
-      }
     }
+
+    const strongUpdate = isStrongUpdateCandidate(item.confidence, match);
 
     const enriched: DetectedItem = {
       ...item,
       pantryMatch: match ?? undefined,
-      disposition: defaultDisposition(match, item.confidence),
-      // Prefer existing storage when merging into known stock
+      disposition: defaultDisposition(match),
       storage: match?.storage ?? item.storage,
     };
 
-    if (lowConfidence || match) {
+    if (strongUpdate && match) {
+      // High-confidence strong match → auto-increase quantity (no review)
+      autoItems.push({
+        ...enriched,
+        disposition: "merge",
+        pantryMatch: match,
+      });
+    } else if (lowConfidence || match) {
+      // Weaker match or low OCR confidence → human review
       reviewItems.push(enriched);
     } else {
       autoItems.push({ ...item, disposition: "add_new" });

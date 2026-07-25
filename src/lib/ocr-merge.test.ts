@@ -131,7 +131,7 @@ describe("scorePantryCandidate / findBestPantryMatch", () => {
 });
 
 describe("splitAutoAndReview", () => {
-  it("sends low confidence and pantry matches to review", () => {
+  it("auto-adds new high-conf items; reviews low conf; auto-updates strong matches", () => {
     const items = ocrLinesToDetected([
       line({ name: "New Juice", confidence: 0.95 }),
       line({ name: "Fuzzy Item", confidence: 0.5 }),
@@ -141,23 +141,26 @@ describe("splitAutoAndReview", () => {
       { id: "m1", name: "whole milk", unit: "L", qty: 1, emoji: "🥛", storage: "fridge" },
     ]);
     const { autoItems, reviewItems } = splitAutoAndReview(items, stock);
-    expect(autoItems.map((i) => i.name)).toEqual(["New Juice"]);
-    expect(reviewItems.map((i) => i.name).sort()).toEqual(["Fuzzy Item", "Whole Milk"]);
 
-    const milk = reviewItems.find((i) => i.name === "Whole Milk")!;
+    // New Juice: new auto-add; Whole Milk: strong match → auto-update (merge)
+    expect(autoItems.map((i) => i.name).sort()).toEqual(["New Juice", "Whole Milk"]);
+    expect(reviewItems.map((i) => i.name)).toEqual(["Fuzzy Item"]);
+
+    const milk = autoItems.find((i) => i.name === "Whole Milk")!;
     expect(milk.pantryMatch?.id).toBe("m1");
     expect(milk.disposition).toBe("merge");
   });
 
-  it("defaults exact high-confidence matches to merge disposition", () => {
+  it("sends weaker fuzzy matches to review with match attached", () => {
+    // Low OCR confidence forces review even if name is close
     const items = ocrLinesToDetected([
-      line({ name: "Whole milk 1L", confidence: 0.96, unit: "L", qty: 2 }),
+      line({ name: "Whole milk 1L", confidence: 0.55, unit: "L", qty: 2 }),
     ]);
     const stock = pantry([{ id: "m1", name: "Whole Milk", unit: "L", qty: 1, emoji: "🥛" }]);
     const { autoItems, reviewItems } = splitAutoAndReview(items, stock);
     expect(autoItems).toHaveLength(0);
     expect(reviewItems).toHaveLength(1);
-    expect(reviewItems[0].pantryMatch?.kind).toBe("exact");
+    expect(reviewItems[0].pantryMatch?.id).toBe("m1");
     expect(reviewItems[0].disposition).toBe("merge");
   });
 

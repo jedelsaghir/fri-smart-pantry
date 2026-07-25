@@ -846,21 +846,18 @@ export function ReceiptScanFlow({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          {/* Status badges */}
                           <div className="flex flex-wrap gap-1.5 mb-1.5">
                             {isLow && (
                               <span className="rounded-full bg-amber-100 dark:bg-amber-500/15 px-2 py-px text-[10px] font-medium text-amber-700 dark:text-amber-300">
                                 Low confidence · {Math.round(item.confidence * 100)}%
                               </span>
                             )}
-                            {match?.kind === "exact" && (
+                            {match && (
                               <span className="rounded-full bg-sky-100 dark:bg-sky-500/15 px-2 py-px text-[10px] font-medium text-sky-800 dark:text-sky-300">
-                                Matches pantry
-                              </span>
-                            )}
-                            {match?.kind === "similar" && (
-                              <span className="rounded-full bg-violet-100 dark:bg-violet-500/15 px-2 py-px text-[10px] font-medium text-violet-800 dark:text-violet-300">
-                                Similar to stock
+                                {match.kind === "exact" ? "Likely match" : "Similar item"}
+                                {typeof match.score === "number"
+                                  ? ` · ${Math.round(match.score * 100)}%`
+                                  : ""}
                               </span>
                             )}
                           </div>
@@ -871,64 +868,54 @@ export function ReceiptScanFlow({
                             className="w-full bg-transparent text-[15px] font-semibold tracking-[-0.01em] outline-none border-b border-transparent focus:border-border/50 pb-0.5"
                           />
 
-                          {/* Matched pantry item preview */}
+                          {/* Clear match line: “Similar to: X (current qty)” */}
                           {match && (
                             <div className="mt-2.5 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5">
-                              <div className="flex items-center gap-2.5">
-                                <span className="text-lg leading-none">{match.emoji}</span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-sky-800/70 dark:text-sky-300/80">
-                                    In your {formatStorageLabel(match.storage)}
-                                  </p>
-                                  <p className="text-[13px] font-semibold truncate">
-                                    {match.name}
-                                  </p>
-                                  <p className="text-[11px] text-muted-foreground tabular-nums">
-                                    Now {match.qty} {match.unit}
-                                    {disposition !== "add_new" && (
-                                      <>
-                                        {" "}
-                                        →{" "}
-                                        <span className="font-semibold text-foreground">
-                                          {resultQtyPreview} {match.unit}
-                                        </span>
-                                        {disposition === "merge" && (
-                                          <span className="text-muted-foreground">
-                                            {" "}
-                                            (+{item.qty})
-                                          </span>
-                                        )}
-                                      </>
-                                    )}
-                                  </p>
-                                </div>
-                              </div>
+                              <p className="text-[13px] leading-snug text-foreground">
+                                <span className="text-muted-foreground">Similar to: </span>
+                                <span className="font-semibold">
+                                  {match.emoji} {match.name}
+                                </span>
+                                <span className="text-muted-foreground tabular-nums">
+                                  {" "}
+                                  (current {match.qty} {match.unit})
+                                </span>
+                              </p>
+                              {disposition === "merge" && (
+                                <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+                                  Update → {resultQtyPreview} {match.unit} (+{item.qty})
+                                </p>
+                              )}
 
-                              {/* Disposition: Merge / Update / Add new */}
-                              <div className="mt-2.5 inline-flex w-full rounded-xl bg-background/70 p-0.5 text-[11px] font-semibold">
-                                {(
-                                  [
-                                    { key: "merge" as const, label: "Merge" },
-                                    { key: "update" as const, label: "Update qty" },
-                                    { key: "add_new" as const, label: "Add new" },
-                                  ] as const
-                                ).map((opt) => (
-                                  <button
-                                    type="button"
-                                    key={opt.key}
-                                    onClick={() =>
-                                      updateReviewItem(item.id, { disposition: opt.key })
-                                    }
-                                    className={
-                                      "flex-1 rounded-[10px] py-1.5 transition " +
-                                      (disposition === opt.key
-                                        ? "bg-card text-foreground shadow-sm"
-                                        : "text-muted-foreground active:bg-card/50")
-                                    }
-                                  >
-                                    {opt.label}
-                                  </button>
-                                ))}
+                              <div className="mt-2.5 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateReviewItem(item.id, { disposition: "merge" })
+                                  }
+                                  className={
+                                    "flex-1 rounded-2xl py-2 text-[12px] font-semibold transition active:scale-[0.98] " +
+                                    (disposition === "merge" || disposition === "update"
+                                      ? "bg-brand text-brand-foreground shadow-sm"
+                                      : "bg-background/80 text-foreground border border-border/60")
+                                  }
+                                >
+                                  Update existing
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateReviewItem(item.id, { disposition: "add_new" })
+                                  }
+                                  className={
+                                    "flex-1 rounded-2xl py-2 text-[12px] font-semibold transition active:scale-[0.98] " +
+                                    (disposition === "add_new"
+                                      ? "bg-brand text-brand-foreground shadow-sm"
+                                      : "bg-background/80 text-foreground border border-border/60")
+                                  }
+                                >
+                                  Add as new
+                                </button>
                               </div>
                             </div>
                           )}

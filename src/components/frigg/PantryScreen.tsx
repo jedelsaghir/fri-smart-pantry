@@ -1173,20 +1173,20 @@ export function PantryScreen() {
             <button
               type="button"
               onClick={() => setAddSheetOpen(true)}
-              className="group relative mb-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-border/50 bg-card py-3.5 text-[15px] font-semibold tracking-[-0.01em] text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.7)_inset,0_8px_24px_-12px_oklch(0.2_0.02_150/0.12)] active:scale-[0.985] active:brightness-[0.99] transition duration-200"
+              className="group relative mb-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-border/45 bg-card py-3.5 text-[15px] font-semibold tracking-[-0.015em] text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.75)_inset,0_10px_28px_-14px_oklch(0.2_0.02_150/0.14)] active:scale-[0.985] transition duration-200 dark:shadow-[0_1px_0_0_oklch(1_0_0/0.06)_inset,0_10px_28px_-14px_oklch(0_0_0/0.4)]"
             >
               <span
-                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-active:opacity-100"
+                className="pointer-events-none absolute inset-0 opacity-60 transition-opacity duration-300 group-hover:opacity-100"
                 style={{
                   background:
-                    "radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--color-brand) 8%, transparent), transparent 60%)",
+                    "linear-gradient(180deg, color-mix(in oklab, var(--color-brand) 5%, transparent), transparent 55%)",
                 }}
                 aria-hidden
               />
-              <span className="grid size-7 place-items-center rounded-full bg-brand text-brand-foreground shadow-sm transition group-active:scale-95">
+              <span className="relative grid size-7 place-items-center rounded-full bg-brand text-brand-foreground shadow-[0_4px_12px_-4px_color-mix(in_oklab,var(--color-brand)_50%,transparent)] transition group-active:scale-95">
                 <Plus className="size-3.5" strokeWidth={2.5} />
               </span>
-              Add item
+              <span className="relative">Add item</span>
             </button>
             {/* Silent success + motivational banner */}
             {addedBanner && (
@@ -1428,89 +1428,111 @@ function EmptyState({
     label === "freezer"
       ? {
           emoji: "🧊",
-          title: "Your freezer is waiting",
-          body: "Save leftovers and bulk buys for later. Scan a receipt or add something by hand.",
+          kicker: "Freezer",
+          title: "Cold storage, calmly empty",
+          body: "Park leftovers and bulk buys here. A single add — or a receipt scan — is all it takes.",
           accent: "oklch(0.72 0.08 230)",
+          floatA: "❄️",
+          floatB: "🥩",
         }
       : label === "pantry"
         ? {
             emoji: "🫙",
-            title: "A calm, empty pantry",
-            body: "Staples and dry goods will live here. Start with a quick scan or a single item.",
+            kicker: "Pantry",
+            title: "Room for the staples",
+            body: "Oils, grains, and dry goods live here. Start light — one jar, or a whole receipt.",
             accent: "oklch(0.78 0.08 85)",
+            floatA: "🍝",
+            floatB: "🫒",
           }
         : {
             emoji: "🥛",
-            title: "Your fridge is ready",
-            body: "Fresh food looks best when it’s easy to see. Add a few items and breathe easy.",
+            kicker: "Fridge",
+            title: "Fresh space, ready for you",
+            body: "Your calm inventory starts here. Add a few favorites, or scan dinner’s ingredients.",
             accent: "oklch(0.72 0.1 155)",
+            floatA: "🥚",
+            floatB: "🧀",
           };
 
   return (
-    <div className="relative mt-10 flex flex-col items-center px-2 pb-6 text-center">
-      {/* Soft ambient atmosphere */}
+    <div className="relative mt-8 flex flex-col items-center px-1 pb-8 text-center">
+      {/* Layered ambient atmosphere */}
       <div
-        className="pointer-events-none absolute left-1/2 top-6 h-56 w-56 -translate-x-1/2 rounded-full opacity-70 blur-3xl"
+        className="pointer-events-none absolute left-1/2 top-4 h-64 w-64 -translate-x-1/2 rounded-full opacity-80 blur-3xl dark:opacity-50"
         style={{
-          background: `radial-gradient(circle, color-mix(in oklab, ${copy.accent} 35%, transparent), transparent 70%)`,
+          background: `radial-gradient(circle, color-mix(in oklab, ${copy.accent} 42%, transparent), transparent 68%)`,
         }}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute left-1/2 top-16 h-40 w-72 -translate-x-1/2 rounded-full opacity-40 blur-2xl"
+        className="pointer-events-none absolute left-[20%] top-24 h-28 w-28 rounded-full opacity-50 blur-2xl dark:opacity-30"
         style={{
-          background:
-            "radial-gradient(ellipse, color-mix(in oklab, var(--color-brand) 12%, transparent), transparent 70%)",
+          background: `radial-gradient(circle, color-mix(in oklab, var(--color-brand) 18%, transparent), transparent 70%)`,
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute right-[18%] top-28 h-24 w-24 rounded-full opacity-40 blur-2xl dark:opacity-25"
+        style={{
+          background: `radial-gradient(circle, color-mix(in oklab, ${copy.accent} 30%, transparent), transparent 70%)`,
         }}
         aria-hidden
       />
 
-      {/* Illustration stack */}
-      <div className="relative mt-2">
-        {/* Outer glow ring */}
+      {/* Illustration */}
+      <div className="relative mt-3 mb-1">
         <div
-          className="absolute -inset-3 rounded-[2rem] opacity-60 animate-[emptyGlow_4.5s_ease-in-out_infinite]"
+          className="absolute -inset-6 rounded-full opacity-70 animate-[emptyGlow_5s_ease-in-out_infinite]"
           style={{
-            background: `radial-gradient(circle at 50% 40%, color-mix(in oklab, ${copy.accent} 28%, transparent), transparent 68%)`,
+            background: `radial-gradient(circle at 50% 45%, color-mix(in oklab, ${copy.accent} 32%, transparent), transparent 65%)`,
           }}
           aria-hidden
         />
-        {/* Soft floating card back */}
-        <div
-          className="absolute -right-3 top-4 size-16 rotate-6 rounded-2xl border border-border/40 bg-card/70 shadow-sm backdrop-blur-sm animate-[emptyFloat_5.5s_ease-in-out_infinite]"
-          style={{ transformOrigin: "center" }}
-          aria-hidden
-        />
-        <div
-          className="absolute -left-4 bottom-2 size-12 -rotate-8 rounded-2xl border border-border/35 bg-card/60 shadow-sm backdrop-blur-sm animate-[emptyFloat_6.2s_ease-in-out_infinite_reverse]"
-          style={{ transformOrigin: "center" }}
-          aria-hidden
-        />
 
-        {/* Main icon vessel */}
+        {/* Floating mini chips */}
         <div
-          className="relative grid size-[5.75rem] place-items-center rounded-[1.85rem] border border-border/50 bg-card text-[2.75rem] leading-none shadow-[0_1px_0_0_oklch(1_0_0/0.8)_inset,0_12px_32px_-12px_oklch(0.2_0.02_150/0.18),0_28px_48px_-20px_oklch(0.2_0.02_150/0.12)]"
+          className="absolute -left-8 top-2 grid size-11 place-items-center rounded-2xl border border-border/45 bg-card/85 text-lg shadow-[0_8px_20px_-10px_oklch(0.2_0.02_150/0.25)] backdrop-blur-md animate-[emptyFloat_5.8s_ease-in-out_infinite] dark:bg-card/70"
+          aria-hidden
         >
+          {copy.floatA}
+        </div>
+        <div
+          className="absolute -right-7 bottom-1 grid size-10 place-items-center rounded-2xl border border-border/40 bg-card/80 text-base shadow-[0_8px_20px_-10px_oklch(0.2_0.02_150/0.22)] backdrop-blur-md animate-[emptyFloat_6.4s_ease-in-out_infinite_reverse] dark:bg-card/65"
+          aria-hidden
+        >
+          {copy.floatB}
+        </div>
+
+        {/* Main vessel */}
+        <div className="relative grid size-[6.25rem] place-items-center rounded-[2rem] border border-border/55 bg-card text-[3rem] leading-none shadow-[0_1px_0_0_oklch(1_0_0/0.85)_inset,0_14px_36px_-14px_oklch(0.2_0.02_150/0.2),0_32px_56px_-24px_oklch(0.2_0.02_150/0.14)] dark:shadow-[0_1px_0_0_oklch(1_0_0/0.08)_inset,0_14px_36px_-14px_oklch(0_0_0/0.45)]">
           <span className="select-none drop-shadow-sm" role="img" aria-hidden>
             {copy.emoji}
           </span>
-          {/* Inner sheen */}
           <span
-            className="pointer-events-none absolute inset-0 rounded-[1.85rem]"
+            className="pointer-events-none absolute inset-0 rounded-[2rem]"
             style={{
               background:
-                "linear-gradient(160deg, oklch(1 0 0 / 0.55) 0%, transparent 42%, transparent 100%)",
+                "linear-gradient(155deg, oklch(1 0 0 / 0.58) 0%, transparent 45%, transparent 100%)",
             }}
+            aria-hidden
+          />
+          {/* Soft ring */}
+          <span
+            className="pointer-events-none absolute -inset-px rounded-[2rem] ring-1 ring-inset ring-black/[0.03] dark:ring-white/[0.06]"
             aria-hidden
           />
         </div>
       </div>
 
-      <div className="relative mt-8 max-w-[280px]">
-        <p className="font-display text-[23px] font-medium leading-[1.15] tracking-[-0.02em] text-foreground/95">
+      <div className="relative mt-9 max-w-[300px]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/75">
+          {copy.kicker}
+        </p>
+        <p className="mt-2 font-display text-[1.5rem] font-medium leading-[1.12] tracking-[-0.025em] text-foreground/95">
           {copy.title}
         </p>
-        <p className="mt-2.5 text-[13.5px] leading-relaxed text-muted-foreground">
+        <p className="mt-3 text-[13.5px] leading-[1.55] text-muted-foreground">
           {copy.body}
         </p>
       </div>
@@ -1519,15 +1541,17 @@ function EmptyState({
         <button
           type="button"
           onClick={onAdd}
-          className="relative mt-7 inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-[13px] font-semibold text-brand-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--color-brand)_55%,transparent)] active:scale-[0.98] transition"
+          className="relative mt-8 inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-[13px] font-semibold text-brand-foreground shadow-[0_10px_28px_-12px_color-mix(in_oklab,var(--color-brand)_60%,transparent)] active:scale-[0.98] transition"
         >
-          <Plus className="size-3.5" strokeWidth={2.5} />
+          <span className="grid size-5 place-items-center rounded-full bg-brand-foreground/15">
+            <Plus className="size-3.5" strokeWidth={2.5} />
+          </span>
           Add your first item
         </button>
       )}
 
-      <p className="relative mt-4 text-[11px] font-medium tracking-[0.01em] text-muted-foreground/80">
-        Or use Quick Scan for a whole receipt
+      <p className="relative mt-4 text-[11.5px] font-medium tracking-[0.01em] text-muted-foreground/75">
+        Or tap <span className="text-foreground/70">Quick Scan</span> for a full receipt
       </p>
     </div>
   );

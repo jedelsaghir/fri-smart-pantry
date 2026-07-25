@@ -135,13 +135,13 @@ export function analyzeCaptureQuality(
 
   let message: string | null = null;
   if (issues.includes("blurry")) {
-    message = "Hold steady — image looks a bit soft";
+    message = "Hold steady — looking a little soft";
   } else if (issues.includes("dark")) {
-    message = "A little more light will help the text";
+    message = "A bit more light helps the text";
   } else if (issues.includes("low_contrast")) {
-    message = "Improve lighting so the text stands out";
+    message = "Boost the light so print stands out";
   } else if (issues.includes("too_far")) {
-    message = "Move closer so the receipt fills the frame";
+    message = "Move closer — fill the frame with the receipt";
   }
 
   return {
@@ -159,7 +159,19 @@ export function analyzeCaptureQuality(
 export function hapticShutter(): void {
   try {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(12);
+      // Short double-tap feel — more “camera shutter” than a single buzz
+      navigator.vibrate([10, 24, 14]);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Soft success tick after a photo is queued */
+export function hapticPhotoQueued(): void {
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(8);
     }
   } catch {
     /* ignore */

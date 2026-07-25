@@ -119,10 +119,10 @@ export function GlassHeader({
 
         {/* Hero title area — calm & premium */}
         <div className="relative mt-6">
-          <p className="text-[13px] font-medium tracking-[0.02em] text-muted-foreground/95">
+          <p className="text-[12.5px] font-medium tracking-[0.03em] text-muted-foreground/90">
             {subtitle}
           </p>
-          <h1 className="mt-1 font-display text-[2.35rem] leading-[0.94] font-medium tracking-[-0.025em] text-foreground/92">
+          <h1 className="mt-1.5 font-display text-[2.4rem] leading-[0.93] font-medium tracking-[-0.03em] text-foreground/93">
             {title}
           </h1>
         </div>

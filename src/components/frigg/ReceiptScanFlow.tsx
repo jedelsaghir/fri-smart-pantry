@@ -22,6 +22,7 @@ import { buildReceiptFromScan, readFileAsDataUrl } from "@/lib/receipts";
 import { captureAndPrepareFrame, prepareImageForOcr } from "@/lib/ocr-image";
 import {
   analyzeCaptureQuality,
+  hapticPhotoQueued,
   hapticShutter,
   type CaptureQuality,
 } from "@/lib/capture-quality";
@@ -500,7 +501,7 @@ export function ReceiptScanFlow({
     }
     setCapturing(true);
 
-    // Strong shutter feedback: flash + pulse + haptic
+    // Strong shutter feedback: flash + ring pulse + haptic
     hapticShutter();
     setShutterFlash(true);
     setShutterPulse(true);
@@ -508,9 +509,9 @@ export function ReceiptScanFlow({
     flashTimerRef.current = setTimeout(() => {
       setShutterFlash(false);
       setShutterPulse(false);
-    }, 160);
+    }, 220);
 
-    // Capture raw immediately so shutter stays snappy; enhance async in background
+    // Capture + light enhance; re-arm shutter ASAP for multi-shot
     void (async () => {
       try {
         const prepared = await captureAndPrepareFrame(video, {
@@ -523,10 +524,10 @@ export function ReceiptScanFlow({
           return;
         }
         setPhotos((prev) => [...prev, { id: createPhotoId(), dataUrl: prepared }]);
+        hapticPhotoQueued();
       } catch {
         toast.error("Could not capture frame");
       } finally {
-        // Re-arm shutter ASAP — no confirmation between multi-shots
         requestAnimationFrame(() => setCapturing(false));
       }
     })();
@@ -715,34 +716,43 @@ export function ReceiptScanFlow({
                   </div>
                 )}
 
-                {/* Shutter flash overlay */}
+                {/* Shutter flash + expanding ring */}
                 {shutterFlash && (
-                  <div className="pointer-events-none absolute inset-0 bg-white/75 animate-[fadeOut_0.16s_ease-out_forwards] z-20" />
+                  <>
+                    <div className="pointer-events-none absolute inset-0 z-20 bg-white/80 animate-[fadeOut_0.2s_ease-out_forwards]" />
+                    <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
+                      <div className="size-24 rounded-full border-2 border-white/90 animate-[shutterRing_0.35s_ease-out_forwards]" />
+                    </div>
+                  </>
                 )}
 
                 {/* Frame guide — tinted when quality issues */}
                 {cameraOn && (
                   <div
                     className={
-                      "pointer-events-none absolute inset-5 rounded-2xl border shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)] transition-colors duration-300 " +
+                      "pointer-events-none absolute inset-5 rounded-2xl border-2 transition-all duration-300 " +
                       (captureQuality && !captureQuality.ok
-                        ? "border-amber-300/70"
-                        : "border-white/35")
+                        ? "border-amber-300/80 shadow-[0_0_0_1px_rgba(251,191,36,0.15),inset_0_0_40px_rgba(0,0,0,0.12)]"
+                        : captureQuality?.ok
+                          ? "border-emerald-300/45 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]"
+                          : "border-white/35 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)]")
                     }
                   />
                 )}
 
                 {/* Live quality guidance */}
                 {cameraOn && captureQuality?.message && (
-                  <div className="absolute left-3 right-3 top-3 z-10 flex justify-center">
-                    <div className="rounded-full bg-black/55 px-3.5 py-1.5 text-[12px] font-medium text-white/95 backdrop-blur-md shadow-sm">
+                  <div className="absolute left-3 right-3 top-3 z-10 flex justify-center px-1">
+                    <div className="max-w-[min(100%,320px)] rounded-full border border-white/10 bg-black/60 px-3.5 py-1.5 text-center text-[12px] font-medium leading-snug text-white/95 shadow-lg backdrop-blur-md">
                       {captureQuality.message}
                     </div>
                   </div>
                 )}
-                {cameraOn && captureQuality?.ok && (
-                  <div className="absolute left-3 right-3 top-3 z-10 flex justify-center pointer-events-none opacity-0">
-                    {/* reserved for calm “ready” if we want later */}
+                {cameraOn && captureQuality?.ok && !captureQuality.message && (
+                  <div className="absolute left-3 right-3 top-3 z-10 flex justify-center">
+                    <div className="rounded-full border border-emerald-400/25 bg-black/45 px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-md">
+                      Looking good — snap when ready
+                    </div>
                   </div>
                 )}
 
@@ -756,11 +766,17 @@ export function ReceiptScanFlow({
               {/* Thumbnail strip */}
               {photoCount > 0 && (
                 <div className="border-t border-border/50 bg-background/95 px-3 py-2.5">
+                  <div className="mb-1.5 flex items-center justify-between px-0.5">
+                    <span className="text-[11px] font-semibold text-muted-foreground">
+                      {photoCount} photo{photoCount === 1 ? "" : "s"} ready
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/80">Tap × to remove</span>
+                  </div>
                   <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none">
                     {photos.map((photo, index) => (
                       <div
                         key={photo.id}
-                        className="relative shrink-0 size-16 overflow-hidden rounded-xl ring-1 ring-border/50 bg-secondary"
+                        className="relative shrink-0 size-16 overflow-hidden rounded-xl ring-1 ring-border/50 bg-secondary animate-[thumbPop_0.28s_ease-out]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -793,17 +809,22 @@ export function ReceiptScanFlow({
                     onClick={handleShutter}
                     disabled={capturing}
                     className={
-                      "relative w-full flex items-center justify-center gap-3 rounded-3xl bg-brand py-4 text-lg font-semibold text-brand-foreground active:scale-[0.97] active:brightness-110 transition touch-manipulation disabled:opacity-80 " +
+                      "relative w-full flex items-center justify-center gap-3 rounded-3xl bg-brand py-4 text-lg font-semibold text-brand-foreground shadow-[0_10px_28px_-12px_color-mix(in_oklab,var(--color-brand)_55%,transparent)] active:scale-[0.97] active:brightness-110 transition touch-manipulation disabled:opacity-80 " +
                       (shutterPulse ? "scale-[0.97] brightness-110" : "")
                     }
                   >
-                    <span
-                      className={
-                        "grid size-9 place-items-center rounded-full border-2 border-brand-foreground/90 transition-transform " +
-                        (shutterPulse ? "scale-90" : "")
-                      }
-                    >
-                      <span className="size-5 rounded-full bg-brand-foreground/95" />
+                    <span className="relative grid size-9 place-items-center">
+                      {shutterPulse && (
+                        <span className="absolute inset-0 rounded-full border-2 border-brand-foreground/50 animate-[shutterRing_0.35s_ease-out_forwards]" />
+                      )}
+                      <span
+                        className={
+                          "grid size-9 place-items-center rounded-full border-2 border-brand-foreground/90 transition-transform " +
+                          (shutterPulse ? "scale-90" : "")
+                        }
+                      >
+                        <span className="size-5 rounded-full bg-brand-foreground/95" />
+                      </span>
                     </span>
                     {photoCount === 0 ? "Capture" : "Capture next"}
                   </button>
@@ -844,24 +865,23 @@ export function ReceiptScanFlow({
                 </label>
 
                 <p className="text-center text-[11px] text-muted-foreground pb-1">
-                  Snap freely · we enhance &amp; merge · iOS &amp; Android
+                  Snap freely · enhance · merge · works on iOS &amp; Android
                 </p>
               </div>
             </div>
           )}
 
           {step === "processing" && (
-            <div className="flex flex-col items-center justify-center min-h-[420px] text-center pt-4">
-              {/* Premium multi-ring loader */}
+            <div className="flex flex-col items-center justify-center min-h-[420px] text-center pt-4 px-2">
               <div className="relative mb-8 size-28">
-                <div className="absolute inset-0 rounded-full border-2 border-brand/15" />
+                <div className="absolute inset-0 rounded-full border-2 border-brand/12" />
                 <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-brand animate-spin" />
                 <div
                   className="absolute inset-3 rounded-full border-2 border-transparent border-b-[var(--color-fresh)] animate-spin"
-                  style={{ animationDuration: "1.1s", animationDirection: "reverse" }}
+                  style={{ animationDuration: "1.05s", animationDirection: "reverse" }}
                 />
                 <div className="absolute inset-0 grid place-items-center">
-                  <div className="grid size-14 place-items-center rounded-2xl bg-secondary/80 shadow-inner">
+                  <div className="grid size-14 place-items-center rounded-2xl bg-secondary/85 shadow-inner">
                     {processProgress < 40 ? (
                       <Aperture className="size-7 text-brand animate-pulse" />
                     ) : (
@@ -873,82 +893,108 @@ export function ReceiptScanFlow({
 
               <div className="space-y-1.5 mb-5">
                 <p className="text-xl font-semibold tracking-tight">{processLabel}</p>
-                <p className="text-sm text-muted-foreground max-w-[280px] mx-auto">
+                <p className="text-sm text-muted-foreground max-w-[280px] mx-auto leading-relaxed">
                   {processSub}
                 </p>
               </div>
 
-              {/* Stage chips */}
-              <div className="flex flex-wrap justify-center gap-1.5 mb-6 max-w-[300px]">
+              <div className="flex flex-wrap justify-center gap-1.5 mb-5 max-w-[300px]">
                 {(
                   [
-                    { label: "Enhance", active: processProgress < 40 },
-                    { label: "OCR", active: processProgress >= 40 && processProgress < 90 },
-                    { label: "Match", active: processProgress >= 90 },
+                    { label: "Enhance", done: processProgress >= 40, active: processProgress < 40 },
+                    {
+                      label: "Read",
+                      done: processProgress >= 90,
+                      active: processProgress >= 40 && processProgress < 90,
+                    },
+                    {
+                      label: "Match",
+                      done: processProgress >= 100,
+                      active: processProgress >= 90 && processProgress < 100,
+                    },
                   ] as const
                 ).map((s) => (
                   <span
                     key={s.label}
                     className={
-                      "rounded-full px-2.5 py-0.5 text-[10px] font-semibold " +
+                      "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition " +
                       (s.active
-                        ? "bg-brand/15 text-brand"
-                        : processProgress >=
-                            (s.label === "Enhance" ? 40 : s.label === "OCR" ? 90 : 101)
-                          ? "bg-secondary text-muted-foreground"
+                        ? "bg-brand/15 text-brand ring-1 ring-brand/20"
+                        : s.done
+                          ? "bg-[color-mix(in_oklab,var(--color-fresh)_14%,var(--color-secondary))] text-[var(--color-fresh)]"
                           : "bg-secondary/60 text-muted-foreground/70")
                     }
                   >
+                    {s.done && !s.active ? "✓ " : ""}
                     {s.label}
                   </span>
                 ))}
               </div>
 
-              {/* Progress bar */}
-              <div className="w-full max-w-[240px] h-1.5 rounded-full bg-secondary overflow-hidden mb-8">
+              <div className="w-full max-w-[260px] mb-2 flex items-center justify-between text-[11px] font-medium text-muted-foreground tabular-nums">
+                <span>Progress</span>
+                <span>{Math.min(100, Math.round(processProgress))}%</span>
+              </div>
+              <div className="w-full max-w-[260px] h-2 rounded-full bg-secondary overflow-hidden mb-8">
                 <div
-                  className="h-full rounded-full bg-brand transition-[width] duration-300 ease-out"
-                  style={{ width: `${Math.min(100, processProgress)}%` }}
+                  className="h-full rounded-full transition-[width] duration-300 ease-out"
+                  style={{
+                    width: `${Math.min(100, processProgress)}%`,
+                    background:
+                      "linear-gradient(90deg, var(--color-brand), color-mix(in oklab, var(--color-fresh) 70%, var(--color-brand)))",
+                    backgroundSize: "200% 100%",
+                    animation: "progressShimmer 1.4s linear infinite",
+                  }}
                 />
               </div>
 
               {photos.length > 0 && (
                 <div className="flex justify-center gap-1.5 flex-wrap max-w-[280px]">
-                  {photos.map((p, i) => (
-                    <div
-                      key={p.id}
-                      className="size-12 overflow-hidden rounded-lg ring-1 ring-border/40 opacity-90"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={p.dataUrl}
-                        alt=""
-                        className="size-full object-cover"
-                      />
-                      <span className="sr-only">Photo {i + 1}</span>
-                    </div>
-                  ))}
+                  {photos.map((p, i) => {
+                    const done =
+                      processProgress >= 40 + ((i + 1) / Math.max(1, photos.length)) * 50;
+                    return (
+                      <div
+                        key={p.id}
+                        className={
+                          "relative size-12 overflow-hidden rounded-lg ring-1 transition " +
+                          (done ? "ring-brand/40 opacity-100" : "ring-border/40 opacity-80")
+                        }
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.dataUrl} alt="" className="size-full object-cover" />
+                        {done && (
+                          <div className="absolute inset-0 grid place-items-center bg-black/30">
+                            <Check className="size-4 text-white" strokeWidth={2.5} />
+                          </div>
+                        )}
+                        <span className="sr-only">Photo {i + 1}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
 
           {step === "result" && (
-            <div className="flex flex-col items-center justify-center min-h-[360px] text-center px-2 animate-in fade-in duration-300">
+            <div className="flex flex-col items-center justify-center min-h-[360px] text-center px-4 animate-in fade-in duration-300">
               <div
                 className={
-                  "mx-auto mb-5 grid size-20 place-items-center rounded-[1.75rem] text-4xl shadow-inner " +
+                  "mx-auto mb-5 grid size-[4.75rem] place-items-center rounded-[1.75rem] text-3xl shadow-[0_1px_0_0_oklch(1_0_0/0.5)_inset,0_12px_28px_-12px_oklch(0.2_0.02_150/0.18)] " +
                   (resultOk
-                    ? "bg-[color-mix(in_oklab,var(--color-fresh)_14%,var(--color-card))]"
-                    : "bg-destructive/10")
+                    ? "bg-[color-mix(in_oklab,var(--color-fresh)_14%,var(--color-card))] text-[var(--color-fresh)]"
+                    : "bg-destructive/10 text-destructive")
                 }
               >
-                {resultOk ? "✓" : "!"}
+                {resultOk ? <Check className="size-9" strokeWidth={2.25} /> : "!"}
               </div>
-              <p className="text-xl font-semibold tracking-tight">
-                {resultOk ? "Success" : "Couldn't process"}
+              <p className="font-display text-[1.35rem] font-medium tracking-[-0.02em]">
+                {resultOk ? "All set" : "Couldn’t finish"}
               </p>
-              <p className="mt-1.5 text-sm text-muted-foreground max-w-xs">{resultMessage}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground max-w-xs">
+                {resultMessage}
+              </p>
               <div className="mt-8 flex gap-1.5">
                 <span className="size-1.5 rounded-full bg-brand/60 animate-pulse" />
                 <span

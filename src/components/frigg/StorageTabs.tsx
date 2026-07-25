@@ -27,17 +27,17 @@ export function StorageTabs({
         gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
         width: "100%",
         maxWidth: "100%",
-        gap: "0.3rem",
-        padding: "0.4rem",
-        borderRadius: "1.5rem",
+        gap: "0.28rem",
+        padding: "0.38rem",
+        borderRadius: "1.55rem",
         boxSizing: "border-box",
-        border: "1px solid color-mix(in oklab, var(--color-border) 42%, transparent)",
+        border: "1px solid color-mix(in oklab, var(--color-border) 40%, transparent)",
         background:
-          "linear-gradient(180deg, color-mix(in oklab, var(--color-secondary) 78%, transparent), color-mix(in oklab, var(--color-secondary) 58%, transparent))",
+          "linear-gradient(180deg, color-mix(in oklab, var(--color-secondary) 82%, transparent), color-mix(in oklab, var(--color-secondary) 55%, transparent))",
         backdropFilter: "saturate(190%) blur(22px)",
         WebkitBackdropFilter: "saturate(190%) blur(22px)",
         boxShadow:
-          "inset 0 1px 0 oklch(1 0 0 / 0.5), 0 1px 0 0 color-mix(in oklab, var(--color-border) 30%, transparent), 0 12px 28px -14px oklch(0.2 0.02 150 / 0.12)",
+          "inset 0 1px 0 oklch(1 0 0 / 0.55), 0 1px 0 0 color-mix(in oklab, var(--color-border) 28%, transparent), 0 14px 30px -16px oklch(0.2 0.02 150 / 0.14)",
       }}
     >
       {TABS.map((t) => {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ActivityLogEntry, FamilyMember } from "@/types/pantry";
+import { clearAuthSession } from "@/lib/auth";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   buildInviteUrl,
@@ -154,7 +155,8 @@ export function useFamily(options?: UseFamilyOptions) {
       setShowManageFamily(false);
       setShowFamilyDrawer(false);
       try {
-        localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
+        // Simulate invite as a fresh session (clear structured + legacy flags)
+        clearAuthSession();
         localStorage.setItem(STORAGE_KEYS.PENDING_INVITE, code);
       } catch {
         /* ignore */

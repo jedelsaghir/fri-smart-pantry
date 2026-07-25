@@ -52,7 +52,7 @@ export const cloudInviteProvider: InviteProvider = {
     if (cloud.ok) return { ok: true };
 
     // Same-device fallback (owner still has pending member in localStorage)
-    const local = acceptInviteAndCreateAccount({
+    const local = await acceptInviteAndCreateAccount({
       inviteCode: code,
       email: account.email,
       password: account.password,

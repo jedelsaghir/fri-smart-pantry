@@ -23,7 +23,7 @@ export const localInviteProvider: InviteProvider = {
     };
   },
   async acceptInvite(code, account) {
-    const result = acceptInviteAndCreateAccount({
+    const result = await acceptInviteAndCreateAccount({
       inviteCode: code,
       email: account.email,
       password: account.password,

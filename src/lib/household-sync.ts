@@ -27,11 +27,27 @@ export type HouseholdSyncAccount = {
   id: string;
   memberId: string;
   email: string;
-  /** Plain password kept for demo multi-device auth (same as local demo store) */
-  password: string;
+  /**
+   * @deprecated Never write plain passwords into sync snapshots.
+   * Legacy remote blobs may still contain this; stripped on apply/build.
+   */
+  password?: string;
+  /** Preferred: SHA-256 via hashSyncPassword (same as local accounts) */
+  passwordHash?: string;
   name: string;
   emoji: string;
 };
+
+/** Strip plain passwords from account rows before local/cloud persistence. */
+export function sanitizeAccountsForSync(
+  accounts: HouseholdSyncAccount[] | undefined | null
+): HouseholdSyncAccount[] | undefined {
+  if (!accounts || !Array.isArray(accounts)) return undefined;
+  return accounts.map((a) => {
+    const { password: _plain, ...rest } = a;
+    return { ...rest, password: undefined };
+  });
+}
 
 /** Full household blob shared across devices for one account/household */
 export type HouseholdSyncSnapshot = {
@@ -88,6 +104,7 @@ function readJson<T>(key: string): T | undefined {
 
 /** Build snapshot from current localStorage (browser only) */
 export function buildSnapshotFromLocalStorage(email: string): HouseholdSyncSnapshot {
+  const rawAccounts = readJson<HouseholdSyncAccount[]>(STORAGE_KEYS.ACCOUNTS);
   return {
     version: HOUSEHOLD_SYNC_VERSION,
     updatedAt: new Date().toISOString(),
@@ -100,7 +117,8 @@ export function buildSnapshotFromLocalStorage(email: string): HouseholdSyncSnaps
     familyMembers: readJson(STORAGE_KEYS.FAMILY_MEMBERS),
     household: localStorage.getItem(STORAGE_KEYS.HOUSEHOLD) || undefined,
     profile: readJson(STORAGE_KEYS.PROFILE),
-    accounts: readJson(STORAGE_KEYS.ACCOUNTS),
+    // Never push plain passwords into the cloud household blob
+    accounts: sanitizeAccountsForSync(rawAccounts),
     theme: localStorage.getItem(STORAGE_KEYS.THEME) || undefined,
     notifications: localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || undefined,
   };
@@ -146,7 +164,9 @@ export function applySnapshotToLocalStorage(
   write(STORAGE_KEYS.FAMILY_MEMBERS, s.familyMembers);
   if (s.household) localStorage.setItem(STORAGE_KEYS.HOUSEHOLD, s.household);
   write(STORAGE_KEYS.PROFILE, s.profile);
-  write(STORAGE_KEYS.ACCOUNTS, s.accounts);
+  // Strip plain passwords from remote/legacy blobs before writing local accounts
+  const safeAccounts = sanitizeAccountsForSync(s.accounts);
+  write(STORAGE_KEYS.ACCOUNTS, safeAccounts);
   if (s.theme) localStorage.setItem(STORAGE_KEYS.THEME, s.theme);
   if (s.notifications != null) localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, s.notifications);
 

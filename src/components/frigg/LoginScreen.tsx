@@ -8,6 +8,7 @@ import {
   clearInviteFromUrl,
   getInviteContext,
   readInviteCodeFromLocation,
+  registerOwnerAccount,
   signInWithAccount,
   type PendingInviteContext,
 } from "@/lib/family";
@@ -160,7 +161,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
     }
 
     // Same-device fallback (owner device still has the pending member row)
-    const result = acceptInviteAndCreateAccount({
+    const result = await acceptInviteAndCreateAccount({
       inviteCode: invite.code,
       email,
       password,
@@ -235,7 +236,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
     }
 
     if (mode === "signin") {
-      const result = signInWithAccount(email, password);
+      const result = await signInWithAccount(email, password);
       if (!result.ok) {
         toast.error("Sign in failed", { description: result.error });
         return;
@@ -245,7 +246,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
         successBody: `Hi ${result.account.name.split(" ")[0] || result.account.name}.`,
       });
     } else {
-      // Owner signup → beautiful onboarding
+      // Owner signup → beautiful onboarding (account created on complete with hashed password)
       setHouseholdName("The " + (name.split(" ")[1] || "Family") + " Home");
       setProfileEmoji("👩‍🍳");
       setOnboardStep("welcome");
@@ -254,10 +255,17 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
 
   const completeOnboarding = async () => {
     const displayName = name || email.split("@")[0];
-    try {
-      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
-    } catch {}
-    registerOwnerAccount(displayName, email, password, profileEmoji, householdName);
+    const result = await registerOwnerAccount(
+      displayName,
+      email,
+      password,
+      profileEmoji,
+      householdName
+    );
+    if (!result.ok) {
+      toast.error("Couldn't create account", { description: result.error });
+      return;
+    }
     setOnboardStep(null);
     resetAuthForm();
     await finishWithCloudSync(email, password, {
@@ -577,63 +585,4 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
       </div>
     </div>
   );
-}
-
-function registerOwnerAccount(
-  displayName: string,
-  email: string,
-  password: string,
-  emoji: string,
-  householdName: string
-) {
-  try {
-    const accountsRaw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-    const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
-    const accountId = `acct-${Date.now()}`;
-    const memberId = "you";
-    const account = {
-      id: accountId,
-      memberId,
-      email: email.trim().toLowerCase(),
-      password,
-      name: displayName,
-      emoji,
-    };
-    const next = Array.isArray(accounts)
-      ? [...accounts.filter((a: { email?: string }) => a.email !== account.email), account]
-      : [account];
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(next));
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, accountId);
-    localStorage.setItem(STORAGE_KEYS.HOUSEHOLD, householdName);
-    localStorage.setItem(
-      STORAGE_KEYS.PROFILE,
-      JSON.stringify({ name: displayName, emoji, email: account.email, memberId, accountId })
-    );
-
-    const membersRaw = localStorage.getItem(STORAGE_KEYS.FAMILY_MEMBERS);
-    let members = membersRaw ? JSON.parse(membersRaw) : null;
-    if (!Array.isArray(members) || members.length === 0) {
-      members = [
-        {
-          id: "you",
-          name: displayName.split(" ")[0] || "You",
-          emoji,
-          phone: "",
-          inviteCode: Math.random().toString(36).slice(2, 12),
-          status: "owner",
-          isYou: true,
-          email: account.email,
-        },
-      ];
-    } else {
-      members = members.map((m: { id: string; status?: string }) => ({
-        ...m,
-        isYou: m.id === "you" || m.status === "owner",
-        ...(m.id === "you"
-          ? { name: displayName.split(" ")[0] || m.id, emoji, email: account.email, status: "owner" }
-          : { isYou: false }),
-      }));
-    }
-    localStorage.setItem(STORAGE_KEYS.FAMILY_MEMBERS, JSON.stringify(members));
-  } catch {}
 }

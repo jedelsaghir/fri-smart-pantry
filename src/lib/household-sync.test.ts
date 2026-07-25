@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   hashSyncPassword,
+  sanitizeAccountsForSync,
   shouldApplyRemote,
   validateSnapshot,
   HOUSEHOLD_SYNC_VERSION,
@@ -46,5 +47,24 @@ describe("validateSnapshot", () => {
       household: "Home",
     });
     expect(s.email).toBe("jed@x.com");
+  });
+});
+
+describe("sanitizeAccountsForSync", () => {
+  it("strips plain passwords", () => {
+    const out = sanitizeAccountsForSync([
+      {
+        id: "a1",
+        memberId: "you",
+        email: "a@b.com",
+        password: "secret",
+        passwordHash: "abc",
+        name: "A",
+        emoji: "👤",
+      },
+    ]);
+    expect(out?.[0].password).toBeUndefined();
+    expect(out?.[0].passwordHash).toBe("abc");
+    expect(out?.[0].email).toBe("a@b.com");
   });
 });

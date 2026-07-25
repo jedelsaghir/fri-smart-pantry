@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { clearAuthSession, isSessionAuthenticated } from "@/lib/auth";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { loadSyncCreds } from "@/lib/sync-session";
 import { flushHouseholdPush, logoutSyncSession } from "@/lib/run-household-sync";
 
 /**
  * Login flag, splash gate, and session glue for LoginScreen ↔ main app.
+ * Prefers structured auth session (with expiry); mirrors legacy LOGGED_IN for compatibility.
  */
 export function useAuthSession(options?: {
   onAuthenticated?: () => void;
@@ -15,7 +17,7 @@ export function useAuthSession(options?: {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
-      return localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === "true";
+      return isSessionAuthenticated();
     } catch {
       return false;
     }
@@ -28,9 +30,27 @@ export function useAuthSession(options?: {
     return () => clearTimeout(t);
   }, []);
 
+  // Re-check expiry when tab becomes visible (session may have lapsed)
+  useEffect(() => {
+    const onVis = () => {
+      try {
+        if (!isSessionAuthenticated()) {
+          setIsAuthenticated(false);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   const doLogin = useCallback(() => {
+    // Session is established by signIn/register/invite; mirror flag if still needed
     try {
-      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
+      if (localStorage.getItem(STORAGE_KEYS.LOGGED_IN) !== "true") {
+        localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
+      }
     } catch {
       /* ignore */
     }
@@ -45,8 +65,8 @@ export function useAuthSession(options?: {
     void flushHouseholdPush().finally(() => {
       logoutSyncSession();
     });
+    clearAuthSession();
     try {
-      localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
       localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
     } catch {
       /* ignore */

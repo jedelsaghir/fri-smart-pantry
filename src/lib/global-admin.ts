@@ -4,9 +4,9 @@
  */
 
 import type { FamilyMember } from "@/types/pantry";
+import { clearAuthSession } from "@/lib/auth";
 import {
   CURRENT_USER_KEY,
-  LOGGED_IN_KEY,
   loadAccounts,
   loadFamilyMembers,
   loadHouseholdName,
@@ -225,7 +225,7 @@ export function removeGlobalUser(user: GlobalRegisteredUser): {
       saveAccounts(next);
       if (currentId && currentId === user.accountId) {
         removedSelf = true;
-        localStorage.removeItem(LOGGED_IN_KEY);
+        clearAuthSession();
         localStorage.removeItem(CURRENT_USER_KEY);
         clearSyncCreds();
       }
@@ -279,12 +279,12 @@ export function forceLogoutUser(user: GlobalRegisteredUser): {
   try {
     const currentId = localStorage.getItem(CURRENT_USER_KEY);
     if (user.accountId && currentId === user.accountId) {
-      localStorage.removeItem(LOGGED_IN_KEY);
+      clearAuthSession();
       localStorage.removeItem(CURRENT_USER_KEY);
       clearSyncCreds();
       signedOutNow = true;
     } else if (user.isCurrentUser) {
-      localStorage.removeItem(LOGGED_IN_KEY);
+      clearAuthSession();
       localStorage.removeItem(CURRENT_USER_KEY);
       clearSyncCreds();
       signedOutNow = true;
@@ -294,8 +294,10 @@ export function forceLogoutUser(user: GlobalRegisteredUser): {
   return { ok: true, signedOutNow };
 }
 
-/** Drop password-bearing fields when exposing account rows (admin UI never needs passwords). */
-export function sanitizeAccountForAdmin(acct: FamilyAccount): Omit<FamilyAccount, "password"> {
-  const { password: _p, ...rest } = acct;
+/** Drop password-bearing fields when exposing account rows (admin UI never needs secrets). */
+export function sanitizeAccountForAdmin(
+  acct: FamilyAccount
+): Omit<FamilyAccount, "password" | "passwordHash"> {
+  const { password: _p, passwordHash: _h, ...rest } = acct;
   return rest;
 }

@@ -4,6 +4,7 @@
  */
 
 import type { FamilyMember } from "@/types/pantry";
+import { establishSession, hashPassword } from "@/lib/auth";
 import {
   applySnapshotToLocalStorage,
   buildSnapshotFromLocalStorage,
@@ -162,21 +163,35 @@ export async function acceptMemberInvite(opts: {
 
     applySnapshotToLocalStorage(result.snapshot, { currentUserId: result.accountId });
     try {
+      const email = opts.email.trim().toLowerCase();
+      const passwordHash = await hashPassword(email, opts.password);
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, result.accountId);
-      localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
-      // Ensure joiner account exists in local accounts for session recovery
+      establishSession(result.accountId, email);
+      // Joiner local account — hash only, never plain password
       const accountsRaw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
       const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
-      if (Array.isArray(accounts) && !accounts.some((a: { id?: string }) => a.id === result.accountId)) {
-        accounts.push({
+      if (Array.isArray(accounts)) {
+        const idx = accounts.findIndex(
+          (a: { id?: string; email?: string }) =>
+            a.id === result.accountId || a.email?.toLowerCase() === email
+        );
+        const row = {
           id: result.accountId,
           memberId: result.memberId,
-          email: opts.email.trim().toLowerCase(),
-          password: opts.password,
+          email,
+          passwordHash,
           name: opts.name || "Member",
           emoji: opts.emoji || "👤",
-        });
-        localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
+        };
+        if (idx >= 0) {
+          accounts[idx] = { ...accounts[idx], ...row, password: undefined };
+        } else {
+          accounts.push(row);
+        }
+        localStorage.setItem(
+          STORAGE_KEYS.ACCOUNTS,
+          JSON.stringify(accounts.map((a: { password?: string }) => ({ ...a, password: undefined })))
+        );
       }
     } catch {
       /* ignore */

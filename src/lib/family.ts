@@ -1,5 +1,12 @@
 import type { FamilyMember, FamilyMemberStatus } from "@/types/pantry";
 
+import {
+  establishSession,
+  hashPassword,
+  isDemoAuthMode,
+  validatePasswordStrength,
+  verifyPassword,
+} from "@/lib/auth";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 export const FAMILY_MEMBERS_KEY = STORAGE_KEYS.FAMILY_MEMBERS;
@@ -14,8 +21,13 @@ export type FamilyAccount = {
   id: string;
   memberId: string;
   email: string;
-  /** Demo only — plain text for local simulation */
-  password: string;
+  /**
+   * @deprecated Prefer passwordHash. Migrated away on next successful sign-in.
+   * Never write new plain passwords to localStorage.
+   */
+  password?: string;
+  /** SHA-256 hash via hashSyncPassword (same scheme as cloud household auth) */
+  passwordHash?: string;
   name: string;
   emoji: string;
 };
@@ -360,7 +372,9 @@ export function loadAccounts(): FamilyAccount[] {
 
 export function saveAccounts(accounts: FamilyAccount[]): void {
   try {
-    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    // Never persist plain passwords via the shared writer
+    const cleaned = accounts.map(({ password: _p, ...rest }) => rest);
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(cleaned));
   } catch {}
 }
 
@@ -369,14 +383,32 @@ export function findAccountByEmail(email: string): FamilyAccount | null {
   return loadAccounts().find((a) => a.email.toLowerCase() === lower) ?? null;
 }
 
-/** Mark invite as accepted and attach account */
-export function acceptInviteAndCreateAccount(opts: {
+/** Persist account with hash only (strip plain password). */
+function saveAccountSecure(account: FamilyAccount): FamilyAccount {
+  const { password: _plain, ...rest } = account;
+  const clean: FamilyAccount = { ...rest };
+  // never persist plaintext
+  delete clean.password;
+  const accounts = loadAccounts();
+  const idx = accounts.findIndex((a) => a.id === clean.id || a.email.toLowerCase() === clean.email.toLowerCase());
+  if (idx >= 0) {
+    const next = [...accounts];
+    next[idx] = { ...next[idx], ...clean, password: undefined };
+    saveAccounts(next.map((a) => ({ ...a, password: undefined })));
+  } else {
+    saveAccounts([...accounts.map((a) => ({ ...a, password: undefined })), clean]);
+  }
+  return clean;
+}
+
+/** Mark invite as accepted and attach account (local/same-device path) */
+export async function acceptInviteAndCreateAccount(opts: {
   inviteCode: string;
   email: string;
   password: string;
   name?: string;
   emoji?: string;
-}): { ok: true; account: FamilyAccount; member: FamilyMember } | { ok: false; error: string } {
+}): Promise<{ ok: true; account: FamilyAccount; member: FamilyMember } | { ok: false; error: string }> {
   const members = loadFamilyMembers();
   const member = findMemberByInviteCode(opts.inviteCode, members);
   if (!member) {
@@ -390,6 +422,8 @@ export function acceptInviteAndCreateAccount(opts: {
   if (!email || !opts.password) {
     return { ok: false, error: "Email and password are required." };
   }
+  const strength = validatePasswordStrength(opts.password);
+  if (!strength.ok) return { ok: false, error: strength.error };
 
   const existing = findAccountByEmail(email);
   if (existing && existing.memberId !== member.id) {
@@ -398,33 +432,31 @@ export function acceptInviteAndCreateAccount(opts: {
 
   const name = (opts.name?.trim() || member.name).trim();
   const emoji = opts.emoji || member.emoji || "👤";
+  const passwordHash = await hashPassword(email, opts.password);
 
   let account: FamilyAccount;
-  const accounts = loadAccounts();
   if (existing) {
-    account = {
+    account = saveAccountSecure({
       ...existing,
-      password: opts.password,
+      passwordHash,
+      password: undefined,
       name,
       emoji,
       memberId: member.id,
-    };
-    saveAccounts(accounts.map((a) => (a.id === account.id ? account : a)));
+    });
   } else {
-    account = {
+    account = saveAccountSecure({
       id: `acct-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       memberId: member.id,
       email,
-      password: opts.password,
+      passwordHash,
       name,
       emoji,
-    };
-    saveAccounts([...accounts, account]);
+    });
   }
 
   const updatedMembers = members.map((m) => {
     if (m.id !== member.id) {
-      // Only one "You" — clear isYou on others when switching
       return { ...m, isYou: false };
     }
     return {
@@ -444,52 +476,63 @@ export function acceptInviteAndCreateAccount(opts: {
       PROFILE_KEY,
       JSON.stringify({ name, emoji, email, memberId: member.id, accountId: account.id })
     );
-    localStorage.setItem(CURRENT_USER_KEY, account.id);
-    localStorage.setItem(LOGGED_IN_KEY, "true");
     localStorage.removeItem(PENDING_INVITE_KEY);
   } catch {}
 
+  establishSession(account.id, email);
   clearInviteFromUrl();
 
   const joined = updatedMembers.find((m) => m.id === member.id)!;
   return { ok: true, account, member: joined };
 }
 
-export function signInWithAccount(
+export async function signInWithAccount(
   email: string,
   password: string
-): { ok: true; account: FamilyAccount } | { ok: false; error: string } {
-  const account = findAccountByEmail(email);
+): Promise<{ ok: true; account: FamilyAccount } | { ok: false; error: string }> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !password) {
+    return { ok: false, error: "Email and password are required." };
+  }
+
+  let account = findAccountByEmail(normalized);
+
   if (!account) {
-    // Demo fallback: allow sign-in without pre-registered account (legacy owner)
-    if (email && password) {
+    // Demo-only: auto-create on first sign-in (disabled in production mode)
+    if (isDemoAuthMode() && password) {
+      const strength = validatePasswordStrength(password, "demo");
+      if (!strength.ok) return { ok: false, error: strength.error };
+      const passwordHash = await hashPassword(normalized, password);
       const demo: FamilyAccount = {
         id: "acct-demo-owner",
         memberId: "you",
-        email: email.trim().toLowerCase(),
-        password,
-        name: email.split("@")[0] || "You",
+        email: normalized,
+        passwordHash,
+        name: normalized.split("@")[0] || "You",
         emoji: "👤",
       };
       const accounts = loadAccounts();
-      if (!accounts.some((a) => a.id === demo.id)) {
-        saveAccounts([...accounts, demo]);
+      if (!accounts.some((a) => a.id === demo.id || a.email === normalized)) {
+        saveAccountSecure(demo);
+      } else {
+        const existingById = accounts.find((a) => a.id === demo.id || a.email === normalized);
+        if (existingById) account = existingById;
       }
+      if (!account) account = findAccountByEmail(normalized) || demo;
+
       try {
-        localStorage.setItem(LOGGED_IN_KEY, "true");
-        localStorage.setItem(CURRENT_USER_KEY, demo.id);
         localStorage.setItem(
           PROFILE_KEY,
-          JSON.stringify({ name: demo.name, emoji: demo.emoji, email: demo.email, memberId: demo.memberId })
+          JSON.stringify({
+            name: account.name,
+            emoji: account.emoji,
+            email: account.email,
+            memberId: account.memberId,
+            accountId: account.id,
+          })
         );
-        // Mark owner as current "You"
-        const members = loadFamilyMembers().map((m) => ({
-          ...m,
-          isYou: m.id === "you" || m.status === "owner",
-        }));
-        // Ensure only one isYou
         let seen = false;
-        const fixed = members.map((m) => {
+        const fixed = loadFamilyMembers().map((m) => {
           if ((m.id === "you" || m.status === "owner") && !seen) {
             seen = true;
             return { ...m, isYou: true };
@@ -498,17 +541,38 @@ export function signInWithAccount(
         });
         saveFamilyMembers(fixed);
       } catch {}
-      return { ok: true, account: demo };
+      establishSession(account.id, account.email);
+      return { ok: true, account };
     }
-    return { ok: false, error: "No account found for that email." };
+    return {
+      ok: false,
+      error: isDemoAuthMode()
+        ? "No account found for that email."
+        : "No account found. Create an account first.",
+    };
   }
-  if (account.password !== password) {
+
+  // Verify: prefer hash; migrate plain → hash on success
+  let valid = false;
+  if (account.passwordHash) {
+    valid = await verifyPassword(normalized, password, account.passwordHash);
+  } else if (account.password != null && account.password === password) {
+    valid = true;
+  }
+
+  if (!valid) {
     return { ok: false, error: "Incorrect password." };
   }
 
+  // Migrate / re-hash and strip plaintext
+  const passwordHash = account.passwordHash || (await hashPassword(normalized, password));
+  account = saveAccountSecure({
+    ...account,
+    passwordHash,
+    password: undefined,
+  });
+
   try {
-    localStorage.setItem(LOGGED_IN_KEY, "true");
-    localStorage.setItem(CURRENT_USER_KEY, account.id);
     localStorage.setItem(
       PROFILE_KEY,
       JSON.stringify({
@@ -521,22 +585,101 @@ export function signInWithAccount(
     );
     const members = loadFamilyMembers().map((m) => ({
       ...m,
-      isYou: m.id === account.memberId,
+      isYou: m.id === account!.memberId,
     }));
     saveFamilyMembers(members);
-    // Successful sign-in clears any simulated force-logout mark
     try {
       const key = "friggg-forced-logout-ids";
       const raw = localStorage.getItem(key);
       if (raw) {
         const ids = JSON.parse(raw) as string[];
         if (Array.isArray(ids) && ids.includes(account.id)) {
-          localStorage.setItem(key, JSON.stringify(ids.filter((id) => id !== account.id)));
+          localStorage.setItem(key, JSON.stringify(ids.filter((id) => id !== account!.id)));
         }
       }
     } catch {}
   } catch {}
 
+  establishSession(account.id, account.email);
+  return { ok: true, account };
+}
+
+/** Register household owner (onboarding) with hashed password */
+export async function registerOwnerAccount(
+  displayName: string,
+  email: string,
+  password: string,
+  emoji: string,
+  householdName: string
+): Promise<{ ok: true; account: FamilyAccount } | { ok: false; error: string }> {
+  const normalized = email.trim().toLowerCase();
+  const strength = validatePasswordStrength(password);
+  if (!strength.ok) return { ok: false, error: strength.error };
+  if (!normalized) return { ok: false, error: "Email is required." };
+
+  const existing = findAccountByEmail(normalized);
+  if (existing) {
+    return { ok: false, error: "An account with this email already exists. Sign in instead." };
+  }
+
+  const passwordHash = await hashPassword(normalized, password);
+  const accountId = `acct-${Date.now()}`;
+  const memberId = "you";
+  const account = saveAccountSecure({
+    id: accountId,
+    memberId,
+    email: normalized,
+    passwordHash,
+    name: displayName,
+    emoji,
+  });
+
+  try {
+    localStorage.setItem(HOUSEHOLD_KEY, householdName);
+    localStorage.setItem(
+      PROFILE_KEY,
+      JSON.stringify({
+        name: displayName,
+        emoji,
+        email: normalized,
+        memberId,
+        accountId,
+      })
+    );
+
+    const membersRaw = localStorage.getItem(FAMILY_MEMBERS_KEY);
+    let members = membersRaw ? JSON.parse(membersRaw) : null;
+    if (!Array.isArray(members) || members.length === 0) {
+      members = [
+        {
+          id: "you",
+          name: displayName.split(" ")[0] || "You",
+          emoji,
+          phone: "",
+          inviteCode: Math.random().toString(36).slice(2, 12),
+          status: "owner",
+          isYou: true,
+          email: normalized,
+        },
+      ];
+    } else {
+      members = members.map((m: { id: string; status?: string }) => ({
+        ...m,
+        isYou: m.id === "you" || m.status === "owner",
+        ...(m.id === "you"
+          ? {
+              name: displayName.split(" ")[0] || m.id,
+              emoji,
+              email: normalized,
+              status: "owner",
+            }
+          : { isYou: false }),
+      }));
+    }
+    localStorage.setItem(FAMILY_MEMBERS_KEY, JSON.stringify(members));
+  } catch {}
+
+  establishSession(accountId, normalized);
   return { ok: true, account };
 }
 

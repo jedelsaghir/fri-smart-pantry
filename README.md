@@ -18,16 +18,27 @@ Everything stays private on your device. Works beautifully as a Progressive Web 
 
 Friġġ keeps a **local cache** in the browser and **syncs the household to the server** when you sign in with the same email & password on another device.
 
-| Area | Reality |
-|------|---------|
-| Accounts / passwords | Demo auth — passwords stored for local simulation; server stores a hash for sync auth — **not** production-grade auth |
-| Multi-device sync | **Wired:** login pulls cloud snapshot; changes debounce-push. Same email/password on PC + iOS restores household, members, pantry, receipts, profile. |
-| Household invites | **Cross-device:** unique invite link per member; owner publishes to cloud when sharing; joiner opens link on their phone, creates an account, and lands in the shared pantry (`pending` → `joined`). |
-| Receipt scan | **Live OCR** via `getPlatform().ocr` → xAI vision (`XAI_API_KEY`). |
-| Push notifications | Not implemented — in-app Alerts panel only |
-| Backup | Settings export/import JSON still available |
+Full breakdown: [`docs/AUTH.md`](docs/AUTH.md).
 
-Do not use this build for real sensitive credentials without hardening auth.
+| Area | Status | Notes |
+|------|--------|--------|
+| Local passwords | **Hardened** | Stored as `passwordHash` (SHA-256, same scheme as cloud sync). Plain passwords are **not** written to `localStorage`. |
+| Session | **Hardened** | Structured session with 30-day expiry (`friggg-auth-session`); legacy `LOGGED_IN` still mirrored. |
+| Auth mode | **Split** | `VITE_AUTH_MODE=demo` (default): may auto-create on first sign-in. `VITE_AUTH_MODE=production`: no auto-create; stronger password rules. |
+| Multi-device sync | **Wired** | Login pulls cloud snapshot; changes debounce-push. Same email/password on PC + iOS restores household. Sync re-auth uses **sessionStorage** password for the tab session only. |
+| Household invites | **Wired** | Unique invite link per member; cloud publish + accept. |
+| Email verification | **Demo / TODO** | No confirm-email flow yet. |
+| OAuth / magic link | **Demo / TODO** | No third-party IdP yet. |
+| Receipt scan | **Live OCR** | `getPlatform().ocr` → xAI vision (`XAI_API_KEY`). |
+| Push notifications | Not implemented | In-app Alerts panel only |
+| Backup | Available | Settings export/import JSON |
+
+Do not treat this as full production identity (no email verify / OAuth yet). For family pantry data with shared passwords it is a practical step up from plain-text local accounts.
+
+```bash
+# Stricter client behaviour (no silent account auto-create on sign-in)
+export VITE_AUTH_MODE=production
+```
 
 ### Pluggable platform (OCR / sync / push)
 

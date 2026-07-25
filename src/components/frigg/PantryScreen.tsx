@@ -1170,24 +1170,27 @@ export function PantryScreen() {
             >
               <StorageTabs active={active} onChange={setActive} />
             </div>
-            <button
-              type="button"
-              onClick={() => setAddSheetOpen(true)}
-              className="group relative mb-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-border/45 bg-card py-3.5 text-[15px] font-semibold tracking-[-0.015em] text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.75)_inset,0_10px_28px_-14px_oklch(0.2_0.02_150/0.14)] active:scale-[0.985] transition duration-200 dark:shadow-[0_1px_0_0_oklch(1_0_0/0.06)_inset,0_10px_28px_-14px_oklch(0_0_0/0.4)]"
-            >
-              <span
-                className="pointer-events-none absolute inset-0 opacity-60 transition-opacity duration-300 group-hover:opacity-100"
-                style={{
-                  background:
-                    "linear-gradient(180deg, color-mix(in oklab, var(--color-brand) 5%, transparent), transparent 55%)",
-                }}
-                aria-hidden
-              />
-              <span className="relative grid size-7 place-items-center rounded-full bg-brand text-brand-foreground shadow-[0_4px_12px_-4px_color-mix(in_oklab,var(--color-brand)_50%,transparent)] transition group-active:scale-95">
-                <Plus className="size-3.5" strokeWidth={2.5} />
-              </span>
-              <span className="relative">Add item</span>
-            </button>
+            {/* Hide under-tabs Add when empty — empty state owns Add + Scan CTAs */}
+            {current.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAddSheetOpen(true)}
+                className="group relative mb-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-border/45 bg-card py-3.5 text-[15px] font-semibold tracking-[-0.015em] text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.75)_inset,0_10px_28px_-14px_oklch(0.2_0.02_150/0.14)] active:scale-[0.985] transition duration-200 dark:shadow-[0_1px_0_0_oklch(1_0_0/0.06)_inset,0_10px_28px_-14px_oklch(0_0_0/0.4)]"
+              >
+                <span
+                  className="pointer-events-none absolute inset-0 opacity-60 transition-opacity duration-300 group-hover:opacity-100"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, color-mix(in oklab, var(--color-brand) 5%, transparent), transparent 55%)",
+                  }}
+                  aria-hidden
+                />
+                <span className="relative grid size-7 place-items-center rounded-full bg-brand text-brand-foreground shadow-[0_4px_12px_-4px_color-mix(in_oklab,var(--color-brand)_50%,transparent)] transition group-active:scale-95">
+                  <Plus className="size-3.5" strokeWidth={2.5} />
+                </span>
+                <span className="relative">Add item</span>
+              </button>
+            )}
             {/* Silent success + motivational banner */}
             {addedBanner && (
               <div
@@ -1549,7 +1552,7 @@ function EmptyState({
             className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-[14px] font-semibold text-brand-foreground shadow-[0_10px_28px_-12px_color-mix(in_oklab,var(--color-brand)_55%,transparent)] active:scale-[0.98] transition"
           >
             <Plus className="size-4" strokeWidth={2.5} />
-            Add your first item
+            Add item
           </button>
         )}
         {onScan && (

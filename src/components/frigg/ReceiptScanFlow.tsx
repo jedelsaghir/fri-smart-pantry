@@ -39,6 +39,8 @@ import {
   ReceiptReviewFooter,
   ReceiptReviewStage,
 } from "./receipt-scan/ReceiptReviewStage";
+import { ReceiptExpiryAssistStage } from "./receipt-scan/ReceiptExpiryAssistStage";
+import type { ExpiryAssistSignal } from "./receipt-scan/types";
 
 export type { DetectedItem };
 export type { ReceiptScanFlowProps } from "./receipt-scan/types";
@@ -48,6 +50,7 @@ export function ReceiptScanFlow({
   onClose,
   onItemsAdded,
   onReceiptSaved,
+  onExpirySignals,
   pantryItems = [],
   onNavigateToPantry,
 }: ReceiptScanFlowProps) {
@@ -55,6 +58,8 @@ export function ReceiptScanFlow({
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [detected, setDetected] = useState<DetectedItem[]>([]);
   const [reviewItems, setReviewItems] = useState<DetectedItem[]>([]);
+  /** Items eligible for optional post-scan expiry photo assist */
+  const [expiryCandidates, setExpiryCandidates] = useState<DetectedItem[]>([]);
   const [resultOk, setResultOk] = useState(true);
   const [resultMessage, setResultMessage] = useState("");
   const [processLabel, setProcessLabel] = useState("Reading receipt…");
@@ -71,6 +76,7 @@ export function ReceiptScanFlow({
   const [captureQuality, setCaptureQuality] = useState<CaptureQuality | null>(null);
 
   const receiptSavedRef = useRef(false);
+  const pantryToastShownRef = useRef(false);
   const ocrMetaRef = useRef<OcrMeta>({});
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -191,6 +197,7 @@ export function ReceiptScanFlow({
     setPhotos([]);
     setDetected([]);
     setReviewItems([]);
+    setExpiryCandidates([]);
     setResultOk(true);
     setResultMessage("");
     setProcessLabel("Reading receipt…");
@@ -203,6 +210,7 @@ export function ReceiptScanFlow({
     setCapturing(false);
     setCaptureQuality(null);
     receiptSavedRef.current = false;
+    pantryToastShownRef.current = false;
     ocrMetaRef.current = {};
   };
 
@@ -233,16 +241,45 @@ export function ReceiptScanFlow({
     onReceiptSaved?.(receipt);
   };
 
-  const finishCleanToPantry = (allItems: DetectedItem[]) => {
-    saveReceiptSnapshot(allItems, primaryImage);
-    toast.success("Pantry Updated", {
-      description: ocrMetaRef.current.store
-        ? `Saved receipt from ${ocrMetaRef.current.store}`
-        : "Receipt saved in Finances",
-    });
+  const leaveToPantry = () => {
+    if (!pantryToastShownRef.current) {
+      pantryToastShownRef.current = true;
+      toast.success("Pantry Updated", {
+        description: ocrMetaRef.current.store
+          ? `Saved receipt from ${ocrMetaRef.current.store}`
+          : "Receipt saved in Finances",
+      });
+    }
     stopCamera();
     onNavigateToPantry?.();
     handleClose();
+  };
+
+  /** Offer optional expiry label photos after a successful add (skippable). */
+  const offerExpiryAssist = (candidates: DetectedItem[], allForReceipt: DetectedItem[]) => {
+    saveReceiptSnapshot(allForReceipt, primaryImage);
+    if (candidates.length === 0) {
+      leaveToPantry();
+      return;
+    }
+    setExpiryCandidates(candidates);
+    setStep("expiry-assist");
+  };
+
+  const finishExpiryAssist = (signals: ExpiryAssistSignal[]) => {
+    if (signals.length > 0) {
+      onExpirySignals?.(signals);
+      const photoN = signals.filter((s) => s.labelPhotoDataUrl).length;
+      const daysN = signals.filter((s) => typeof s.daysLeft === "number").length;
+      const parts: string[] = [];
+      if (photoN > 0) parts.push(`${photoN} label photo${photoN === 1 ? "" : "s"}`);
+      if (daysN > 0) parts.push(`${daysN} date${daysN === 1 ? "" : "s"} set`);
+      toast.success("Labels saved", {
+        description: parts.join(" · ") || "Expiry notes attached",
+      });
+      pantryToastShownRef.current = true; // suppress second generic toast
+    }
+    leaveToPantry();
   };
 
   const showResultThen = (opts: {
@@ -407,7 +444,7 @@ export function ReceiptScanFlow({
         clearResultTimer();
         resultTimerRef.current = setTimeout(() => {
           if (autoItems.length > 0) {
-            finishCleanToPantry(pantryBound);
+            offerExpiryAssist(autoItems, pantryBound);
           } else {
             stopCamera();
             onNavigateToPantry?.();
@@ -548,10 +585,13 @@ export function ReceiptScanFlow({
   const confirmReview = () => {
     if (reviewItems.length === 0) {
       const autoOnly = detected.filter((i) => !reviewItems.some((r) => r.id === i.id));
-      if (detected.length > 0) saveReceiptSnapshot(detected, primaryImage);
-      else if (autoOnly.length > 0) saveReceiptSnapshot(autoOnly, primaryImage);
-      onNavigateToPantry?.();
-      handleClose();
+      if (autoOnly.length > 0) {
+        offerExpiryAssist(autoOnly, autoOnly);
+      } else {
+        if (detected.length > 0) saveReceiptSnapshot(detected, primaryImage);
+        onNavigateToPantry?.();
+        handleClose();
+      }
       return;
     }
 
@@ -563,7 +603,6 @@ export function ReceiptScanFlow({
     const reviewIds = new Set(reviewItems.map((r) => r.id));
     const autoPart = detected.filter((i) => !reviewIds.has(i.id));
     const allForReceipt = [...autoPart, ...reviewItems];
-    saveReceiptSnapshot(allForReceipt, primaryImage);
 
     const mergeN = reviewItems.filter(
       (i) => i.pantryMatch && (i.disposition ?? "merge") === "merge"
@@ -578,13 +617,15 @@ export function ReceiptScanFlow({
     if (mergeN > 0) parts.push(`${mergeN} merged`);
     if (updateN > 0) parts.push(`${updateN} updated`);
 
+    pantryToastShownRef.current = true;
     toast.success("Pantry Updated", {
       description: parts.length
         ? parts.join(" · ") + " · saved in Finances"
         : "Receipt saved in Finances",
     });
-    onNavigateToPantry?.();
-    handleClose();
+
+    // Optional expiry photos for everything just confirmed + earlier auto-adds
+    offerExpiryAssist([...autoPart, ...reviewItems], allForReceipt);
   };
 
   const handleRetryFromError = () => {
@@ -678,6 +719,14 @@ export function ReceiptScanFlow({
               onRemoveItem={removeReviewItem}
             />
           )}
+
+          {step === "expiry-assist" && (
+            <ReceiptExpiryAssistStage
+              items={expiryCandidates}
+              onSkip={leaveToPantry}
+              onDone={finishExpiryAssist}
+            />
+          )}
         </div>
 
         {step === "review" && (
@@ -685,13 +734,15 @@ export function ReceiptScanFlow({
             reviewCount={reviewItems.length}
             onConfirm={confirmReview}
             onSkip={() => {
-              if (detected.length > 0) {
-                const reviewIds = new Set(reviewItems.map((r) => r.id));
-                const autoPart = detected.filter((i) => !reviewIds.has(i.id));
-                if (autoPart.length > 0) saveReceiptSnapshot(autoPart, primaryImage);
+              const reviewIds = new Set(reviewItems.map((r) => r.id));
+              const autoPart = detected.filter((i) => !reviewIds.has(i.id));
+              if (autoPart.length > 0) {
+                // Already added auto items earlier — offer optional labels, skip review lines
+                offerExpiryAssist(autoPart, autoPart);
+              } else {
+                onNavigateToPantry?.();
+                handleClose();
               }
-              onNavigateToPantry?.();
-              handleClose();
             }}
           />
         )}

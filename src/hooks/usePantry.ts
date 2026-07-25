@@ -10,7 +10,11 @@ import type {
   DetailsItemState,
   AddedBanner,
 } from "@/types/pantry";
-import { applyIncomingToStorage, applyPriceToMatchingItems } from "@/lib/pantry-ops";
+import {
+  applyIncomingToStorage,
+  applyPriceToMatchingItems,
+  sameProduct,
+} from "@/lib/pantry-ops";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { defaultPriceUnit as priceUnitFromUnit, estimateLinePrice } from "@/lib/receipts";
 
@@ -507,6 +511,66 @@ export function usePantry(options: UsePantryOptions = {}) {
 
   const dismissBanner = useCallback(() => setAddedBanner(null), []);
 
+  /**
+   * Attach post-scan label photos / days-left to pantry rows matched by name+unit+storage.
+   * Prefer rows in the signal's storage; fall back to any storage with same product.
+   */
+  const applyExpirySignals = useCallback(
+    (
+      signals: Array<{
+        name: string;
+        unit: string;
+        storage: StorageKey;
+        labelPhotoDataUrl?: string;
+        daysLeft?: number;
+      }>
+    ) => {
+      if (!signals.length) return;
+      setItems((prev) => {
+        const next: PantryItemsByStorage = {
+          fridge: [...prev.fridge],
+          freezer: [...prev.freezer],
+          pantry: [...prev.pantry],
+        };
+
+        for (const signal of signals) {
+          const patch: Partial<PantryItem> = {};
+          if (signal.labelPhotoDataUrl) {
+            patch.labelPhotoDataUrl = signal.labelPhotoDataUrl;
+            patch.labelPhotoAt = new Date().toISOString();
+          }
+          if (typeof signal.daysLeft === "number" && Number.isFinite(signal.daysLeft)) {
+            patch.daysLeft = Math.max(0, Math.floor(signal.daysLeft));
+          }
+          if (Object.keys(patch).length === 0) continue;
+
+          const tryMatch = (list: PantryItem[]): number =>
+            list.findIndex((i) => sameProduct(i, { name: signal.name, unit: signal.unit }));
+
+          // Prefer target storage, then any
+          let foundStorage: StorageKey | null = null;
+          let idx = tryMatch(next[signal.storage]);
+          if (idx >= 0) foundStorage = signal.storage;
+          else {
+            for (const st of ["fridge", "freezer", "pantry"] as StorageKey[]) {
+              idx = tryMatch(next[st]);
+              if (idx >= 0) {
+                foundStorage = st;
+                break;
+              }
+            }
+          }
+          if (foundStorage == null || idx < 0) continue;
+          next[foundStorage] = next[foundStorage].map((item, i) =>
+            i === idx ? { ...item, ...patch } : item
+          );
+        }
+        return next;
+      });
+    },
+    []
+  );
+
   const expiringSoon = current.filter((i) => i.daysLeft <= 3).length;
 
   /** Global low stock count (items currently below their minStock) */
@@ -537,6 +601,7 @@ export function usePantry(options: UsePantryOptions = {}) {
     openItemDetails,
     closeItemDetails,
     addScannedItems,
+    applyExpirySignals,
     dismissBanner,
   };
 }

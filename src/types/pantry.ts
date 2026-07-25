@@ -16,6 +16,15 @@ export interface PantryItem {
   latestPrice?: number;
   /** Price basis label, e.g. "100g", "L", "pcs" */
   priceUnit?: string;
+  /**
+   * Optional compressed product-label / expiry photo (data URL).
+   * Attached via post-scan expiry assist — not auto-OCR’d for dates.
+   */
+  labelPhotoDataUrl?: string;
+  /** When the label photo was captured (ISO) */
+  labelPhotoAt?: string;
+  /** Optional barcode / GTIN if known (from barcode assist) */
+  barcode?: string;
 }
 
 export type ItemStatus = {

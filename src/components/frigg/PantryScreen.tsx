@@ -119,6 +119,7 @@ export function PantryScreen() {
     openItemDetails,
     closeItemDetails,
     addScannedItems,
+    applyExpirySignals,
     dismissBanner,
   } = usePantry({ onActivity: family.addActivity });
 
@@ -258,6 +259,7 @@ export function PantryScreen() {
       emoji: string;
       qty: number;
       minStock: number;
+      barcode?: string;
     }) => {
       const newItem = {
         id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -267,6 +269,7 @@ export function PantryScreen() {
         emoji: input.emoji,
         daysLeft: getDefaultDaysLeft(input.name, active),
         minStock: input.minStock || getDefaultMinStock(input.name),
+        ...(input.barcode ? { barcode: input.barcode } : {}),
       };
       setItems((prev) => applyIncomingToStorage(prev, active, newItem));
       rememberPantryItem(newItem, "pantry_add");
@@ -740,6 +743,7 @@ export function PantryScreen() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         onItemsAdded={handleScannedItems}
+        onExpirySignals={(signals) => applyExpirySignals(signals)}
         onReceiptSaved={(receipt) => {
           addReceipt(receipt);
           family.addActivity("You", `saved receipt from ${receipt.store}`);

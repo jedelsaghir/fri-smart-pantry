@@ -534,6 +534,20 @@ function DetailsBody({
               : " · expired or expires today"}
             . Pick a date; freezers last 3–6× longer.
           </p>
+
+          {item.labelPhotoDataUrl && (
+            <div className="mt-3 overflow-hidden rounded-3xl border border-border/50">
+              <img
+                src={item.labelPhotoDataUrl}
+                alt={`Product label for ${item.name}`}
+                className="max-h-36 w-full object-cover"
+              />
+              <p className="px-3 py-1.5 text-[10px] text-muted-foreground bg-secondary/40">
+                Label photo (reference only — dates are not auto-read)
+                {item.barcode ? ` · barcode ${item.barcode}` : ""}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Minimum stock */}

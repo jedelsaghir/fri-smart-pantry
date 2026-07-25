@@ -2,6 +2,7 @@
 
 import { Check, Trash2 } from "lucide-react";
 import type { DetectedItem, ReviewDisposition, StorageKey } from "@/types/pantry";
+import { BarcodeAssistButton } from "@/components/frigg/BarcodeAssistButton";
 import { formatStorageLabel } from "./types";
 
 export function ReceiptReviewStage({
@@ -86,6 +87,20 @@ export function ReceiptReviewStage({
                     onChange={(e) => onUpdateItem(item.id, { name: e.target.value })}
                     className="w-full bg-transparent text-[15px] font-semibold tracking-[-0.01em] outline-none border-b border-transparent focus:border-border/50 pb-0.5"
                   />
+
+                  <div className="mt-1.5">
+                    <BarcodeAssistButton
+                      label="Barcode"
+                      className="inline-flex items-center gap-1 rounded-xl border border-border/50 bg-secondary/40 px-2 py-1 text-[11px] font-semibold text-muted-foreground active:bg-secondary"
+                      onPrefill={(r) => {
+                        onUpdateItem(item.id, {
+                          ...(r.name ? { name: r.name } : {}),
+                          ...(r.unit ? { unit: r.unit } : {}),
+                          ...(r.emoji ? { emoji: r.emoji } : {}),
+                        });
+                      }}
+                    />
+                  </div>
 
                   {isNonFoodSuspect && (
                     <div className="mt-2.5 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-3 py-2.5">

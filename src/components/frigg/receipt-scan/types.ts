@@ -12,7 +12,27 @@ export type CapturedPhoto = {
   dataUrl: string;
 };
 
-export type ScanStep = "capture" | "processing" | "result" | "review" | "error";
+export type ScanStep =
+  | "capture"
+  | "processing"
+  | "result"
+  | "review"
+  | "expiry-assist"
+  | "error";
+
+/** Post-scan expiry photo / days-left signal for one scanned line */
+export type ExpiryAssistSignal = {
+  /** Stable key within this scan session (detected item id) */
+  scanItemId: string;
+  name: string;
+  unit: string;
+  storage: StorageKey;
+  emoji: string;
+  /** Compressed label photo data URL */
+  labelPhotoDataUrl?: string;
+  /** User-entered days until expiry when they can read the label */
+  daysLeft?: number;
+};
 
 export type OcrMeta = {
   store?: string | null;
@@ -29,6 +49,8 @@ export interface ReceiptScanFlowProps {
   ) => void;
   /** Persist full receipt (photo + line items) for Finances history */
   onReceiptSaved?: (receipt: StoredReceipt) => void;
+  /** Optional label photos + days-left after a successful scan */
+  onExpirySignals?: (signals: ExpiryAssistSignal[]) => void;
   /** Existing pantry rows — similar / duplicate lines go to review */
   pantryItems?: FlatPantryRef[];
   /** Called when scan finishes cleanly (no review) so parent can open Pantry tab */
@@ -46,6 +68,7 @@ export function createPhotoId() {
 export function scanHeaderTitle(step: ScanStep, resultOk: boolean): string {
   if (step === "result") return resultOk ? "Receipt ready" : "Scan issue";
   if (step === "review") return "Review items";
+  if (step === "expiry-assist") return "Expiry labels";
   if (step === "processing") return "Processing";
   return "Scan receipt";
 }

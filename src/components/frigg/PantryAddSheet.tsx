@@ -11,6 +11,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { BarcodeAssistButton } from "./BarcodeAssistButton";
 
 export function PantryAddSheet({
   open,
@@ -29,12 +30,14 @@ export function PantryAddSheet({
     emoji: string;
     qty: number;
     minStock: number;
+    barcode?: string;
   }) => void;
 }) {
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("pcs");
   const [emoji, setEmoji] = useState("🛒");
   const [qty, setQty] = useState("1");
+  const [barcode, setBarcode] = useState<string | undefined>();
 
   const matches = useMemo(() => suggest(name), [name, suggest]);
 
@@ -43,6 +46,7 @@ export function PantryAddSheet({
     setUnit("pcs");
     setEmoji("🛒");
     setQty("1");
+    setBarcode(undefined);
   };
 
   const pick = (item: CatalogItem) => {
@@ -61,6 +65,7 @@ export function PantryAddSheet({
       emoji: emoji.trim() || "🛒",
       qty: q,
       minStock: 1,
+      barcode,
     });
     reset();
     onOpenChange(false);
@@ -80,11 +85,27 @@ export function PantryAddSheet({
             Add to {storage === "fridge" ? "Fridge" : storage === "freezer" ? "Freezer" : "Pantry"}
           </DrawerTitle>
           <p className="text-sm text-muted-foreground">
-            Type a name — matches from your Database appear below.
+            Type a name — or scan a barcode when your browser supports it.
           </p>
         </DrawerHeader>
 
         <div className="space-y-3 px-5 pb-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <BarcodeAssistButton
+              onPrefill={(r) => {
+                if (r.name) setName(r.name);
+                if (r.unit) setUnit(r.unit);
+                if (r.emoji) setEmoji(r.emoji);
+                setBarcode(r.barcode);
+              }}
+            />
+            {barcode && (
+              <span className="text-[10px] text-muted-foreground tabular-nums">
+                Code {barcode}
+              </span>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <Input
               value={emoji}

@@ -1,7 +1,11 @@
 "use client";
 
-import type { PantryItemsByStorage, Recipe, RecipeFilter, StorageKey } from "@/types/pantry";
-import { namesMatchLoose } from "@/lib/pantry-ops";
+import type { PantryItemsByStorage, Recipe, RecipeFilter } from "@/types/pantry";
+
+export {
+  countRecipeAvailability,
+  canMakeRecipeFully,
+} from "@/lib/recipe-helpers";
 
 export function RecipesView({
   items,
@@ -125,19 +129,4 @@ export function RecipesView({
       </p>
     </div>
   );
-}
-
-export function countRecipeAvailability(
-  items: PantryItemsByStorage,
-  recipe: Recipe
-): number {
-  return recipe.ingredients.filter((ing) => {
-    return (["fridge", "freezer", "pantry"] as StorageKey[]).some((storage) =>
-      items[storage].some((n) => namesMatchLoose(n.name, ing.name) && n.qty >= ing.qty)
-    );
-  }).length;
-}
-
-export function canMakeRecipeFully(items: PantryItemsByStorage, recipe: Recipe): boolean {
-  return countRecipeAvailability(items, recipe) === recipe.ingredients.length;
 }

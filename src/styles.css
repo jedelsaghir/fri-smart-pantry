@@ -267,6 +267,29 @@
   min-width: 44px;
 }
 
+/* Empty-state atmosphere — calm, expensive motion */
+@keyframes emptyGlow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes emptyFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Mobile performance & UX
    --------------------------------------------------------------------------- */

@@ -31,12 +31,13 @@ export function StorageTabs({
         padding: "0.4rem",
         borderRadius: "1.5rem",
         boxSizing: "border-box",
-        border: "1px solid color-mix(in oklab, var(--color-border) 45%, transparent)",
-        background: "color-mix(in oklab, var(--color-secondary) 68%, transparent)",
+        border: "1px solid color-mix(in oklab, var(--color-border) 42%, transparent)",
+        background:
+          "linear-gradient(180deg, color-mix(in oklab, var(--color-secondary) 78%, transparent), color-mix(in oklab, var(--color-secondary) 58%, transparent))",
         backdropFilter: "saturate(190%) blur(22px)",
         WebkitBackdropFilter: "saturate(190%) blur(22px)",
         boxShadow:
-          "inset 0 1px 0 oklch(1 0 0 / 0.45), 0 10px 28px -14px oklch(0.2 0.02 150 / 0.1)",
+          "inset 0 1px 0 oklch(1 0 0 / 0.5), 0 1px 0 0 color-mix(in oklab, var(--color-border) 30%, transparent), 0 12px 28px -14px oklch(0.2 0.02 150 / 0.12)",
       }}
     >
       {TABS.map((t) => {

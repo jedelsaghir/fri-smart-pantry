@@ -1165,7 +1165,7 @@ export function PantryScreen() {
           <>
             {/* Full-width storage segmented control — never partial width */}
             <div
-              className="mb-3"
+              className="mb-3.5"
               style={{ width: "100%", maxWidth: "100%", display: "block" }}
             >
               <StorageTabs active={active} onChange={setActive} />
@@ -1173,9 +1173,19 @@ export function PantryScreen() {
             <button
               type="button"
               onClick={() => setAddSheetOpen(true)}
-              className="mb-1 flex w-full items-center justify-center gap-2 rounded-3xl border border-border/60 bg-card py-3 text-sm font-semibold active:bg-secondary/50 active:scale-[0.99] transition"
+              className="group relative mb-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-border/50 bg-card py-3.5 text-[15px] font-semibold tracking-[-0.01em] text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.7)_inset,0_8px_24px_-12px_oklch(0.2_0.02_150/0.12)] active:scale-[0.985] active:brightness-[0.99] transition duration-200"
             >
-              <Plus className="size-4" />
+              <span
+                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-active:opacity-100"
+                style={{
+                  background:
+                    "radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--color-brand) 8%, transparent), transparent 60%)",
+                }}
+                aria-hidden
+              />
+              <span className="grid size-7 place-items-center rounded-full bg-brand text-brand-foreground shadow-sm transition group-active:scale-95">
+                <Plus className="size-3.5" strokeWidth={2.5} />
+              </span>
               Add item
             </button>
             {/* Silent success + motivational banner */}
@@ -1227,7 +1237,7 @@ export function PantryScreen() {
             )}
 
             {current.length === 0 ? (
-              <EmptyState label={active} />
+              <EmptyState label={active} onAdd={() => setAddSheetOpen(true)} />
             ) : (
               /* FINAL: 1-column vertical stack only — never grid / never 2-col */
               <div className="mt-5 flex flex-col gap-4" style={{ width: "100%" }}>
@@ -1407,17 +1417,117 @@ export function PantryScreen() {
   );
 }
 
-function EmptyState({ label }: { label: StorageKey }) {
+function EmptyState({
+  label,
+  onAdd,
+}: {
+  label: StorageKey;
+  onAdd?: () => void;
+}) {
+  const copy =
+    label === "freezer"
+      ? {
+          emoji: "🧊",
+          title: "Your freezer is waiting",
+          body: "Save leftovers and bulk buys for later. Scan a receipt or add something by hand.",
+          accent: "oklch(0.72 0.08 230)",
+        }
+      : label === "pantry"
+        ? {
+            emoji: "🫙",
+            title: "A calm, empty pantry",
+            body: "Staples and dry goods will live here. Start with a quick scan or a single item.",
+            accent: "oklch(0.78 0.08 85)",
+          }
+        : {
+            emoji: "🥛",
+            title: "Your fridge is ready",
+            body: "Fresh food looks best when it’s easy to see. Add a few items and breathe easy.",
+            accent: "oklch(0.72 0.1 155)",
+          };
+
   return (
-    <div className="mt-20 flex flex-col items-center text-center">
-      <div className="mx-auto grid size-20 place-items-center rounded-3xl bg-secondary/70 text-4xl shadow-inner">
-        {label === "freezer" ? "🧊" : "🫙"}
+    <div className="relative mt-10 flex flex-col items-center px-2 pb-6 text-center">
+      {/* Soft ambient atmosphere */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-6 h-56 w-56 -translate-x-1/2 rounded-full opacity-70 blur-3xl"
+        style={{
+          background: `radial-gradient(circle, color-mix(in oklab, ${copy.accent} 35%, transparent), transparent 70%)`,
+        }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute left-1/2 top-16 h-40 w-72 -translate-x-1/2 rounded-full opacity-40 blur-2xl"
+        style={{
+          background:
+            "radial-gradient(ellipse, color-mix(in oklab, var(--color-brand) 12%, transparent), transparent 70%)",
+        }}
+        aria-hidden
+      />
+
+      {/* Illustration stack */}
+      <div className="relative mt-2">
+        {/* Outer glow ring */}
+        <div
+          className="absolute -inset-3 rounded-[2rem] opacity-60 animate-[emptyGlow_4.5s_ease-in-out_infinite]"
+          style={{
+            background: `radial-gradient(circle at 50% 40%, color-mix(in oklab, ${copy.accent} 28%, transparent), transparent 68%)`,
+          }}
+          aria-hidden
+        />
+        {/* Soft floating card back */}
+        <div
+          className="absolute -right-3 top-4 size-16 rotate-6 rounded-2xl border border-border/40 bg-card/70 shadow-sm backdrop-blur-sm animate-[emptyFloat_5.5s_ease-in-out_infinite]"
+          style={{ transformOrigin: "center" }}
+          aria-hidden
+        />
+        <div
+          className="absolute -left-4 bottom-2 size-12 -rotate-8 rounded-2xl border border-border/35 bg-card/60 shadow-sm backdrop-blur-sm animate-[emptyFloat_6.2s_ease-in-out_infinite_reverse]"
+          style={{ transformOrigin: "center" }}
+          aria-hidden
+        />
+
+        {/* Main icon vessel */}
+        <div
+          className="relative grid size-[5.75rem] place-items-center rounded-[1.85rem] border border-border/50 bg-card text-[2.75rem] leading-none shadow-[0_1px_0_0_oklch(1_0_0/0.8)_inset,0_12px_32px_-12px_oklch(0.2_0.02_150/0.18),0_28px_48px_-20px_oklch(0.2_0.02_150/0.12)]"
+        >
+          <span className="select-none drop-shadow-sm" role="img" aria-hidden>
+            {copy.emoji}
+          </span>
+          {/* Inner sheen */}
+          <span
+            className="pointer-events-none absolute inset-0 rounded-[1.85rem]"
+            style={{
+              background:
+                "linear-gradient(160deg, oklch(1 0 0 / 0.55) 0%, transparent 42%, transparent 100%)",
+            }}
+            aria-hidden
+          />
+        </div>
       </div>
-      <p className="mt-5 font-display text-[21px] font-medium tracking-[-0.01em] text-foreground">
-        Nothing here yet
-      </p>
-      <p className="mt-1.5 max-w-[220px] text-[13px] leading-snug text-muted-foreground">
-        Tap the scan button to add items. Your family can update the shared pantry too.
+
+      <div className="relative mt-8 max-w-[280px]">
+        <p className="font-display text-[23px] font-medium leading-[1.15] tracking-[-0.02em] text-foreground/95">
+          {copy.title}
+        </p>
+        <p className="mt-2.5 text-[13.5px] leading-relaxed text-muted-foreground">
+          {copy.body}
+        </p>
+      </div>
+
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="relative mt-7 inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-[13px] font-semibold text-brand-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--color-brand)_55%,transparent)] active:scale-[0.98] transition"
+        >
+          <Plus className="size-3.5" strokeWidth={2.5} />
+          Add your first item
+        </button>
+      )}
+
+      <p className="relative mt-4 text-[11px] font-medium tracking-[0.01em] text-muted-foreground/80">
+        Or use Quick Scan for a whole receipt
       </p>
     </div>
   );

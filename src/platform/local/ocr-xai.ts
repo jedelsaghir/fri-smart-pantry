@@ -40,9 +40,11 @@ export const xaiOcrProvider: OcrProvider = {
       };
     }
 
+    // Downscale only — full receipt enhance (crop/contrast/sharpen) runs in the
+    // scan flow before detect so multi-photo processing can show that stage.
     let prepared = imageDataUrl;
     try {
-      prepared = await prepareImageForOcr(imageDataUrl);
+      prepared = await prepareImageForOcr(imageDataUrl, { enhance: false });
     } catch {
       prepared = imageDataUrl;
     }

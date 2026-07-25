@@ -9,6 +9,7 @@ import {
   Check,
   Trash2,
   Sparkles,
+  Aperture,
 } from "lucide-react";
 import type {
   StorageKey,
@@ -18,7 +19,12 @@ import type {
 } from "@/types/pantry";
 import { toast } from "sonner";
 import { buildReceiptFromScan, readFileAsDataUrl } from "@/lib/receipts";
-import { captureVideoFrame } from "@/lib/ocr-image";
+import { captureAndPrepareFrame, prepareImageForOcr } from "@/lib/ocr-image";
+import {
+  analyzeCaptureQuality,
+  hapticShutter,
+  type CaptureQuality,
+} from "@/lib/capture-quality";
 import { getPlatform } from "@/platform";
 import type { OcrDetectResult } from "@/platform/types";
 import {
@@ -84,7 +90,9 @@ export function ReceiptScanFlow({
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [shutterFlash, setShutterFlash] = useState(false);
+  const [shutterPulse, setShutterPulse] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [captureQuality, setCaptureQuality] = useState<CaptureQuality | null>(null);
 
   const receiptSavedRef = useRef(false);
   const ocrMetaRef = useRef<{ store?: string | null; total?: number | null; currency?: string }>(
@@ -95,6 +103,7 @@ export function ReceiptScanFlow({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const qualityTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -169,11 +178,44 @@ export function ReceiptScanFlow({
     void videoRef.current.play().catch(() => {});
   }, [cameraOn]);
 
+  // Live capture quality feedback (~2.5 Hz while camera open on capture step)
+  useEffect(() => {
+    if (qualityTimerRef.current) {
+      clearInterval(qualityTimerRef.current);
+      qualityTimerRef.current = null;
+    }
+    if (!open || !cameraOn || step !== "capture") {
+      setCaptureQuality(null);
+      return;
+    }
+    const tick = () => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) return;
+      try {
+        setCaptureQuality(analyzeCaptureQuality(video));
+      } catch {
+        /* ignore analysis errors */
+      }
+    };
+    tick();
+    qualityTimerRef.current = setInterval(tick, 400);
+    return () => {
+      if (qualityTimerRef.current) {
+        clearInterval(qualityTimerRef.current);
+        qualityTimerRef.current = null;
+      }
+    };
+  }, [open, cameraOn, step]);
+
   if (!open) return null;
 
   const resetFlow = () => {
     stopCamera();
     clearResultTimer();
+    if (qualityTimerRef.current) {
+      clearInterval(qualityTimerRef.current);
+      qualityTimerRef.current = null;
+    }
     setStep("capture");
     setPhotos([]);
     setDetected([]);
@@ -181,12 +223,14 @@ export function ReceiptScanFlow({
     setResultOk(true);
     setResultMessage("");
     setProcessLabel("Reading receipt…");
-    setProcessSub("Vision OCR on your photos");
+    setProcessSub("Enhancing photos · Vision OCR");
     setProcessProgress(0);
     setErrorMessage(null);
     setCameraError(null);
     setShutterFlash(false);
+    setShutterPulse(false);
     setCapturing(false);
+    setCaptureQuality(null);
     receiptSavedRef.current = false;
     ocrMetaRef.current = {};
   };
@@ -261,39 +305,60 @@ export function ReceiptScanFlow({
     setErrorMessage(null);
     receiptSavedRef.current = false;
     setProcessProgress(0);
-    setProcessLabel("Reading receipt…");
+    setProcessLabel("Enhancing photos…");
     setProcessSub(
       photoList.length === 1
-        ? "Vision OCR on your photo"
-        : `OCR on ${photoList.length} photos · merging lines`
+        ? "Crop · contrast · sharpen for clearer text"
+        : `Enhancing ${photoList.length} photos for OCR`
     );
 
     try {
       const platform = getPlatform();
       const total = photoList.length;
-      let done = 0;
 
+      // Pre-process each photo (crop, deskew, contrast, denoise, sharpen)
+      const enhanced: string[] = [];
+      for (let i = 0; i < photoList.length; i++) {
+        setProcessSub(`Enhancing photo ${i + 1} of ${total}`);
+        setProcessProgress(Math.round(((i + 0.4) / total) * 35));
+        try {
+          const ready = await prepareImageForOcr(photoList[i].dataUrl, {
+            enhance: true,
+            maxEdge: 1600,
+            quality: 0.88,
+          });
+          enhanced.push(ready);
+        } catch {
+          enhanced.push(photoList[i].dataUrl);
+        }
+      }
+
+      setProcessLabel("Reading receipt…");
+      setProcessSub(
+        total === 1 ? "Vision OCR on your photo" : `OCR on ${total} photos · merging lines`
+      );
+      setProcessProgress(40);
+
+      let done = 0;
       // Parallel OCR for speed; progress ticks as each settles
       const settled = await Promise.all(
-        photoList.map(async (photo) => {
-          const result = await platform.ocr.detectFromImage(photo.dataUrl);
+        enhanced.map(async (dataUrl) => {
+          const result = await platform.ocr.detectFromImage(dataUrl);
           done += 1;
-          setProcessProgress(Math.round((done / total) * 100));
+          setProcessProgress(40 + Math.round((done / total) * 50));
           setProcessSub(
             total === 1
               ? "Vision OCR on your photo"
-              : `Processed ${done} of ${total} photos`
+              : `Read ${done} of ${total} photos`
           );
           return result;
         })
       );
 
-      setProcessLabel("Merging line items…");
-      setProcessSub("Deduplicating overlaps across photos");
-      setProcessProgress(100);
-
-      // Brief beat so merge animation is visible
-      await new Promise((r) => setTimeout(r, 280));
+      setProcessLabel("Matching your pantry…");
+      setProcessSub("Fuzzy match · merge overlaps · split review");
+      setProcessProgress(95);
+      await new Promise((r) => setTimeout(r, 320));
 
       const merged = mergeOcrResults(settled as OcrDetectResult[]);
 
@@ -328,6 +393,8 @@ export function ReceiptScanFlow({
         );
       }
 
+      setProcessProgress(100);
+
       if (ambiguous.length > 0) {
         setReviewItems(ambiguous);
         showResultThen({
@@ -350,12 +417,16 @@ export function ReceiptScanFlow({
         }, 1250);
       }
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "OCR failed");
+      const text =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while reading the receipt.";
+      setErrorMessage(text);
       showResultThen({
         ok: false,
         message: "Processing failed",
         next: "error",
-        errorText: err instanceof Error ? err.message : "OCR failed",
+        errorText: text,
       });
     }
   };
@@ -394,20 +465,37 @@ export function ReceiptScanFlow({
       return;
     }
     setCapturing(true);
-    const frame = captureVideoFrame(video, { maxEdge: 1600, quality: 0.85 });
-    if (!frame) {
-      setCapturing(false);
-      toast.error("Could not capture frame");
-      return;
-    }
-    // Visual flash only — no modal / no leave camera
-    setShutterFlash(true);
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = setTimeout(() => setShutterFlash(false), 120);
 
-    setPhotos((prev) => [...prev, { id: createPhotoId(), dataUrl: frame }]);
-    // Re-enable shutter immediately (next frame)
-    requestAnimationFrame(() => setCapturing(false));
+    // Strong shutter feedback: flash + pulse + haptic
+    hapticShutter();
+    setShutterFlash(true);
+    setShutterPulse(true);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => {
+      setShutterFlash(false);
+      setShutterPulse(false);
+    }, 160);
+
+    // Capture raw immediately so shutter stays snappy; enhance async in background
+    void (async () => {
+      try {
+        const prepared = await captureAndPrepareFrame(video, {
+          maxEdge: 1600,
+          quality: 0.9,
+          fast: true,
+        });
+        if (!prepared) {
+          toast.error("Could not capture frame");
+          return;
+        }
+        setPhotos((prev) => [...prev, { id: createPhotoId(), dataUrl: prepared }]);
+      } catch {
+        toast.error("Could not capture frame");
+      } finally {
+        // Re-arm shutter ASAP — no confirmation between multi-shots
+        requestAnimationFrame(() => setCapturing(false));
+      }
+    })();
   };
 
   const removePhoto = (id: string) => {
@@ -423,7 +511,14 @@ export function ReceiptScanFlow({
         const file = files[i];
         if (!file.type.startsWith("image/")) continue;
         const dataUrl = await readFileAsDataUrl(file);
-        next.push({ id: createPhotoId(), dataUrl });
+        // Light enhance for library picks (full enhance again before OCR)
+        let prepared = dataUrl;
+        try {
+          prepared = await prepareImageForOcr(dataUrl, { fast: true, enhance: true });
+        } catch {
+          prepared = dataUrl;
+        }
+        next.push({ id: createPhotoId(), dataUrl: prepared });
       }
       if (next.length === 0) {
         toast.error("No images selected");
@@ -435,7 +530,7 @@ export function ReceiptScanFlow({
         );
       }
     } catch {
-      setErrorMessage("Could not read that image file.");
+      setErrorMessage("Could not read that image file. Try another photo.");
       setStep("error");
     }
     e.target.value = "";
@@ -586,12 +681,33 @@ export function ReceiptScanFlow({
 
                 {/* Shutter flash overlay */}
                 {shutterFlash && (
-                  <div className="pointer-events-none absolute inset-0 bg-white/70 animate-[fadeOut_0.12s_ease-out_forwards]" />
+                  <div className="pointer-events-none absolute inset-0 bg-white/75 animate-[fadeOut_0.16s_ease-out_forwards] z-20" />
                 )}
 
-                {/* Frame guide */}
+                {/* Frame guide — tinted when quality issues */}
                 {cameraOn && (
-                  <div className="pointer-events-none absolute inset-5 rounded-2xl border border-white/30 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)]" />
+                  <div
+                    className={
+                      "pointer-events-none absolute inset-5 rounded-2xl border shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)] transition-colors duration-300 " +
+                      (captureQuality && !captureQuality.ok
+                        ? "border-amber-300/70"
+                        : "border-white/35")
+                    }
+                  />
+                )}
+
+                {/* Live quality guidance */}
+                {cameraOn && captureQuality?.message && (
+                  <div className="absolute left-3 right-3 top-3 z-10 flex justify-center">
+                    <div className="rounded-full bg-black/55 px-3.5 py-1.5 text-[12px] font-medium text-white/95 backdrop-blur-md shadow-sm">
+                      {captureQuality.message}
+                    </div>
+                  </div>
+                )}
+                {cameraOn && captureQuality?.ok && (
+                  <div className="absolute left-3 right-3 top-3 z-10 flex justify-center pointer-events-none opacity-0">
+                    {/* reserved for calm “ready” if we want later */}
+                  </div>
                 )}
 
                 {cameraError && (
@@ -640,9 +756,17 @@ export function ReceiptScanFlow({
                     type="button"
                     onClick={handleShutter}
                     disabled={capturing}
-                    className="relative w-full flex items-center justify-center gap-3 rounded-3xl bg-brand py-4 text-lg font-semibold text-brand-foreground active:scale-[0.985] active:brightness-105 transition touch-manipulation disabled:opacity-80"
+                    className={
+                      "relative w-full flex items-center justify-center gap-3 rounded-3xl bg-brand py-4 text-lg font-semibold text-brand-foreground active:scale-[0.97] active:brightness-110 transition touch-manipulation disabled:opacity-80 " +
+                      (shutterPulse ? "scale-[0.97] brightness-110" : "")
+                    }
                   >
-                    <span className="grid size-8 place-items-center rounded-full border-2 border-brand-foreground/90">
+                    <span
+                      className={
+                        "grid size-9 place-items-center rounded-full border-2 border-brand-foreground/90 transition-transform " +
+                        (shutterPulse ? "scale-90" : "")
+                      }
+                    >
                       <span className="size-5 rounded-full bg-brand-foreground/95" />
                     </span>
                     {photoCount === 0 ? "Capture" : "Capture next"}
@@ -684,7 +808,7 @@ export function ReceiptScanFlow({
                 </label>
 
                 <p className="text-center text-[11px] text-muted-foreground pb-1">
-                  Snap sections freely · process once · works on iOS &amp; Android
+                  Snap freely · we enhance &amp; merge · iOS &amp; Android
                 </p>
               </div>
             </div>
@@ -702,14 +826,46 @@ export function ReceiptScanFlow({
                 />
                 <div className="absolute inset-0 grid place-items-center">
                   <div className="grid size-14 place-items-center rounded-2xl bg-secondary/80 shadow-inner">
-                    <Loader2 className="size-7 animate-spin text-brand" />
+                    {processProgress < 40 ? (
+                      <Aperture className="size-7 text-brand animate-pulse" />
+                    ) : (
+                      <Loader2 className="size-7 animate-spin text-brand" />
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-1.5 mb-6">
+              <div className="space-y-1.5 mb-5">
                 <p className="text-xl font-semibold tracking-tight">{processLabel}</p>
-                <p className="text-sm text-muted-foreground">{processSub}</p>
+                <p className="text-sm text-muted-foreground max-w-[280px] mx-auto">
+                  {processSub}
+                </p>
+              </div>
+
+              {/* Stage chips */}
+              <div className="flex flex-wrap justify-center gap-1.5 mb-6 max-w-[300px]">
+                {(
+                  [
+                    { label: "Enhance", active: processProgress < 40 },
+                    { label: "OCR", active: processProgress >= 40 && processProgress < 90 },
+                    { label: "Match", active: processProgress >= 90 },
+                  ] as const
+                ).map((s) => (
+                  <span
+                    key={s.label}
+                    className={
+                      "rounded-full px-2.5 py-0.5 text-[10px] font-semibold " +
+                      (s.active
+                        ? "bg-brand/15 text-brand"
+                        : processProgress >=
+                            (s.label === "Enhance" ? 40 : s.label === "OCR" ? 90 : 101)
+                          ? "bg-secondary text-muted-foreground"
+                          : "bg-secondary/60 text-muted-foreground/70")
+                    }
+                  >
+                    {s.label}
+                  </span>
+                ))}
               </div>
 
               {/* Progress bar */}
@@ -776,11 +932,17 @@ export function ReceiptScanFlow({
               <div className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-secondary text-3xl">
                 📄
               </div>
-              <p className="text-lg font-semibold tracking-tight">Photos unreadable</p>
-              <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+              <p className="text-lg font-semibold tracking-tight">Couldn’t read that receipt</p>
+              <p className="mt-2 max-w-sm text-sm text-muted-foreground leading-relaxed">
                 {errorMessage ||
                   "Blurry, incomplete, or poorly lit shots can't be read. Retake with good light and fill the frame."}
               </p>
+              <ul className="mt-4 max-w-xs text-left text-[12px] text-muted-foreground space-y-1.5">
+                <li>· Hold steady — avoid motion blur</li>
+                <li>· Fill the frame with the receipt</li>
+                <li>· Use even light; avoid heavy glare</li>
+                <li>· Long receipts: a few clear sections work best</li>
+              </ul>
               <button
                 type="button"
                 onClick={handleRetryFromError}

@@ -337,8 +337,14 @@ export function multiPhotoErrorMessage(results: OcrDetectResult[]): string {
   if (joined && /blur|unreadable|quality|dark|incomplete/i.test(joined)) {
     return joined;
   }
+  if (joined && /timeout|network|fetch|failed/i.test(joined)) {
+    return "We couldn’t reach the scanner. Check your connection and try again.";
+  }
+  if (joined && /key|config|unavailable/i.test(joined)) {
+    return "Receipt reading isn’t configured on this server yet. You can still add items manually.";
+  }
   return (
     joined ||
-    "Photos look blurry, incomplete, or unreadable. Retake with good light, fill the frame with the receipt, and capture each section clearly."
+    "We couldn’t read those photos. Retake with steady hands, good light, and the full receipt filling the frame — long receipts work better as a few clear sections."
   );
 }

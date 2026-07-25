@@ -17,7 +17,7 @@ import { applyIncomingToStorage, deductIngredients, sameProduct } from "@/lib/pa
 import { upsertShoppingListItem } from "@/lib/shopping";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { getPlatform } from "@/platform";
-import { Plus } from "lucide-react";
+import { Plus, ScanLine } from "lucide-react";
 import type {
   StorageKey,
   ActiveView,
@@ -1237,7 +1237,11 @@ export function PantryScreen() {
             )}
 
             {current.length === 0 ? (
-              <EmptyState label={active} onAdd={() => setAddSheetOpen(true)} />
+              <EmptyState
+                label={active}
+                onAdd={() => setAddSheetOpen(true)}
+                onScan={() => setScanOpen(true)}
+              />
             ) : (
               /* FINAL: 1-column vertical stack only — never grid / never 2-col */
               <div className="mt-5 flex flex-col gap-4" style={{ width: "100%" }}>
@@ -1264,7 +1268,11 @@ export function PantryScreen() {
         )}
       </main>
 
-      {!isListView && !isRecipesView && !isFinancesView && <ScanFab onClick={() => setScanOpen(true)} />}
+      {/* Hide floating FAB on empty pantry — scan lives in empty-state secondary CTA to avoid overlap */}
+      {!isListView &&
+        !isRecipesView &&
+        !isFinancesView &&
+        current.length > 0 && <ScanFab onClick={() => setScanOpen(true)} />}
       <BottomNav 
         active={isListView ? "list" : isRecipesView ? "recipes" : isFinancesView ? "money" : "pantry"} 
         badges={suggestedCount > 0 ? { list: suggestedCount } : {}}
@@ -1420,9 +1428,11 @@ export function PantryScreen() {
 function EmptyState({
   label,
   onAdd,
+  onScan,
 }: {
   label: StorageKey;
   onAdd?: () => void;
+  onScan?: () => void;
 }) {
   const copy =
     label === "freezer"
@@ -1450,30 +1460,30 @@ function EmptyState({
             kicker: "Fridge",
             title: "Fresh space, ready for you",
             body: "Your calm inventory starts here. Add a few favorites, or scan dinner’s ingredients.",
-            accent: "oklch(0.72 0.1 155)",
+            accent: "oklch(0.72 0.09 183)",
             floatA: "🥚",
             floatB: "🧀",
           };
 
   return (
-    <div className="relative mt-8 flex flex-col items-center px-1 pb-8 text-center">
+    <div className="relative mt-6 flex flex-col items-center px-1 pb-6 text-center">
       {/* Layered ambient atmosphere */}
       <div
-        className="pointer-events-none absolute left-1/2 top-4 h-64 w-64 -translate-x-1/2 rounded-full opacity-80 blur-3xl dark:opacity-50"
+        className="pointer-events-none absolute left-1/2 top-2 h-56 w-56 -translate-x-1/2 rounded-full opacity-80 blur-3xl dark:opacity-50"
         style={{
           background: `radial-gradient(circle, color-mix(in oklab, ${copy.accent} 42%, transparent), transparent 68%)`,
         }}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute left-[20%] top-24 h-28 w-28 rounded-full opacity-50 blur-2xl dark:opacity-30"
+        className="pointer-events-none absolute left-[20%] top-20 h-24 w-24 rounded-full opacity-50 blur-2xl dark:opacity-30"
         style={{
           background: `radial-gradient(circle, color-mix(in oklab, var(--color-brand) 18%, transparent), transparent 70%)`,
         }}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute right-[18%] top-28 h-24 w-24 rounded-full opacity-40 blur-2xl dark:opacity-25"
+        className="pointer-events-none absolute right-[18%] top-24 h-20 w-20 rounded-full opacity-40 blur-2xl dark:opacity-25"
         style={{
           background: `radial-gradient(circle, color-mix(in oklab, ${copy.accent} 30%, transparent), transparent 70%)`,
         }}
@@ -1481,16 +1491,15 @@ function EmptyState({
       />
 
       {/* Illustration */}
-      <div className="relative mt-3 mb-1">
+      <div className="relative mt-2 mb-1">
         <div
-          className="absolute -inset-6 rounded-full opacity-70 animate-[emptyGlow_5s_ease-in-out_infinite]"
+          className="absolute -inset-5 rounded-full opacity-70 animate-[emptyGlow_5s_ease-in-out_infinite]"
           style={{
             background: `radial-gradient(circle at 50% 45%, color-mix(in oklab, ${copy.accent} 32%, transparent), transparent 65%)`,
           }}
           aria-hidden
         />
 
-        {/* Floating mini chips */}
         <div
           className="absolute -left-8 top-2 grid size-11 place-items-center rounded-2xl border border-border/45 bg-card/85 text-lg shadow-[0_8px_20px_-10px_oklch(0.2_0.02_150/0.25)] backdrop-blur-md animate-[emptyFloat_5.8s_ease-in-out_infinite] dark:bg-card/70"
           aria-hidden
@@ -1504,55 +1513,56 @@ function EmptyState({
           {copy.floatB}
         </div>
 
-        {/* Main vessel */}
-        <div className="relative grid size-[6.25rem] place-items-center rounded-[2rem] border border-border/55 bg-card text-[3rem] leading-none shadow-[0_1px_0_0_oklch(1_0_0/0.85)_inset,0_14px_36px_-14px_oklch(0.2_0.02_150/0.2),0_32px_56px_-24px_oklch(0.2_0.02_150/0.14)] dark:shadow-[0_1px_0_0_oklch(1_0_0/0.08)_inset,0_14px_36px_-14px_oklch(0_0_0/0.45)]">
+        <div className="relative grid size-[5.75rem] place-items-center rounded-[1.85rem] border border-border/55 bg-card text-[2.75rem] leading-none shadow-[0_1px_0_0_oklch(1_0_0/0.85)_inset,0_14px_36px_-14px_oklch(0.2_0.02_150/0.2),0_32px_56px_-24px_oklch(0.2_0.02_150/0.14)] dark:shadow-[0_1px_0_0_oklch(1_0_0/0.08)_inset,0_14px_36px_-14px_oklch(0_0_0/0.45)]">
           <span className="select-none drop-shadow-sm" role="img" aria-hidden>
             {copy.emoji}
           </span>
           <span
-            className="pointer-events-none absolute inset-0 rounded-[2rem]"
+            className="pointer-events-none absolute inset-0 rounded-[1.85rem]"
             style={{
               background:
                 "linear-gradient(155deg, oklch(1 0 0 / 0.58) 0%, transparent 45%, transparent 100%)",
             }}
             aria-hidden
           />
-          {/* Soft ring */}
-          <span
-            className="pointer-events-none absolute -inset-px rounded-[2rem] ring-1 ring-inset ring-black/[0.03] dark:ring-white/[0.06]"
-            aria-hidden
-          />
         </div>
       </div>
 
-      <div className="relative mt-9 max-w-[300px]">
+      <div className="relative mt-7 max-w-[300px]">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/75">
           {copy.kicker}
         </p>
-        <p className="mt-2 font-display text-[1.5rem] font-medium leading-[1.12] tracking-[-0.025em] text-foreground/95">
+        <p className="mt-2 font-display text-[1.45rem] font-medium leading-[1.12] tracking-[-0.025em] text-foreground/95">
           {copy.title}
         </p>
-        <p className="mt-3 text-[13.5px] leading-[1.55] text-muted-foreground">
+        <p className="mt-2.5 text-[13.5px] leading-[1.55] text-muted-foreground">
           {copy.body}
         </p>
       </div>
 
-      {onAdd && (
-        <button
-          type="button"
-          onClick={onAdd}
-          className="relative mt-8 inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-[13px] font-semibold text-brand-foreground shadow-[0_10px_28px_-12px_color-mix(in_oklab,var(--color-brand)_60%,transparent)] active:scale-[0.98] transition"
-        >
-          <span className="grid size-5 place-items-center rounded-full bg-brand-foreground/15">
-            <Plus className="size-3.5" strokeWidth={2.5} />
-          </span>
-          Add your first item
-        </button>
-      )}
-
-      <p className="relative mt-4 text-[11.5px] font-medium tracking-[0.01em] text-muted-foreground/75">
-        Or tap <span className="text-foreground/70">Quick Scan</span> for a full receipt
-      </p>
+      {/* CTAs stacked in-flow — no collision with floating Scan FAB */}
+      <div className="relative mt-7 flex w-full max-w-[300px] flex-col gap-2.5">
+        {onAdd && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 text-[14px] font-semibold text-brand-foreground shadow-[0_10px_28px_-12px_color-mix(in_oklab,var(--color-brand)_55%,transparent)] active:scale-[0.98] transition"
+          >
+            <Plus className="size-4" strokeWidth={2.5} />
+            Add your first item
+          </button>
+        )}
+        {onScan && (
+          <button
+            type="button"
+            onClick={onScan}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border/70 bg-card px-5 py-3 text-[13.5px] font-semibold text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.5)_inset] active:scale-[0.98] active:bg-secondary/40 transition"
+          >
+            <ScanLine className="size-4 text-brand" strokeWidth={2.25} />
+            Scan a receipt
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import type { Platform } from "@/platform/types";
 import { cloudSyncProvider } from "@/platform/local/sync-cloud";
 import { xaiOcrProvider } from "@/platform/local/ocr-xai";
 import { nonePushProvider } from "@/platform/local/push-none";
-import { localInviteProvider } from "@/platform/local/invite-local";
+import { cloudInviteProvider } from "@/platform/local/invite-cloud";
 
 export type PlatformConfig = Partial<Platform>;
 
@@ -17,7 +17,7 @@ export function createPlatform(overrides: PlatformConfig = {}): Platform {
     sync: overrides.sync ?? cloudSyncProvider,
     ocr: overrides.ocr ?? xaiOcrProvider,
     push: overrides.push ?? nonePushProvider,
-    invite: overrides.invite ?? localInviteProvider,
+    invite: overrides.invite ?? cloudInviteProvider,
   };
 }
 

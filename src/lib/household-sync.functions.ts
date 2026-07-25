@@ -382,9 +382,15 @@ export const resolveHouseholdInvite = createServerFn({ method: "POST" })
         return { ok: false, reason: "Invite not found. Ask the owner to copy the link again." };
       }
       if (invite.status === "accepted") {
+        if (invite.acceptedEmail === "__revoked__") {
+          return {
+            ok: false,
+            reason: "This invite was cancelled. Ask the owner to send a new link.",
+          };
+        }
         return {
           ok: false,
-          reason: "This invite was already used. Ask the owner for a new invite if needed.",
+          reason: "This invite was already used. Sign in with the account you created, or ask the owner for a new invite.",
         };
       }
       return {
@@ -550,6 +556,60 @@ export const acceptHouseholdInvite = createServerFn({ method: "POST" })
         };
       } catch (e) {
         return { ok: false, reason: e instanceof Error ? e.message : "Accept invite failed" };
+      }
+    }
+  );
+
+export type RevokeInviteInput = {
+  email: string;
+  password: string;
+  code: string;
+};
+
+/** Owner cancels a pending invite — removes cloud invite record */
+export const revokeHouseholdInvite = createServerFn({ method: "POST" })
+  .validator((data: RevokeInviteInput) => {
+    if (!data?.email?.trim() || !data?.password || !data?.code?.trim()) {
+      throw new Error("Owner credentials and invite code required");
+    }
+    return {
+      email: data.email.trim().toLowerCase(),
+      password: data.password,
+      code: data.code.trim(),
+    };
+  })
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: true } | { ok: false; reason: string }> => {
+      try {
+        const hash = await hashSyncPassword(data.email, data.password);
+        const record = await getHouseholdRecord(data.email);
+        if (!record) {
+          return { ok: false, reason: "No cloud household for this owner." };
+        }
+        if (record.passwordHash !== hash) {
+          return { ok: false, reason: "Owner password does not match." };
+        }
+
+        const invite = await kvGetJson<HouseholdInviteRecord>(inviteKey(data.code));
+        if (!invite) {
+          return { ok: true }; // already gone
+        }
+        if (invite.ownerEmail.toLowerCase() !== data.email) {
+          return { ok: false, reason: "This invite belongs to another household." };
+        }
+
+        // Soft-delete: mark revoked so resolve fails cleanly
+        await kvSetJson(inviteKey(data.code), {
+          ...invite,
+          status: "accepted",
+          acceptedEmail: "__revoked__",
+        } satisfies HouseholdInviteRecord);
+
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, reason: e instanceof Error ? e.message : "Revoke failed" };
       }
     }
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Plus,
@@ -27,9 +27,13 @@ import {
   memberStatusLabel,
 } from "@/lib/family";
 import { APP_BUILD } from "@/lib/app-build";
-import { ensureMemberInviteCode, publishMemberInvite } from "@/lib/member-invite";
+import {
+  ensureMemberInviteCode,
+  publishMemberInvite,
+  revokeMemberInvite,
+} from "@/lib/member-invite";
 import { loadSyncCreds } from "@/lib/sync-session";
-import { flushHouseholdPush } from "@/lib/run-household-sync";
+import { flushHouseholdPush, pullAndMergeOnLogin } from "@/lib/run-household-sync";
 
 const AVATAR_EMOJIS = [
   "👤",
@@ -66,8 +70,8 @@ interface ManageFamilyPageProps {
   activityLog: ActivityLogEntry[];
   sharedItemCount: number;
   onBack: () => void;
-  onAddMember: (member: Omit<FamilyMember, "id" | "isYou">) => void;
-  onRemoveMember: (id: string) => void;
+  onAddMember: (member: Omit<FamilyMember, "id" | "isYou">) => FamilyMember | void;
+  onRemoveMember: (id: string) => FamilyMember | null | void;
   onUpdateMember?: (id: string, patch: Partial<FamilyMember>) => void;
   /** Rename the shared household (persisted) */
   onRenameHousehold?: (name: string) => void;
@@ -110,6 +114,26 @@ export function ManageFamilyPage({
   const pendingCount = members.filter((m) => m.status === "pending").length;
   const activeCount = members.filter((m) => m.status === "joined" || m.status === "owner").length;
 
+  // Pull latest household so pending → joined updates appear after invitee accepts on another device
+  useEffect(() => {
+    const creds = loadSyncCreds();
+    if (!creds) return;
+    let cancelled = false;
+    void (async () => {
+      const result = await pullAndMergeOnLogin(creds);
+      if (cancelled || !result.applied) return;
+      // Parent reloads members from localStorage on next auth-effect; force soft refresh via event
+      try {
+        window.dispatchEvent(new CustomEvent("frigg-household-pulled"));
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const inviteUrl = useMemo(
     () => (inviteSheetMember ? buildInviteUrl(inviteSheetMember.inviteCode) : ""),
     [inviteSheetMember]
@@ -137,17 +161,40 @@ export function ManageFamilyPage({
       toast.error("Already a member", { description: `${trimmed} is already in this household.` });
       return;
     }
-    onAddMember({
+    const created = onAddMember({
       name: trimmed,
       emoji: newEmoji || DEFAULT_EMOJI,
       phone: newPhone.trim(),
       inviteCode: generateInviteCode(),
       status: "pending",
     });
-    toast.success("Invite ready", {
-      description: `Copy the invite link and send it to ${trimmed} however you like.`,
-    });
     resetAddForm();
+
+    // Publish to cloud so WhatsApp / other-device links work immediately
+    void (async () => {
+      const member =
+        created && typeof created === "object" && "id" in created
+          ? (created as FamilyMember)
+          : null;
+      if (!member) {
+        toast.success("Invite ready", {
+          description: `Open ${trimmed}’s row to copy their unique invite link.`,
+        });
+        return;
+      }
+      const prepared = await prepareMemberInvite(member);
+      if (prepared) {
+        toast.success("Invite ready", {
+          description: `Link for ${trimmed} works on any phone — share via WhatsApp or copy.`,
+        });
+        setInviteSheetMember(prepared);
+        setInviteSheetMode("share");
+      } else {
+        toast.success("Member added", {
+          description: "Copy their invite link when you’re ready to share.",
+        });
+      }
+    })();
   };
 
   const canRemoveMember = (member: FamilyMember) => {
@@ -189,10 +236,20 @@ export function ManageFamilyPage({
     // Call parent first, then clear UI — no Radix dialog race
     onRemoveMember(target.id);
     const wasPending = target.status === "pending";
+    const code = target.inviteCode;
     cancelRemove();
+
+    // Invalidate cloud invite so the link no longer works on other devices
+    const creds = loadSyncCreds();
+    if (creds && code) {
+      void revokeMemberInvite({ code, ownerCreds: creds }).then(() => flushHouseholdPush());
+    } else {
+      void flushHouseholdPush();
+    }
+
     toast.success(wasPending ? "Invite cancelled" : "Member removed", {
       description: wasPending
-        ? `${target.name}'s pending invite was deleted.`
+        ? `${target.name}'s invite was deleted — the link no longer works.`
         : `${target.name} was removed from the household.`,
     });
   };

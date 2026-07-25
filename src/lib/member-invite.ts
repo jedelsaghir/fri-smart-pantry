@@ -1,5 +1,6 @@
 /**
- * Client helpers for per-member invite links (unique to each family profile).
+ * Cross-device member invites — unique code per family profile.
+ * Owner publishes to the household-sync store; joiner resolves + accepts on their phone.
  */
 
 import type { FamilyMember } from "@/types/pantry";
@@ -13,10 +14,17 @@ import {
   acceptHouseholdInvite,
   registerHouseholdInvite,
   resolveHouseholdInvite,
+  revokeHouseholdInvite,
 } from "@/lib/household-sync.functions";
 import { saveSyncCreds } from "@/lib/sync-session";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
-import { generateInviteCode } from "@/lib/family";
+import {
+  generateInviteCode,
+  loadFamilyMembers,
+  loadHouseholdName,
+  saveFamilyMembers,
+  saveHouseholdName,
+} from "@/lib/family";
 
 export type ResolvedInvite = {
   code: string;
@@ -35,6 +43,21 @@ export function ensureMemberInviteCode(member: FamilyMember): FamilyMember {
 }
 
 /**
+ * Persist member into local family list so snapshot builders see them immediately.
+ */
+export function persistMemberInLocalFamily(member: FamilyMember): FamilyMember[] {
+  const withCode = ensureMemberInviteCode(member);
+  const members = loadFamilyMembers();
+  const idx = members.findIndex((m) => m.id === withCode.id);
+  const next =
+    idx >= 0
+      ? members.map((m, i) => (i === idx ? { ...m, ...withCode } : m))
+      : [...members, withCode];
+  saveFamilyMembers(next);
+  return next;
+}
+
+/**
  * Register this member’s invite on the server so other devices can open the link.
  * Call while owner is signed in (sync credentials available).
  */
@@ -44,12 +67,12 @@ export async function publishMemberInvite(opts: {
   ownerCreds: SyncCreds;
 }): Promise<{ ok: boolean; reason?: string; code?: string }> {
   const member = ensureMemberInviteCode(opts.member);
+  saveHouseholdName(opts.householdName);
+  const members = persistMemberInLocalFamily(member);
+
   const snapshot = buildSnapshotFromLocalStorage(opts.ownerCreds.email);
-  const members = [...(snapshot.familyMembers || [])];
-  const idx = members.findIndex((m) => m.id === member.id);
-  if (idx >= 0) members[idx] = { ...members[idx], ...member };
-  else members.push(member);
   snapshot.familyMembers = members;
+  snapshot.household = opts.householdName.trim() || loadHouseholdName();
 
   try {
     const result = await registerHouseholdInvite({
@@ -70,6 +93,28 @@ export async function publishMemberInvite(opts: {
     return {
       ok: false,
       reason: e instanceof Error ? e.message : "Could not publish invite",
+    };
+  }
+}
+
+/** Owner cancels invite — invalidates cloud code */
+export async function revokeMemberInvite(opts: {
+  code: string;
+  ownerCreds: SyncCreds;
+}): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const result = await revokeHouseholdInvite({
+      data: {
+        email: opts.ownerCreds.email,
+        password: opts.ownerCreds.password,
+        code: opts.code,
+      },
+    });
+    return result.ok ? { ok: true } : { ok: false, reason: result.reason };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : "Could not revoke invite",
     };
   }
 }
@@ -119,7 +164,23 @@ export async function acceptMemberInvite(opts: {
     try {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, result.accountId);
       localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
-    } catch {}
+      // Ensure joiner account exists in local accounts for session recovery
+      const accountsRaw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+      const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
+      if (Array.isArray(accounts) && !accounts.some((a: { id?: string }) => a.id === result.accountId)) {
+        accounts.push({
+          id: result.accountId,
+          memberId: result.memberId,
+          email: opts.email.trim().toLowerCase(),
+          password: opts.password,
+          name: opts.name || "Member",
+          emoji: opts.emoji || "👤",
+        });
+        localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
+      }
+    } catch {
+      /* ignore */
+    }
 
     saveSyncCreds({ email: opts.email.trim().toLowerCase(), password: opts.password });
     writeLocalSyncMeta({

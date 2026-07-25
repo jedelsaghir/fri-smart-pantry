@@ -5,7 +5,7 @@
 | Multi-device sync | `SyncProvider` | **`local/sync-cloud`** (server snapshot) | Upstash Redis for durable multi-instance |
 | Receipt OCR / camera | `OcrProvider` | **`local/ocr-xai`** (live vision) | Alternate models / on-device |
 | Push notifications | `PushProvider` | `local/push-none` | Web Push + SW |
-| Cross-device invites | `InviteProvider` | `local/invite-local` | Backend invite service |
+| Cross-device invites | `InviteProvider` | **`local/invite-cloud`** (cloud registry + local fallback) | Production auth / magic links |
 
 ## OCR architecture (D-2 — wired)
 
@@ -66,7 +66,33 @@ setPlatform(createPlatform({ ocr: demoOcrProvider }));
 |---------|---------|
 | Receipt scan | `platform.ocr` → server vision |
 | Alerts enable | `platform.push` |
-| Invites | `platform.invite` / `lib/family` |
+| Invites | `platform.invite` → cloud registry (`member-invite` + household-sync RPCs) |
+
+## Cross-device family invites
+
+```
+Owner (signed in)
+  Manage Family → Add member / Copy invite link
+        │
+        ▼
+  publishMemberInvite → registerHouseholdInvite (server KV)
+  + push household snapshot
+        │
+        ▼
+  WhatsApp / link: /?invite=<unique-code>
+        │
+Joiner's phone
+        ▼
+  LoginScreen resolves invite (cloud first)
+        │
+        ▼
+  acceptHouseholdInvite → pending→joined, fan-out snapshot
+        │
+        ▼
+  Joiner lands in shared pantry; owner pulls on Manage Family open
+```
+
+**Env:** same as multi-device sync (`UPSTASH_REDIS_REST_*` recommended). Memory/fs backends only work if both devices hit the same server instance / filesystem.
 
 ## More architecture?
 

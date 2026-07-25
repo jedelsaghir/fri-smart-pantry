@@ -91,6 +91,16 @@ export function PantryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync on auth only
   }, [isAuthenticated]);
 
+  // After Manage Family pulls cloud snapshot, re-read members (pending → joined)
+  useEffect(() => {
+    const onPulled = () => {
+      family.reloadHousehold();
+      prefs.reloadProfile();
+    };
+    window.addEventListener("frigg-household-pulled", onPulled);
+    return () => window.removeEventListener("frigg-household-pulled", onPulled);
+  }, [family, prefs]);
+
   // --- Pantry domain ---
   const {
     active,

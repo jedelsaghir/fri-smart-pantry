@@ -21,8 +21,8 @@ Friġġ keeps a **local cache** in the browser and **syncs the household to the 
 | Area | Reality |
 |------|---------|
 | Accounts / passwords | Demo auth — passwords stored for local simulation; server stores a hash for sync auth — **not** production-grade auth |
-| Multi-device sync | **Wired (D-1):** login pulls cloud snapshot; changes debounce-push. Same email/password on PC + iOS restores household, members, pantry, receipts, profile. |
-| Household invites | Invite links are local/demo across devices until a true invite backend ships (D-4) |
+| Multi-device sync | **Wired:** login pulls cloud snapshot; changes debounce-push. Same email/password on PC + iOS restores household, members, pantry, receipts, profile. |
+| Household invites | **Cross-device:** unique invite link per member; owner publishes to cloud when sharing; joiner opens link on their phone, creates an account, and lands in the shared pantry (`pending` → `joined`). |
 | Receipt scan | **Live OCR** via `getPlatform().ocr` → xAI vision (`XAI_API_KEY`). |
 | Push notifications | Not implemented — in-app Alerts panel only |
 | Backup | Settings export/import JSON still available |
@@ -36,24 +36,40 @@ See [`src/platform/README.md`](src/platform/README.md). Adapters:
 - **Sync** — **wired**: `sync-cloud` + `src/lib/household-sync.functions.ts`
 - **OCR** — **wired**: camera + server vision (`ocr-xai`). Set `XAI_API_KEY` on the host.
 - **Push** — optional browser Notification if granted
-- **Invites** — localStorage codes only (D-4)
+- **Invites** — **wired:** cloud registry (`registerHouseholdInvite` / `resolve` / `accept`) + local fallback
 
-### Enable multi-device sync (recommended for PC + iOS)
+### Enable multi-device sync + family invites (recommended)
 
 ```bash
-# Preferred durable store (free Upstash Redis REST)
+# Preferred durable store (free Upstash Redis REST) — required for invites across phones
 export UPSTASH_REDIS_REST_URL=https://....upstash.io
 export UPSTASH_REDIS_REST_TOKEN=...
 
-# Optional: custom directory for file-backed sync (Node server)
+# Optional: custom directory for file-backed sync (Node server / single host)
 # export FRIGG_SYNC_DIR=/var/lib/frigg-sync
 
 npm run dev
 ```
 
-Without Upstash, the server still syncs via **filesystem** (`.data/frigg-sync`) when writable, or **in-memory** (works only while the same server instance is warm — fine for a single long-lived host, not multi-region serverless).
+Without Upstash, the server still syncs via **filesystem** (`.data/frigg-sync`) when writable, or **in-memory** (works only while the same server instance is warm — **not** reliable for multi-phone invites on serverless).
 
-**Usage:** create account / sign in on device A → use the app → sign in with the **same email & password** on device B → household restores automatically. Settings → **Sync now** forces upload/download.
+| Variable | Required for | Purpose |
+|----------|--------------|---------|
+| `UPSTASH_REDIS_REST_URL` | Cross-device invites + multi-instance sync | Durable household + invite registry |
+| `UPSTASH_REDIS_REST_TOKEN` | Same | Auth for Upstash REST |
+| `FRIGG_SYNC_DIR` | Optional | File-backed store path (single Node host) |
+| `XAI_API_KEY` | Receipt OCR | Server-only vision key |
+
+**Same account, two devices:** create / sign in on A → use the app → sign in with the **same email & password** on B → household restores. Settings → **Sync now** forces upload/download.
+
+**Invite another person (their own phone):**
+
+1. Owner is signed in (session stores sync credentials).
+2. Manage Family → **Add member** (e.g. Krista) → invite is **published to the cloud**.
+3. Share **Copy invite link** / WhatsApp — link is `https://your-app/?invite=<code>`.
+4. Krista opens the link on her phone → create account → joins as that member (`pending` → `joined`).
+5. Shared pantry, members list, and activity stay in sync via household push/pull.
+6. Owner can **cancel** a pending invite or **remove** a member (cloud invite is revoked).
 
 ### Enable receipt OCR
 

@@ -90,7 +90,7 @@ export function useFamily(options?: UseFamilyOptions) {
   );
 
   const addFamilyMember = useCallback(
-    (member: Omit<FamilyMember, "id" | "isYou">) => {
+    (member: Omit<FamilyMember, "id" | "isYou">): FamilyMember => {
       const id = createMemberId();
       const full = normalizeFamilyMember({
         id,
@@ -101,36 +101,48 @@ export function useFamily(options?: UseFamilyOptions) {
         status: member.status || "pending",
         email: member.email,
       });
-      setFamilyMembers((prev) => [...prev, full]);
+      setFamilyMembers((prev) => {
+        const next = [...prev, full];
+        saveFamilyMembers(next); // immediate persist for invite publish snapshot
+        return next;
+      });
       addActivity("You", `invited ${member.name} to the household`);
+      return full;
     },
     [addActivity]
   );
 
   const removeFamilyMember = useCallback(
-    (id: string) => {
+    (id: string): FamilyMember | null => {
+      let removed: FamilyMember | null = null;
       setFamilyMembers((prev) => {
         const target = prev.find((m) => m.id === id);
         if (!target || target.isYou || target.status === "owner") return prev;
+        removed = target;
         const action =
           target.status === "pending"
             ? `cancelled invite for ${target.name}`
             : `removed ${target.name} from the household`;
         addActivity("You", action);
-        return prev.filter((m) => m.id !== id);
+        const next = prev.filter((m) => m.id !== id);
+        saveFamilyMembers(next);
+        return next;
       });
+      return removed;
     },
     [addActivity]
   );
 
   const updateFamilyMember = useCallback((id: string, patch: Partial<FamilyMember>) => {
-    setFamilyMembers((prev) =>
-      prev.map((m) =>
+    setFamilyMembers((prev) => {
+      const next = prev.map((m) =>
         m.id === id
           ? normalizeFamilyMember({ ...m, ...patch, id: m.id, name: patch.name ?? m.name })
           : m
-      )
-    );
+      );
+      saveFamilyMembers(next);
+      return next;
+    });
   }, []);
 
   const simulateAcceptInvite = useCallback(

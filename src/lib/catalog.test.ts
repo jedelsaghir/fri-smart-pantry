@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  coreItemName,
   findMergeGroups,
   mergeCatalogGroup,
+  nameSimilarityScore,
   namesLookSimilar,
   normalizeItemName,
   searchCatalog,
@@ -20,14 +22,34 @@ describe("normalizeItemName", () => {
   it("lowercases and collapses spaces", () => {
     expect(normalizeItemName("  Whole  Milk! ")).toBe("whole milk");
   });
+  it("treats hyphens as spaces", () => {
+    expect(normalizeItemName("Free-range eggs")).toBe("free range eggs");
+  });
+});
+
+describe("coreItemName", () => {
+  it("strips size suffixes", () => {
+    expect(coreItemName("Whole milk 1L")).toBe("whole milk");
+    expect(coreItemName("Eggs 12pcs")).toBe("eggs");
+    expect(coreItemName("Chicken 500g")).toBe("chicken");
+  });
 });
 
 describe("namesLookSimilar", () => {
   it("matches substring variants", () => {
     expect(namesLookSimilar("Milk", "Whole milk")).toBe(true);
   });
+  it("matches free-range vs free range", () => {
+    expect(namesLookSimilar("Free range eggs", "Free-range eggs")).toBe(true);
+  });
+  it("matches names with size noise", () => {
+    expect(namesLookSimilar("Whole milk 1L", "Whole Milk")).toBe(true);
+  });
   it("rejects unrelated", () => {
     expect(namesLookSimilar("Milk", "Pasta")).toBe(false);
+  });
+  it("scores exact cores near 1", () => {
+    expect(nameSimilarityScore("Whole milk 1L", "Whole Milk")).toBeGreaterThanOrEqual(0.95);
   });
 });
 

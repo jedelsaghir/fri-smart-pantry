@@ -24,6 +24,17 @@ describe("sameProduct", () => {
     expect(sameProduct(base(), base({ name: "whole milk", id: "2" }))).toBe(true);
     expect(sameProduct(base(), base({ unit: "ml" }))).toBe(false);
   });
+  it("matches unit aliases and size-stripped names", () => {
+    expect(
+      sameProduct(
+        { name: "Whole milk 1L", unit: "L" },
+        { name: "Whole Milk", unit: "litre" }
+      )
+    ).toBe(true);
+    expect(
+      sameProduct({ name: "Free-range eggs", unit: "pcs" }, { name: "Free range eggs", unit: "pieces" })
+    ).toBe(true);
+  });
 });
 
 describe("namesMatchLoose", () => {

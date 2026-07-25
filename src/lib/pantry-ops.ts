@@ -1,12 +1,29 @@
 import type { PantryItem, PantryItemsByStorage, StorageKey } from "@/types/pantry";
-import { normalizeItemName } from "@/lib/catalog";
+import { coreItemName, normalizeItemName } from "@/lib/catalog";
+import { normalizeUnit } from "@/lib/ocr-parse";
 
-/** Same product identity: name + unit (case/space insensitive) */
+/** Canonical unit for comparisons (L / litre / liter → L, pcs / pieces → pcs, …) */
+export function canonicalUnit(unit: string, qty = 1): string {
+  return normalizeUnit(unit || "pcs", qty);
+}
+
+/** True when units are the same after normalization */
+export function unitsMatch(a: string, b: string, qtyA = 1, qtyB = 1): boolean {
+  return canonicalUnit(a, qtyA) === canonicalUnit(b, qtyB);
+}
+
+/**
+ * Same product identity: core name (sizes stripped) + normalized unit.
+ * "Whole milk 1L" + L  ≈  "Whole Milk" + litre
+ */
 export function sameProduct(a: { name: string; unit: string }, b: { name: string; unit: string }): boolean {
-  return (
-    normalizeItemName(a.name) === normalizeItemName(b.name) &&
-    a.unit.trim().toLowerCase() === b.unit.trim().toLowerCase()
-  );
+  const nameA = coreItemName(a.name) || normalizeItemName(a.name);
+  const nameB = coreItemName(b.name) || normalizeItemName(b.name);
+  if (!nameA || !nameB) return false;
+  if (nameA !== nameB && normalizeItemName(a.name) !== normalizeItemName(b.name)) {
+    return false;
+  }
+  return unitsMatch(a.unit, b.unit);
 }
 
 /**

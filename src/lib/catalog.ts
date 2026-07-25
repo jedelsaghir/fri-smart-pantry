@@ -7,7 +7,23 @@ export const CATALOG_KEY = STORAGE_KEYS.CATALOG;
 export function normalizeItemName(name: string): string {
   return name
     .toLowerCase()
+    // Treat hyphens / punctuation as spaces so "free-range" ≈ "free range"
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Product core for matching: drop embedded sizes/qty tokens so
+ * "Whole milk 1L" ≈ "Whole Milk" and "Eggs 12pcs" ≈ "Free range eggs" still scores on tokens.
+ */
+export function coreItemName(name: string): string {
+  return normalizeItemName(name)
+    .replace(
+      /\b\d+([.,]\d+)?\s*(ml|l|lt|ltr|liter|litre|liters|litres|g|gr|gram|grams|kg|kilo|kilogram|kilograms|oz|lb|pcs|pc|pack|packs|pk|x)\b/gi,
+      " "
+    )
+    .replace(/\b\d+([.,]\d+)?\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -73,21 +89,64 @@ export function upsertCatalogFromPantryItem(
   ];
 }
 
-/** Simple similarity: shared tokens or one contains the other */
+/** Token set for fuzzy name compare (ignores short noise words) */
+function nameTokens(name: string): Set<string> {
+  const STOP = new Set(["the", "and", "with", "for", "from", "organic", "bio"]);
+  return new Set(
+    coreItemName(name)
+      .split(" ")
+      .filter((t) => t.length > 1 && !STOP.has(t))
+  );
+}
+
+/**
+ * Deterministic name similarity for receipt ↔ pantry matching.
+ * Handles punctuation, free-range vs free range, and size suffixes (1L, 500g).
+ */
 export function namesLookSimilar(a: string, b: string): boolean {
-  const na = normalizeItemName(a);
-  const nb = normalizeItemName(b);
-  if (!na || !nb || na === nb) return na === nb && na.length > 0;
-  if (na.includes(nb) || nb.includes(na)) return true;
-  const ta = new Set(na.split(" ").filter((t) => t.length > 2));
-  const tb = new Set(nb.split(" ").filter((t) => t.length > 2));
-  if (ta.size === 0 || tb.size === 0) return false;
+  return nameSimilarityScore(a, b) >= 0.55;
+}
+
+/** 0–1 score; 1 = same core product name */
+export function nameSimilarityScore(a: string, b: string): number {
+  const na = coreItemName(a);
+  const nb = coreItemName(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+
+  // Containment after size strip (e.g. "milk" ⊂ "whole milk")
+  if (na.includes(nb) || nb.includes(na)) {
+    const shorter = Math.min(na.length, nb.length);
+    const longer = Math.max(na.length, nb.length);
+    // Avoid "oil" matching "toilet" style flukes — require meaningful length
+    if (shorter < 3) return 0;
+    return 0.72 + 0.28 * (shorter / longer);
+  }
+
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (ta.size === 0 || tb.size === 0) return 0;
+
   let shared = 0;
   ta.forEach((t) => {
     if (tb.has(t)) shared += 1;
   });
-  const minSize = Math.min(ta.size, tb.size);
-  return shared >= 1 && shared / minSize >= 0.5;
+  if (shared === 0) {
+    // Soft prefix match on longest tokens (eggs / egg)
+    for (const x of ta) {
+      for (const y of tb) {
+        if (x.length >= 3 && y.length >= 3 && (x.startsWith(y) || y.startsWith(x))) {
+          shared += 0.85;
+        }
+      }
+    }
+    if (shared === 0) return 0;
+  }
+
+  const union = ta.size + tb.size - Math.floor(shared);
+  const jaccard = shared / Math.max(1, union);
+  const coverage = shared / Math.min(ta.size, tb.size);
+  return Math.min(1, jaccard * 0.45 + coverage * 0.55);
 }
 
 export function findMergeGroups(catalog: CatalogItem[]): CatalogMergeGroup[] {

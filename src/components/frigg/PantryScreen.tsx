@@ -1290,10 +1290,32 @@ export function PantryScreen() {
           addReceipt(receipt);
           addActivity("You", `saved receipt from ${receipt.store}`);
         }}
-        pantryItems={[...items.fridge, ...items.freezer, ...items.pantry].map((i) => ({
-          name: i.name,
-          unit: i.unit,
-        }))}
+        pantryItems={[
+          ...items.fridge.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            qty: i.qty,
+            emoji: i.emoji,
+            storage: "fridge" as const,
+          })),
+          ...items.freezer.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            qty: i.qty,
+            emoji: i.emoji,
+            storage: "freezer" as const,
+          })),
+          ...items.pantry.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            qty: i.qty,
+            emoji: i.emoji,
+            storage: "pantry" as const,
+          })),
+        ]}
         onNavigateToPantry={() => setActiveView("pantry")}
       />
 

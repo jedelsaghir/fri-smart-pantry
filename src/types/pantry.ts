@@ -23,6 +23,25 @@ export type ItemStatus = {
   color: string;
 };
 
+/** How a review line should apply against an existing pantry row */
+export type ReviewDisposition = "merge" | "update" | "add_new";
+
+/** Strength of pantry name/unit match for a scanned line */
+export type PantryMatchKind = "exact" | "similar";
+
+/** Best pantry row matched to a scanned / OCR line */
+export type PantryMatchInfo = {
+  id: string;
+  name: string;
+  qty: number;
+  unit: string;
+  emoji: string;
+  storage: StorageKey;
+  /** 0–1 similarity score */
+  score: number;
+  kind: PantryMatchKind;
+};
+
 /** Item detected during receipt scan (includes confidence + target storage) */
 export interface DetectedItem {
   id: string;
@@ -34,6 +53,15 @@ export interface DetectedItem {
   confidence: number;
   /** Line total from OCR when known */
   price?: number;
+  /** Existing pantry item this line likely refers to */
+  pantryMatch?: PantryMatchInfo;
+  /**
+   * Review action when confirming:
+   * - merge: add scanned qty onto matched row
+   * - update: set matched row qty to scanned qty
+   * - add_new: create a separate pantry row
+   */
+  disposition?: ReviewDisposition;
 }
 
 /** Payload used when adding scanned items into the pantry */

@@ -10,7 +10,12 @@ import {
   Trash2,
   Sparkles,
 } from "lucide-react";
-import type { StorageKey, DetectedItem, StoredReceipt, PantryItem } from "@/types/pantry";
+import type {
+  StorageKey,
+  DetectedItem,
+  StoredReceipt,
+  ReviewDisposition,
+} from "@/types/pantry";
 import { toast } from "sonner";
 import { buildReceiptFromScan, readFileAsDataUrl } from "@/lib/receipts";
 import { captureVideoFrame } from "@/lib/ocr-image";
@@ -21,6 +26,7 @@ import {
   multiPhotoErrorMessage,
   ocrLinesToDetected,
   splitAutoAndReview,
+  type FlatPantryRef,
 } from "@/lib/ocr-merge";
 
 export type { DetectedItem };
@@ -40,7 +46,7 @@ interface ReceiptScanFlowProps {
   /** Persist full receipt (photo + line items) for Finances history */
   onReceiptSaved?: (receipt: StoredReceipt) => void;
   /** Existing pantry rows — similar / duplicate lines go to review */
-  pantryItems?: Array<Pick<PantryItem, "name" | "unit">>;
+  pantryItems?: FlatPantryRef[];
   /** Called when scan finishes cleanly (no review) so parent can open Pantry tab */
   onNavigateToPantry?: () => void;
 }
@@ -460,6 +466,7 @@ export function ReceiptScanFlow({
       return;
     }
 
+    // Preserve disposition + pantryMatch for merge/update handling in usePantry
     const toAdd = reviewItems.map(({ id, confidence, ...rest }) => rest);
     onItemsAdded(toAdd, { silent: true });
 
@@ -468,8 +475,21 @@ export function ReceiptScanFlow({
     const allForReceipt = [...autoPart, ...reviewItems];
     saveReceiptSnapshot(allForReceipt, primaryImage);
 
+    const mergeN = reviewItems.filter(
+      (i) => i.pantryMatch && (i.disposition ?? "merge") === "merge"
+    ).length;
+    const updateN = reviewItems.filter(
+      (i) => i.pantryMatch && i.disposition === "update"
+    ).length;
+    const newN = reviewItems.length - mergeN - updateN;
+
+    const parts: string[] = [];
+    if (newN > 0) parts.push(`${newN} new`);
+    if (mergeN > 0) parts.push(`${mergeN} merged`);
+    if (updateN > 0) parts.push(`${updateN} updated`);
+
     toast.success("Pantry Updated", {
-      description: "Receipt saved in Finances",
+      description: parts.length ? parts.join(" · ") + " · saved in Finances" : "Receipt saved in Finances",
     });
     onNavigateToPantry?.();
     handleClose();
@@ -786,94 +806,196 @@ export function ReceiptScanFlow({
           {step === "review" && (
             <div>
               <div className="mb-5">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="text-lg font-semibold tracking-tight">Review items</div>
                   <div className="rounded-full bg-amber-100 px-2.5 py-px text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
                     Needs confirmation
                   </div>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Low-confidence lines or items similar to what you already have.
+                  Low-confidence reads, or items that look like stock you already have.
                 </p>
               </div>
 
               <div className="space-y-3 pb-4">
-                {reviewItems.map((item) => (
-                  <div key={item.id} className="elevated-card rounded-3xl p-4">
-                    <div className="flex items-start gap-4">
-                      <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-secondary text-2xl">
-                        {item.emoji}
-                      </div>
+                {reviewItems.map((item) => {
+                  const match = item.pantryMatch;
+                  const disposition: ReviewDisposition =
+                    item.disposition ?? (match ? "merge" : "add_new");
+                  const isLow = item.confidence < 0.8;
+                  const resultQtyPreview =
+                    match && disposition === "merge"
+                      ? match.qty + item.qty
+                      : disposition === "update"
+                        ? item.qty
+                        : item.qty;
 
-                      <div className="min-w-0 flex-1">
-                        <input
-                          value={item.name}
-                          onChange={(e) => updateReviewItem(item.id, { name: e.target.value })}
-                          className="w-full bg-transparent text-[15px] font-semibold tracking-[-0.01em] outline-none border-b border-transparent focus:border-border/50 pb-0.5"
-                        />
+                  return (
+                    <div
+                      key={item.id}
+                      className={
+                        "elevated-card rounded-3xl p-4 " +
+                        (match
+                          ? "ring-1 ring-sky-500/25 bg-[color-mix(in_oklab,var(--color-card)_88%,oklch(0.7_0.06_230))]"
+                          : "")
+                      }
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-secondary text-2xl">
+                          {item.emoji}
+                        </div>
 
-                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2.5">
-                          <div className="flex items-center gap-1 rounded-full bg-secondary/70 p-0.5">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateReviewItem(item.id, { qty: Math.max(1, item.qty - 1) })
-                              }
-                              className="touch-target grid size-8 place-items-center rounded-full active:bg-background/70"
-                            >
-                              –
-                            </button>
-                            <span className="w-7 text-center text-sm font-semibold tabular-nums">
-                              {item.qty}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => updateReviewItem(item.id, { qty: item.qty + 1 })}
-                              className="touch-target grid size-8 place-items-center rounded-full active:bg-background/70"
-                            >
-                              +
-                            </button>
+                        <div className="min-w-0 flex-1">
+                          {/* Status badges */}
+                          <div className="flex flex-wrap gap-1.5 mb-1.5">
+                            {isLow && (
+                              <span className="rounded-full bg-amber-100 dark:bg-amber-500/15 px-2 py-px text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                                Low confidence · {Math.round(item.confidence * 100)}%
+                              </span>
+                            )}
+                            {match?.kind === "exact" && (
+                              <span className="rounded-full bg-sky-100 dark:bg-sky-500/15 px-2 py-px text-[10px] font-medium text-sky-800 dark:text-sky-300">
+                                Matches pantry
+                              </span>
+                            )}
+                            {match?.kind === "similar" && (
+                              <span className="rounded-full bg-violet-100 dark:bg-violet-500/15 px-2 py-px text-[10px] font-medium text-violet-800 dark:text-violet-300">
+                                Similar to stock
+                              </span>
+                            )}
                           </div>
 
-                          <div className="text-xs text-muted-foreground">{item.unit}</div>
-                          {typeof item.price === "number" && (
-                            <div className="text-xs font-medium tabular-nums">
-                              €{item.price.toFixed(2)}
+                          <input
+                            value={item.name}
+                            onChange={(e) => updateReviewItem(item.id, { name: e.target.value })}
+                            className="w-full bg-transparent text-[15px] font-semibold tracking-[-0.01em] outline-none border-b border-transparent focus:border-border/50 pb-0.5"
+                          />
+
+                          {/* Matched pantry item preview */}
+                          {match && (
+                            <div className="mt-2.5 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5">
+                              <div className="flex items-center gap-2.5">
+                                <span className="text-lg leading-none">{match.emoji}</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[11px] font-medium uppercase tracking-wide text-sky-800/70 dark:text-sky-300/80">
+                                    In your {formatStorageLabel(match.storage)}
+                                  </p>
+                                  <p className="text-[13px] font-semibold truncate">
+                                    {match.name}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground tabular-nums">
+                                    Now {match.qty} {match.unit}
+                                    {disposition !== "add_new" && (
+                                      <>
+                                        {" "}
+                                        →{" "}
+                                        <span className="font-semibold text-foreground">
+                                          {resultQtyPreview} {match.unit}
+                                        </span>
+                                        {disposition === "merge" && (
+                                          <span className="text-muted-foreground">
+                                            {" "}
+                                            (+{item.qty})
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Disposition: Merge / Update / Add new */}
+                              <div className="mt-2.5 inline-flex w-full rounded-xl bg-background/70 p-0.5 text-[11px] font-semibold">
+                                {(
+                                  [
+                                    { key: "merge" as const, label: "Merge" },
+                                    { key: "update" as const, label: "Update qty" },
+                                    { key: "add_new" as const, label: "Add new" },
+                                  ] as const
+                                ).map((opt) => (
+                                  <button
+                                    type="button"
+                                    key={opt.key}
+                                    onClick={() =>
+                                      updateReviewItem(item.id, { disposition: opt.key })
+                                    }
+                                    className={
+                                      "flex-1 rounded-[10px] py-1.5 transition " +
+                                      (disposition === opt.key
+                                        ? "bg-card text-foreground shadow-sm"
+                                        : "text-muted-foreground active:bg-card/50")
+                                    }
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
 
-                          <div className="flex-1 min-w-[148px]">
-                            <div className="inline-flex rounded-2xl bg-secondary/70 p-0.5 text-xs font-semibold">
-                              {(["fridge", "freezer", "pantry"] as StorageKey[]).map((s) => (
-                                <button
-                                  type="button"
-                                  key={s}
-                                  onClick={() => updateReviewItem(item.id, { storage: s })}
-                                  className={`rounded-[10px] px-3 py-1 transition ${
-                                    item.storage === s
-                                      ? "bg-card text-foreground shadow-sm"
-                                      : "text-muted-foreground active:bg-card/50"
-                                  }`}
-                                >
-                                  {formatStorageLabel(s)}
-                                </button>
-                              ))}
+                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2.5">
+                            <div className="flex items-center gap-1 rounded-full bg-secondary/70 p-0.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateReviewItem(item.id, { qty: Math.max(1, item.qty - 1) })
+                                }
+                                className="touch-target grid size-8 place-items-center rounded-full active:bg-background/70"
+                              >
+                                –
+                              </button>
+                              <span className="w-7 text-center text-sm font-semibold tabular-nums">
+                                {item.qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateReviewItem(item.id, { qty: item.qty + 1 })}
+                                className="touch-target grid size-8 place-items-center rounded-full active:bg-background/70"
+                              >
+                                +
+                              </button>
                             </div>
-                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => removeReviewItem(item.id)}
-                            className="ml-auto touch-target grid size-9 place-items-center text-muted-foreground hover:text-destructive active:bg-secondary/60 rounded-full"
-                            aria-label="Remove item"
-                          >
-                            <Trash2 className="size-4" />
-                          </button>
+                            <div className="text-xs text-muted-foreground">{item.unit}</div>
+                            {typeof item.price === "number" && (
+                              <div className="text-xs font-medium tabular-nums">
+                                €{item.price.toFixed(2)}
+                              </div>
+                            )}
+
+                            <div className="flex-1 min-w-[148px]">
+                              <div className="inline-flex rounded-2xl bg-secondary/70 p-0.5 text-xs font-semibold">
+                                {(["fridge", "freezer", "pantry"] as StorageKey[]).map((s) => (
+                                  <button
+                                    type="button"
+                                    key={s}
+                                    onClick={() => updateReviewItem(item.id, { storage: s })}
+                                    className={`rounded-[10px] px-3 py-1 transition ${
+                                      item.storage === s
+                                        ? "bg-card text-foreground shadow-sm"
+                                        : "text-muted-foreground active:bg-card/50"
+                                    }`}
+                                  >
+                                    {formatStorageLabel(s)}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => removeReviewItem(item.id)}
+                              className="ml-auto touch-target grid size-9 place-items-center text-muted-foreground hover:text-destructive active:bg-secondary/60 rounded-full"
+                              aria-label="Remove item"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -888,7 +1010,7 @@ export function ReceiptScanFlow({
               className="w-full rounded-3xl bg-brand py-4 text-lg font-semibold text-brand-foreground active:scale-[0.985] disabled:opacity-60 transition disabled:active:scale-100 flex items-center justify-center gap-2"
             >
               <Check className="size-5" />
-              Add {reviewItems.length} item{reviewItems.length === 1 ? "" : "s"} to pantry
+              Confirm {reviewItems.length} item{reviewItems.length === 1 ? "" : "s"}
             </button>
             <button
               type="button"

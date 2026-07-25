@@ -342,18 +342,30 @@ export function usePantry(options: UsePantryOptions = {}) {
 
   /**
    * Core: add scanned items (can target any storage).
-   * P1-1: merge qty when name+unit match in same storage.
+   * P1-1: merge qty when name+unit match in same storage (or explicit pantryMatch + disposition).
+   * disposition:
+   *   - merge (default with match): add scanned qty onto matched row
+   *   - update: set matched row qty to scanned qty
+   *   - add_new: always create a new row
    * P1-8: set latestPrice on matching items.
    */
   const addScannedItems = useCallback(
     (scanned: ScannedItemInput[], options: { silent?: boolean } = {}) => {
       if (scanned.length === 0) return;
 
+      let mergedCount = 0;
+      let updatedCount = 0;
+      let createdCount = 0;
+
       setItems((prev) => {
-        let next = { ...prev };
+        let next: PantryItemsByStorage = {
+          fridge: [...prev.fridge],
+          freezer: [...prev.freezer],
+          pantry: [...prev.pantry],
+        };
+
         scanned.forEach((s, index) => {
           const target = s.storage;
-          // Prefer real OCR line price; only estimate when OCR had no price
           const lineTotal =
             typeof s.price === "number" && Number.isFinite(s.price) && s.price > 0
               ? s.price
@@ -362,6 +374,72 @@ export function usePantry(options: UsePantryOptions = {}) {
             s.unit === "g" || s.unit === "kg" || s.unit === "ml"
               ? Math.round((lineTotal / Math.max(1, s.qty / 100)) * 100) / 100
               : Math.round((lineTotal / Math.max(1, s.qty)) * 100) / 100;
+          const priceUnit = defaultPriceUnit(s.unit);
+
+          const disposition = s.disposition ?? (s.pantryMatch ? "merge" : "add_new");
+          const matchId = s.pantryMatch?.id;
+
+          // Explicit merge / update against a known pantry row
+          if ((disposition === "merge" || disposition === "update") && matchId) {
+            let foundStorage: StorageKey | null = null;
+            let foundItem: PantryItem | null = null;
+
+            for (const st of ["fridge", "freezer", "pantry"] as StorageKey[]) {
+              const hit = next[st].find((i) => i.id === matchId);
+              if (hit) {
+                foundStorage = st;
+                foundItem = hit;
+                break;
+              }
+            }
+
+            if (foundItem && foundStorage) {
+              const newQty =
+                disposition === "update"
+                  ? Math.max(0, s.qty)
+                  : foundItem.qty + s.qty;
+
+              const updated: PantryItem = {
+                ...foundItem,
+                qty: newQty,
+                emoji: s.emoji || foundItem.emoji,
+                latestPrice,
+                priceUnit: priceUnit || foundItem.priceUnit,
+                // Keep pantry name; scanned name may be noisier OCR text
+                name: foundItem.name,
+                unit: foundItem.unit,
+              };
+
+              // Move to target storage if user changed it in review
+              if (foundStorage !== target) {
+                next = {
+                  ...next,
+                  [foundStorage]: next[foundStorage].filter((i) => i.id !== matchId),
+                  [target]: [...next[target], { ...updated }],
+                };
+              } else {
+                next = {
+                  ...next,
+                  [foundStorage]: next[foundStorage].map((i) =>
+                    i.id === matchId ? updated : i
+                  ),
+                };
+              }
+
+              if (disposition === "update") updatedCount += 1;
+              else mergedCount += 1;
+
+              next = applyPriceToMatchingItems(
+                next,
+                { name: updated.name, unit: updated.unit },
+                latestPrice,
+                priceUnit
+              );
+              return;
+            }
+          }
+
+          // add_new or match not found → create / fuzzy upsert by name+unit
           const newItem: PantryItem = {
             id: `item-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
             name: s.name,
@@ -371,14 +449,28 @@ export function usePantry(options: UsePantryOptions = {}) {
             daysLeft: getDefaultDaysLeft(s.name, target),
             minStock: getDefaultMinStock(s.name),
             latestPrice,
-            priceUnit: defaultPriceUnit(s.unit),
+            priceUnit,
           };
-          next = applyIncomingToStorage(next, target, newItem, { mergePrice: true });
+
+          if (disposition === "add_new") {
+            // Force a distinct row even if name matches
+            next = {
+              ...next,
+              [target]: [...next[target], newItem],
+            };
+            createdCount += 1;
+          } else {
+            const beforeLen = next[target].length;
+            next = applyIncomingToStorage(next, target, newItem, { mergePrice: true });
+            if (next[target].length === beforeLen) mergedCount += 1;
+            else createdCount += 1;
+          }
+
           next = applyPriceToMatchingItems(
             next,
             { name: s.name, unit: s.unit },
             latestPrice,
-            defaultPriceUnit(s.unit)
+            priceUnit
           );
         });
         return next;
@@ -402,7 +494,13 @@ export function usePantry(options: UsePantryOptions = {}) {
       }
 
       const count = scanned.length;
-      onActivity?.("You", `added ${count} item${count > 1 ? "s" : ""}`);
+      const activity =
+        mergedCount + updatedCount > 0 && createdCount === 0
+          ? `restocked ${mergedCount + updatedCount} item${mergedCount + updatedCount > 1 ? "s" : ""}`
+          : mergedCount + updatedCount > 0
+            ? `added ${createdCount}, restocked ${mergedCount + updatedCount}`
+            : `added ${count} item${count > 1 ? "s" : ""}`;
+      onActivity?.("You", activity);
     },
     [onActivity]
   );

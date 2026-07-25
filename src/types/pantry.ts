@@ -62,6 +62,13 @@ export interface DetectedItem {
    * - add_new: create a separate pantry row
    */
   disposition?: ReviewDisposition;
+  /**
+   * Uncertain non-food / non-pantry signal — shown in Review so the user can
+   * Keep (add) or Discard. High-confidence non-pantry lines are excluded before review.
+   */
+  possiblyNonFood?: boolean;
+  /** Short reason / category for non-food flag (e.g. "cleaning") */
+  nonFoodReason?: string;
 }
 
 /** Payload used when adding scanned items into the pantry */

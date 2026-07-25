@@ -140,11 +140,12 @@ describe("splitAutoAndReview", () => {
     const stock = pantry([
       { id: "m1", name: "whole milk", unit: "L", qty: 1, emoji: "🥛", storage: "fridge" },
     ]);
-    const { autoItems, reviewItems } = splitAutoAndReview(items, stock);
+    const { autoItems, reviewItems, excludedItems } = splitAutoAndReview(items, stock);
 
     // New Juice: new auto-add; Whole Milk: strong match → auto-update (merge)
     expect(autoItems.map((i) => i.name).sort()).toEqual(["New Juice", "Whole Milk"]);
     expect(reviewItems.map((i) => i.name)).toEqual(["Fuzzy Item"]);
+    expect(excludedItems).toHaveLength(0);
 
     const milk = autoItems.find((i) => i.name === "Whole Milk")!;
     expect(milk.pantryMatch?.id).toBe("m1");
@@ -169,5 +170,24 @@ describe("splitAutoAndReview", () => {
     const { autoItems, reviewItems } = splitAutoAndReview(items, pantry([]));
     expect(autoItems).toHaveLength(1);
     expect(reviewItems).toHaveLength(0);
+  });
+
+  it("excludes high-confidence non-pantry items and flags uncertain ones", () => {
+    const items = ocrLinesToDetected([
+      line({ name: "Whole milk", confidence: 0.96, unit: "L" }),
+      line({ name: "Laundry detergent", confidence: 0.95 }),
+      line({ name: "Shampoo 500ml", confidence: 0.92 }),
+      line({ name: "Organic bread", confidence: 0.9 }),
+    ]);
+    const { autoItems, reviewItems, excludedItems } = splitAutoAndReview(items, pantry([]));
+
+    expect(excludedItems.map((i) => i.name).sort()).toEqual([
+      "Laundry detergent",
+      "Shampoo 500ml",
+    ]);
+    expect(autoItems.map((i) => i.name).sort()).toEqual(["Organic bread", "Whole milk"]);
+    // No non-food in auto or normal review
+    expect(autoItems.every((i) => !i.possiblyNonFood)).toBe(true);
+    expect(reviewItems.every((i) => i.name !== "Laundry detergent")).toBe(true);
   });
 });

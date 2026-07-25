@@ -384,7 +384,11 @@ export function ReceiptScanFlow({
       const results = ocrLinesToDetected(merged.items);
       setDetected(results);
 
-      const { autoItems, reviewItems: ambiguous } = splitAutoAndReview(results, pantryItems);
+      const {
+        autoItems,
+        reviewItems: ambiguous,
+        excludedItems,
+      } = splitAutoAndReview(results, pantryItems);
 
       if (autoItems.length > 0) {
         onItemsAdded(
@@ -395,25 +399,55 @@ export function ReceiptScanFlow({
 
       setProcessProgress(100);
 
+      const skippedNonFood = excludedItems.length;
+      if (skippedNonFood > 0) {
+        toast.message(
+          skippedNonFood === 1
+            ? "Skipped 1 non-pantry item"
+            : `Skipped ${skippedNonFood} non-pantry items`,
+          {
+            description: "Cleaning, household, and personal care stay off your fridge.",
+            duration: 3200,
+          }
+        );
+      }
+
+      // Receipt snapshot should only track pantry-bound lines for pantry flow;
+      // financials still get store total from OCR meta.
+      const pantryBound = results.filter((r) => !excludedItems.some((e) => e.id === r.id));
+      setDetected(pantryBound);
+
       if (ambiguous.length > 0) {
         setReviewItems(ambiguous);
+        const parts: string[] = [];
+        if (autoItems.length > 0) parts.push(`Added ${autoItems.length}`);
+        parts.push(`${ambiguous.length} to review`);
+        if (skippedNonFood > 0) parts.push(`${skippedNonFood} skipped`);
         showResultThen({
           ok: true,
-          message:
-            autoItems.length > 0
-              ? `Added ${autoItems.length} · ${ambiguous.length} to review`
-              : `${ambiguous.length} item${ambiguous.length === 1 ? "" : "s"} to review`,
+          message: parts.join(" · "),
           next: "review",
         });
       } else {
         setResultOk(true);
         setResultMessage(
-          `Added ${autoItems.length} item${autoItems.length === 1 ? "" : "s"}`
+          autoItems.length > 0
+            ? `Added ${autoItems.length} item${autoItems.length === 1 ? "" : "s"}` +
+                (skippedNonFood > 0 ? ` · ${skippedNonFood} non-food skipped` : "")
+            : skippedNonFood > 0
+              ? "No pantry items on this receipt"
+              : "Nothing to add"
         );
         setStep("result");
         clearResultTimer();
         resultTimerRef.current = setTimeout(() => {
-          finishCleanToPantry(results);
+          if (autoItems.length > 0) {
+            finishCleanToPantry(pantryBound);
+          } else {
+            stopCamera();
+            onNavigateToPantry?.();
+            handleClose();
+          }
         }, 1250);
       }
     } catch (err) {
@@ -563,7 +597,9 @@ export function ReceiptScanFlow({
 
     // Preserve disposition + pantryMatch for merge/update handling in usePantry
     const toAdd = reviewItems.map(({ id, confidence, ...rest }) => rest);
-    onItemsAdded(toAdd, { silent: true });
+    if (toAdd.length > 0) {
+      onItemsAdded(toAdd, { silent: true });
+    }
 
     const reviewIds = new Set(reviewItems.map((r) => r.id));
     const autoPart = detected.filter((i) => !reviewIds.has(i.id));
@@ -975,7 +1011,7 @@ export function ReceiptScanFlow({
                   </div>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Low-confidence reads, or items that look like stock you already have.
+                  Low-confidence reads, similar pantry stock, or possible non-food items.
                 </p>
               </div>
 
@@ -985,6 +1021,7 @@ export function ReceiptScanFlow({
                   const disposition: ReviewDisposition =
                     item.disposition ?? (match ? "merge" : "add_new");
                   const isLow = item.confidence < 0.8;
+                  const isNonFoodSuspect = !!item.possiblyNonFood;
                   const resultQtyPreview =
                     match && disposition === "merge"
                       ? match.qty + item.qty
@@ -997,9 +1034,11 @@ export function ReceiptScanFlow({
                       key={item.id}
                       className={
                         "elevated-card rounded-3xl p-4 " +
-                        (match
-                          ? "ring-1 ring-sky-500/25 bg-[color-mix(in_oklab,var(--color-card)_88%,oklch(0.7_0.06_230))]"
-                          : "")
+                        (isNonFoodSuspect
+                          ? "ring-1 ring-violet-500/25 bg-[color-mix(in_oklab,var(--color-card)_90%,oklch(0.72_0.06_300))]"
+                          : match
+                            ? "ring-1 ring-sky-500/25 bg-[color-mix(in_oklab,var(--color-card)_88%,oklch(0.7_0.06_230))]"
+                            : "")
                       }
                     >
                       <div className="flex items-start gap-4">
@@ -1009,12 +1048,18 @@ export function ReceiptScanFlow({
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap gap-1.5 mb-1.5">
-                            {isLow && (
+                            {isNonFoodSuspect && (
+                              <span className="rounded-full bg-violet-100 dark:bg-violet-500/15 px-2 py-px text-[10px] font-medium text-violet-800 dark:text-violet-300">
+                                Possibly non-food
+                                {item.nonFoodReason ? ` · ${item.nonFoodReason}` : ""}
+                              </span>
+                            )}
+                            {isLow && !isNonFoodSuspect && (
                               <span className="rounded-full bg-amber-100 dark:bg-amber-500/15 px-2 py-px text-[10px] font-medium text-amber-700 dark:text-amber-300">
                                 Low confidence · {Math.round(item.confidence * 100)}%
                               </span>
                             )}
-                            {match && (
+                            {match && !isNonFoodSuspect && (
                               <span className="rounded-full bg-sky-100 dark:bg-sky-500/15 px-2 py-px text-[10px] font-medium text-sky-800 dark:text-sky-300">
                                 {match.kind === "exact" ? "Likely match" : "Similar item"}
                                 {typeof match.score === "number"
@@ -1030,8 +1075,44 @@ export function ReceiptScanFlow({
                             className="w-full bg-transparent text-[15px] font-semibold tracking-[-0.01em] outline-none border-b border-transparent focus:border-border/50 pb-0.5"
                           />
 
+                          {/* Uncertain non-food: Keep / Discard */}
+                          {isNonFoodSuspect && (
+                            <div className="mt-2.5 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-3 py-2.5">
+                              <p className="text-[12px] leading-snug text-muted-foreground">
+                                This doesn’t look like fridge, freezer, or pantry stock. Keep it only
+                                if you want it tracked.
+                              </p>
+                              <div className="mt-2.5 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateReviewItem(item.id, {
+                                      disposition: "add_new",
+                                      possiblyNonFood: false,
+                                    })
+                                  }
+                                  className={
+                                    "flex-1 rounded-2xl py-2 text-[12px] font-semibold transition active:scale-[0.98] " +
+                                    (!item.possiblyNonFood || disposition === "add_new"
+                                      ? "bg-brand text-brand-foreground shadow-sm"
+                                      : "bg-background/80 text-foreground border border-border/60")
+                                  }
+                                >
+                                  Keep
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeReviewItem(item.id)}
+                                  className="flex-1 rounded-2xl border border-border/60 bg-background/80 py-2 text-[12px] font-semibold text-foreground transition active:scale-[0.98]"
+                                >
+                                  Discard
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Clear match line: “Similar to: X (current qty)” */}
-                          {match && (
+                          {match && !isNonFoodSuspect && (
                             <div className="mt-2.5 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5">
                               <p className="text-[13px] leading-snug text-foreground">
                                 <span className="text-muted-foreground">Similar to: </span>

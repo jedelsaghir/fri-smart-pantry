@@ -17,6 +17,11 @@ import {
   unitsCompatible,
   type MatchablePantryItem,
 } from "@/lib/item-matching";
+import {
+  classifyPantryEligibility,
+  isPossiblyNonFood,
+  shouldAutoExcludeNonPantry,
+} from "@/lib/non-pantry";
 import type { OcrDetectResult, OcrLineItem } from "@/platform/types";
 import type {
   DetectedItem,
@@ -247,6 +252,8 @@ function defaultDisposition(match: PantryMatchInfo | null): ReviewDisposition {
 /**
  * Split merged detections into auto-add vs review.
  *
+ * - High-confidence non-pantry → excluded (no add, no review)
+ * - Uncertain non-food → Review with possiblyNonFood flag (Keep / Discard)
  * - High conf + no match → auto-add (new item)
  * - High conf + strong match → auto-update candidate (merge qty, silent)
  * - Low conf or weaker match → Review (show matched item + Update / Add new)
@@ -254,9 +261,15 @@ function defaultDisposition(match: PantryMatchInfo | null): ReviewDisposition {
 export function splitAutoAndReview(
   items: DetectedItem[],
   pantry: Array<FlatPantryNameUnit | FlatPantryRef>
-): { autoItems: DetectedItem[]; reviewItems: DetectedItem[] } {
+): {
+  autoItems: DetectedItem[];
+  reviewItems: DetectedItem[];
+  /** High-confidence non-pantry lines dropped from pantry processing */
+  excludedItems: DetectedItem[];
+} {
   const autoItems: DetectedItem[] = [];
   const reviewItems: DetectedItem[] = [];
+  const excludedItems: DetectedItem[] = [];
 
   const fullPantry: FlatPantryRef[] = pantry
     .filter((p): p is FlatPantryRef => "id" in p && typeof (p as FlatPantryRef).id === "string")
@@ -272,48 +285,71 @@ export function splitAutoAndReview(
   const nameOnly = fullPantry.length === 0;
 
   for (const item of items) {
+    // --- Non-pantry filter (before food matching) ---
+    const eligibility = classifyPantryEligibility(item.name, {
+      ocrConfidence: item.confidence,
+    });
+
+    if (shouldAutoExcludeNonPantry(eligibility)) {
+      excludedItems.push({
+        ...item,
+        possiblyNonFood: true,
+        nonFoodReason: eligibility.category || eligibility.reason,
+      });
+      continue;
+    }
+
+    const possiblyNonFood = isPossiblyNonFood(eligibility);
     const lowConfidence = item.confidence < AUTO_ADD_CONFIDENCE;
 
     let match: PantryMatchInfo | null = null;
-    if (fullPantry.length) {
-      match = findBestPantryMatch(item, fullPantry);
-    } else if (nameOnly) {
-      const synthetic: FlatPantryRef[] = pantry.map((p, i) => ({
-        id: `syn-${i}`,
-        name: p.name,
-        unit: p.unit,
-        qty: (p as { qty?: number }).qty ?? 0,
-        emoji: "🛒",
-        storage: "fridge" as StorageKey,
-      }));
-      match = findBestPantryMatch(item, synthetic);
+    // Don't match non-food suspects against pantry stock
+    if (!possiblyNonFood) {
+      if (fullPantry.length) {
+        match = findBestPantryMatch(item, fullPantry);
+      } else if (nameOnly) {
+        const synthetic: FlatPantryRef[] = pantry.map((p, i) => ({
+          id: `syn-${i}`,
+          name: p.name,
+          unit: p.unit,
+          qty: (p as { qty?: number }).qty ?? 0,
+          emoji: "🛒",
+          storage: "fridge" as StorageKey,
+        }));
+        match = findBestPantryMatch(item, synthetic);
+      }
     }
 
-    const strongUpdate = isStrongUpdateCandidate(item.confidence, match);
+    const strongUpdate = !possiblyNonFood && isStrongUpdateCandidate(item.confidence, match);
 
     const enriched: DetectedItem = {
       ...item,
       pantryMatch: match ?? undefined,
-      disposition: defaultDisposition(match),
+      disposition: possiblyNonFood ? "add_new" : defaultDisposition(match),
       storage: match?.storage ?? item.storage,
+      possiblyNonFood: possiblyNonFood || undefined,
+      nonFoodReason: possiblyNonFood
+        ? eligibility.category || eligibility.reason
+        : undefined,
     };
 
-    if (strongUpdate && match) {
-      // High-confidence strong match → auto-increase quantity (no review)
+    if (possiblyNonFood) {
+      // Uncertain → always manual review (Keep / Discard)
+      reviewItems.push(enriched);
+    } else if (strongUpdate && match) {
       autoItems.push({
         ...enriched,
         disposition: "merge",
         pantryMatch: match,
       });
     } else if (lowConfidence || match) {
-      // Weaker match or low OCR confidence → human review
       reviewItems.push(enriched);
     } else {
       autoItems.push({ ...item, disposition: "add_new" });
     }
   }
 
-  return { autoItems, reviewItems };
+  return { autoItems, reviewItems, excludedItems };
 }
 
 export function ocrLinesToDetected(items: OcrLineItem[], idPrefix = "det"): DetectedItem[] {

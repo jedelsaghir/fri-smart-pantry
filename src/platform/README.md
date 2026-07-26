@@ -19,7 +19,10 @@ Camera / library photo
   platform.ocr.detectFromImage(dataUrl)
         │
         ▼
-  createServerFn ocrReceiptFromImage   ← XAI_API_KEY never leaves server
+  createServerFn ocrReceiptFromImage   ← thin wrapper (tss-serverfn-split safe)
+        │
+        ▼
+  ocr-receipt.server.ts helpers        ← XAI_API_KEY never leaves server
         │
         ▼
   xAI Responses / Chat Completions (vision)

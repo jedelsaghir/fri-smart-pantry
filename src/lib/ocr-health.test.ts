@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { getApiKey, getModel, probeXaiHealth } from "./ocr-receipt.functions";
+import { getApiKey, getModel, probeXaiHealth } from "./ocr-receipt.server";
 
 describe("getApiKey / getModel", () => {
   const prev = { ...process.env };

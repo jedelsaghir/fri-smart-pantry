@@ -1,6 +1,7 @@
 import type { ReceiptLineItem, StoredReceipt, StorageKey } from "@/types/pantry";
 
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { safeSetItem, stripLocalPhotosToFreeSpace } from "@/lib/storage-quota";
 
 export const RECEIPTS_KEY = STORAGE_KEYS.RECEIPTS;
 
@@ -133,17 +134,24 @@ export function loadReceipts(): StoredReceipt[] {
 }
 
 export function saveReceipts(receipts: StoredReceipt[]): void {
-  try {
-    localStorage.setItem(RECEIPTS_KEY, JSON.stringify(receipts));
-  } catch {
-    // localStorage full (large images) — drop oversized photos rather than invent fakes
-    try {
-      const slim = receipts.map((r) => ({
-        ...r,
-        imageDataUrl: r.imageDataUrl && r.imageDataUrl.length > 80_000 ? "" : r.imageDataUrl,
-      }));
-      localStorage.setItem(RECEIPTS_KEY, JSON.stringify(slim));
-    } catch {}
+  // Prefer aggressive strip-on-write for large receipt images (quota-safe)
+  const prepared = receipts.map((r) => ({
+    ...r,
+    imageDataUrl:
+      r.imageDataUrl && r.imageDataUrl.length > 100_000
+        ? ""
+        : r.imageDataUrl || "",
+  }));
+
+  const result = safeSetItem(RECEIPTS_KEY, JSON.stringify(prepared), {
+    freeSpace: stripLocalPhotosToFreeSpace,
+  });
+  if (!result.ok) {
+    // Last resort: metadata only — keep pantry/core receipts list without photos
+    safeSetItem(
+      RECEIPTS_KEY,
+      JSON.stringify(prepared.map((r) => ({ ...r, imageDataUrl: "" })))
+    );
   }
 }
 

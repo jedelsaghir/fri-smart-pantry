@@ -17,6 +17,7 @@ import {
 } from "@/lib/pantry-ops";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { defaultPriceUnit as priceUnitFromUnit, estimateLinePrice } from "@/lib/receipts";
+import { safeSetItem, stripLocalPhotosToFreeSpace } from "@/lib/storage-quota";
 
 // Re-export for existing imports from usePantry
 export function defaultPriceUnit(unit: string): string {
@@ -183,9 +184,23 @@ export function usePantry(options: UsePantryOptions = {}) {
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.ITEMS, JSON.stringify(items));
-    } catch {}
+    const payload = JSON.stringify(items);
+    const result = safeSetItem(STORAGE_KEYS.ITEMS, payload, {
+      freeSpace: stripLocalPhotosToFreeSpace,
+    });
+    if (!result.ok && result.reason === "quota") {
+      // Prefer pantry rows without label photos over failing entirely
+      const strip = (list: PantryItem[]) =>
+        list.map(({ labelPhotoDataUrl: _p, ...rest }) => rest);
+      safeSetItem(
+        STORAGE_KEYS.ITEMS,
+        JSON.stringify({
+          fridge: strip(items.fridge),
+          freezer: strip(items.freezer),
+          pantry: strip(items.pantry),
+        })
+      );
+    }
   }, [items]);
 
   const [detailsItem, setDetailsItem] = useState<DetailsItemState | null>(null);

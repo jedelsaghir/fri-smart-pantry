@@ -21,8 +21,13 @@ export type CloudSyncProvider = SyncProvider & {
   pushHousehold(
     creds: SyncCreds,
     snapshot?: HouseholdSyncSnapshot
-  ): Promise<{ ok: boolean; reason?: string; backend?: string }>;
-  getStatus(): Promise<{ configured: boolean; backend: string; durable: boolean }>;
+  ): Promise<{ ok: boolean; reason?: string; backend?: string; updatedAt?: string }>;
+  getStatus(): Promise<{
+    configured: boolean;
+    backend: string;
+    durable: boolean;
+    multiDeviceWarning?: string;
+  }>;
 };
 
 export const cloudSyncProvider: CloudSyncProvider = {
@@ -33,7 +38,13 @@ export const cloudSyncProvider: CloudSyncProvider = {
     try {
       return await getHouseholdSyncStatus();
     } catch {
-      return { configured: false, backend: "none", durable: false };
+      return {
+        configured: false,
+        backend: "none",
+        durable: false,
+        multiDeviceWarning:
+          "Could not reach the sync server. Multi-device restore may be unavailable.",
+      };
     }
   },
 
@@ -56,7 +67,7 @@ export const cloudSyncProvider: CloudSyncProvider = {
       data: { email: creds.email, password: creds.password, snapshot: snap },
     });
     if (!result.ok) return { ok: false, reason: result.reason };
-    return { ok: true, backend: result.backend };
+    return { ok: true, backend: result.backend, updatedAt: result.updatedAt };
   },
 
   // Narrow legacy methods — map onto full snapshot for partial updates

@@ -27,8 +27,13 @@ export interface SyncProvider {
   pushHousehold?(
     creds: SyncCreds,
     snapshot?: HouseholdSyncSnapshot
-  ): Promise<{ ok: boolean; reason?: string; backend?: string }>;
-  getStatus?(): Promise<{ configured: boolean; backend: string; durable: boolean }>;
+  ): Promise<{ ok: boolean; reason?: string; backend?: string; updatedAt?: string }>;
+  getStatus?(): Promise<{
+    configured: boolean;
+    backend: string;
+    durable: boolean;
+    multiDeviceWarning?: string;
+  }>;
 }
 
 /** One product line returned by OCR / detection */

@@ -71,6 +71,8 @@ Without Upstash, the server still syncs via **filesystem** (`.data/frigg-sync`) 
 | `FRIGG_SYNC_DIR` | Optional | File-backed store path (single Node host) |
 | `XAI_API_KEY` | Receipt OCR | Server-only vision key |
 
+**Memory backend warning:** if neither Upstash nor a writable `FRIGG_SYNC_DIR` is available, sync falls back to **in-process memory**. Settings → Cloud sync shows a calm amber warning: multi-device invites and restore will **not** work across restarts or multiple server instances.
+
 **Same account, two devices:** create / sign in on A → use the app → sign in with the **same email & password** on B → household restores. Settings → **Sync now** forces upload/download.
 
 **Invite another person (their own phone):**

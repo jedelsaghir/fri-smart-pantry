@@ -6,6 +6,9 @@ import { getPlatform } from "@/platform";
 import {
   applySnapshotToLocalStorage,
   buildSnapshotFromLocalStorage,
+  isLocalPantryEmpty,
+  readLocalSyncMeta,
+  shouldApplyRemote,
   writeLocalSyncMeta,
   type SyncCreds,
 } from "@/lib/household-sync";
@@ -15,12 +18,14 @@ import { STORAGE_KEYS } from "@/lib/storage-keys";
 export type PullOnLoginResult = {
   applied: boolean;
   hadRemote: boolean;
+  skippedStaleRemote?: boolean;
   error?: string;
   backend?: string;
 };
 
 /**
- * After successful local auth: pull cloud household and apply if newer/present.
+ * After successful local auth: pull cloud household and apply only when remote
+ * is newer/equal to last known cloud clock (or local pantry is empty).
  * Then push local so this device seeds the cloud for other devices.
  */
 export async function pullAndMergeOnLogin(creds: SyncCreds): Promise<PullOnLoginResult> {
@@ -34,29 +39,44 @@ export async function pullAndMergeOnLogin(creds: SyncCreds): Promise<PullOnLogin
   try {
     const remote = await platform.sync.pullHousehold(creds);
     let applied = false;
+    let skippedStaleRemote = false;
 
-    // On login: if cloud has a household for this email, restore it on this device
-    // (PC ↔ iOS seamless restore). Then we push so cloud stays current.
     if (remote) {
-      const currentUserId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-      applySnapshotToLocalStorage(remote, { currentUserId });
-      writeLocalSyncMeta({
-        lastPulledAt: new Date().toISOString(),
-        lastRemoteUpdatedAt: remote.updatedAt,
-        mode: "cloud",
-        lastError: undefined,
-      });
-      applied = true;
+      const meta = readLocalSyncMeta();
+      const localClock = meta.lastRemoteUpdatedAt || meta.lastPushedAt;
+      const empty = isLocalPantryEmpty();
+      // Empty device always takes cloud. Otherwise only apply when remote ≥ local clock.
+      const apply =
+        empty || !localClock || shouldApplyRemote(localClock, remote.updatedAt);
+
+      if (apply) {
+        const currentUserId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+        applySnapshotToLocalStorage(remote, { currentUserId });
+        writeLocalSyncMeta({
+          lastPulledAt: new Date().toISOString(),
+          lastRemoteUpdatedAt: remote.updatedAt,
+          mode: "cloud",
+          lastError: undefined,
+        });
+        applied = true;
+      } else {
+        skippedStaleRemote = true;
+        writeLocalSyncMeta({
+          lastPulledAt: new Date().toISOString(),
+          mode: "cloud",
+          lastError: undefined,
+        });
+      }
     }
 
-    // Always push after login so cloud has this device's latest
+    // Always push after login so cloud has this device's latest (fresh updatedAt)
     if (platform.sync.pushHousehold) {
       const snapshot = buildSnapshotFromLocalStorage(creds.email);
       const push = await platform.sync.pushHousehold(creds, snapshot);
       if (push.ok) {
         writeLocalSyncMeta({
           lastPushedAt: new Date().toISOString(),
-          lastRemoteUpdatedAt: snapshot.updatedAt,
+          lastRemoteUpdatedAt: push.updatedAt || snapshot.updatedAt,
           mode: "cloud",
           lastError: undefined,
         });
@@ -66,12 +86,13 @@ export async function pullAndMergeOnLogin(creds: SyncCreds): Promise<PullOnLogin
       return {
         applied,
         hadRemote: Boolean(remote),
+        skippedStaleRemote,
         backend: push.backend,
         error: push.ok ? undefined : push.reason,
       };
     }
 
-    return { applied, hadRemote: Boolean(remote) };
+    return { applied, hadRemote: Boolean(remote), skippedStaleRemote };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Sync failed";
     writeLocalSyncMeta({ lastError: msg, mode: "cloud" });
@@ -81,6 +102,8 @@ export async function pullAndMergeOnLogin(creds: SyncCreds): Promise<PullOnLogin
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
+/** When a push is skipped because another is in flight, run once more after. */
+let trailingPushNeeded = false;
 
 /** Debounced background push of current localStorage snapshot */
 export function scheduleHouseholdPush(delayMs = 1200): void {
@@ -95,7 +118,11 @@ export function scheduleHouseholdPush(delayMs = 1200): void {
 export async function flushHouseholdPush(): Promise<{ ok: boolean; reason?: string }> {
   const creds = loadSyncCreds();
   if (!creds) return { ok: false, reason: "Not signed in for sync" };
-  if (pushInFlight) return { ok: true, reason: "busy" };
+  if (pushInFlight) {
+    // H-12: ensure latest state still uploads after the in-flight push finishes
+    trailingPushNeeded = true;
+    return { ok: false, reason: "busy" };
+  }
   const platform = getPlatform();
   if (!platform.sync.pushHousehold) return { ok: false, reason: "No push adapter" };
 
@@ -106,12 +133,35 @@ export async function flushHouseholdPush(): Promise<{ ok: boolean; reason?: stri
     if (result.ok) {
       writeLocalSyncMeta({
         lastPushedAt: new Date().toISOString(),
-        lastRemoteUpdatedAt: snapshot.updatedAt,
+        lastRemoteUpdatedAt: result.updatedAt || snapshot.updatedAt,
         mode: "cloud",
         lastError: undefined,
       });
     } else {
       writeLocalSyncMeta({ lastError: result.reason || "Push failed", mode: "cloud" });
+      // If cloud is newer, try a pull so the next trailing push is based on fresh base
+      if (result.reason && /newer|pull first|stale/i.test(result.reason) && platform.sync.pullHousehold) {
+        try {
+          const remote = await platform.sync.pullHousehold(creds);
+          if (remote) {
+            const meta = readLocalSyncMeta();
+            if (
+              isLocalPantryEmpty() ||
+              shouldApplyRemote(meta.lastRemoteUpdatedAt || meta.lastPushedAt, remote.updatedAt)
+            ) {
+              const currentUserId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+              applySnapshotToLocalStorage(remote, { currentUserId });
+              writeLocalSyncMeta({
+                lastPulledAt: new Date().toISOString(),
+                lastRemoteUpdatedAt: remote.updatedAt,
+                lastError: result.reason,
+              });
+            }
+          }
+        } catch {
+          /* ignore pull recovery errors */
+        }
+      }
     }
     return result;
   } catch (e) {
@@ -120,11 +170,19 @@ export async function flushHouseholdPush(): Promise<{ ok: boolean; reason?: stri
     return { ok: false, reason: msg };
   } finally {
     pushInFlight = false;
+    if (trailingPushNeeded) {
+      trailingPushNeeded = false;
+      // Small delay so callers can finish writing localStorage first
+      pushTimer = setTimeout(() => {
+        void flushHouseholdPush();
+      }, 80);
+    }
   }
 }
 
 export function logoutSyncSession(): void {
   clearSyncCreds();
+  trailingPushNeeded = false;
   if (pushTimer) {
     clearTimeout(pushTimer);
     pushTimer = null;

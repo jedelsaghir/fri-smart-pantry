@@ -85,6 +85,7 @@ export function SettingsDrawer({
     lastPushedAt?: string;
     lastPulledAt?: string;
     lastError?: string;
+    multiDeviceWarning?: string;
   }>({ backend: "…", durable: false });
 
   useEffect(() => {
@@ -94,11 +95,13 @@ export function SettingsDrawer({
       const meta = readLocalSyncMeta();
       let backend = "cloud";
       let durable = false;
+      let multiDeviceWarning: string | undefined;
       try {
         const status = await getPlatform().sync.getStatus?.();
         if (status) {
           backend = status.backend;
           durable = status.durable;
+          multiDeviceWarning = status.multiDeviceWarning;
         }
       } catch {}
       if (!cancelled) {
@@ -108,6 +111,11 @@ export function SettingsDrawer({
           lastPushedAt: meta.lastPushedAt,
           lastPulledAt: meta.lastPulledAt,
           lastError: meta.lastError,
+          multiDeviceWarning:
+            multiDeviceWarning ||
+            (!durable && backend === "memory"
+              ? "Sync is in-memory only. Multi-device invites and household restore will not work across restarts or other servers. Set UPSTASH_REDIS_REST_URL + TOKEN."
+              : undefined),
         });
       }
     })();
@@ -413,10 +421,16 @@ export function SettingsDrawer({
               {syncInfo.lastError && (
                 <p className="text-[11px] text-destructive/90 pt-0.5">{syncInfo.lastError}</p>
               )}
-              {!syncInfo.durable && (
+              {(syncInfo.multiDeviceWarning || (!syncInfo.durable && syncInfo.backend === "memory")) && (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 pt-1.5 leading-snug rounded-xl bg-amber-500/10 px-2 py-1.5">
+                  {syncInfo.multiDeviceWarning ||
+                    "Sync is in-memory only. Multi-device invites and household restore will not work across restarts or other servers. Set UPSTASH_REDIS_REST_URL + TOKEN."}
+                </p>
+              )}
+              {!syncInfo.durable && syncInfo.backend !== "memory" && (
                 <p className="text-[11px] text-amber-700 dark:text-amber-400 pt-1">
-                  Tip: set UPSTASH_REDIS_REST_URL + TOKEN on the server for reliable multi-device
-                  sync across restarts.
+                  Tip: set UPSTASH_REDIS_REST_URL + TOKEN on the server for the most reliable
+                  multi-device sync.
                 </p>
               )}
             </div>

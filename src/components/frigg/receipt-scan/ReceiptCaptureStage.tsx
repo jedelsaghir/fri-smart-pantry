@@ -7,6 +7,8 @@ import type { CapturedPhoto } from "./types";
 
 export function ReceiptCaptureStage({
   ocrConfigured,
+  ocrHealth = null,
+  ocrStatusMessage = null,
   cameraOn,
   cameraError,
   videoRef,
@@ -24,6 +26,18 @@ export function ReceiptCaptureStage({
   onRetakeLast,
 }: {
   ocrConfigured: boolean | null;
+  /** missing | ok | auth_failed | network | model | error | unknown */
+  ocrHealth?:
+    | "missing"
+    | "ok"
+    | "auth_failed"
+    | "network"
+    | "model"
+    | "error"
+    | "unknown"
+    | null;
+  /** Safe short message from server health check (never includes the key). */
+  ocrStatusMessage?: string | null;
   cameraOn: boolean;
   cameraError: string | null;
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -44,12 +58,51 @@ export function ReceiptCaptureStage({
   const qualityOk = captureQuality?.ok;
   const qualityWarn = captureQuality && !captureQuality.ok;
 
+  const showOcrBanner =
+    ocrHealth != null &&
+    ocrHealth !== "ok" &&
+    (ocrConfigured === false ||
+      ocrHealth === "missing" ||
+      ocrHealth === "auth_failed" ||
+      ocrHealth === "network" ||
+      ocrHealth === "model" ||
+      ocrHealth === "error" ||
+      ocrHealth === "unknown");
+
+  const bannerTitle =
+    ocrHealth === "missing"
+      ? "OCR not configured"
+      : ocrHealth === "auth_failed"
+        ? "OCR key rejected"
+        : ocrHealth === "network"
+          ? "OCR network issue"
+          : ocrHealth === "model"
+            ? "OCR model issue"
+            : ocrHealth === "unknown"
+              ? "OCR status unknown"
+              : ocrHealth === "error"
+                ? "OCR health check failed"
+                : "OCR notice";
+
+  const bannerTone =
+    ocrHealth === "missing" || ocrHealth === "auth_failed"
+      ? "border-amber-500/30 bg-amber-500/10"
+      : "border-sky-500/25 bg-sky-500/10";
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {ocrConfigured === false && (
-        <div className="mx-5 mt-3 mb-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-[12px] leading-snug text-foreground/90">
-          <span className="font-semibold">OCR not configured.</span> Set{" "}
-          <code className="text-[11px]">XAI_API_KEY</code> on the server to read real receipts.
+      {showOcrBanner && (
+        <div
+          className={
+            "mx-5 mt-3 mb-2 rounded-2xl border px-3.5 py-2.5 text-[12px] leading-snug text-foreground/90 " +
+            bannerTone
+          }
+        >
+          <span className="font-semibold">{bannerTitle}.</span>{" "}
+          {ocrStatusMessage ||
+            (ocrConfigured === false
+              ? "Set XAI_API_KEY on the server (not VITE_*) to read real receipts."
+              : "Check server OCR settings.")}
         </div>
       )}
 

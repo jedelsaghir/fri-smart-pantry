@@ -72,6 +72,11 @@ export function ReceiptScanFlow({
   const [processProgress, setProcessProgress] = useState(0);
   const [pendingRemoveReviewId, setPendingRemoveReviewId] = useState<string | null>(null);
   const [ocrConfigured, setOcrConfigured] = useState<boolean | null>(null);
+  /** Rich OCR health for banner (missing key vs auth/network vs ok) */
+  const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
+  const [ocrHealth, setOcrHealth] = useState<
+    "missing" | "ok" | "auth_failed" | "network" | "model" | "error" | "unknown" | null
+  >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -119,10 +124,33 @@ export function ReceiptScanFlow({
     let cancelled = false;
     (async () => {
       try {
-        const ok = await getPlatform().ocr.isConfigured();
-        if (!cancelled) setOcrConfigured(ok);
+        const ocr = getPlatform().ocr;
+        if (ocr.getStatus) {
+          const status = await ocr.getStatus();
+          if (!cancelled) {
+            setOcrConfigured(status.keyPresent || status.configured);
+            setOcrHealth(status.health);
+            // Only surface banner when not fully OK
+            setOcrStatusMessage(status.health === "ok" ? null : status.message);
+          }
+        } else {
+          const ok = await ocr.isConfigured();
+          if (!cancelled) {
+            setOcrConfigured(ok);
+            setOcrHealth(ok ? "ok" : "missing");
+            setOcrStatusMessage(
+              ok ? null : "OCR is not configured. Set XAI_API_KEY on the server."
+            );
+          }
+        }
       } catch {
-        if (!cancelled) setOcrConfigured(false);
+        if (!cancelled) {
+          setOcrConfigured(false);
+          setOcrHealth("unknown");
+          setOcrStatusMessage(
+            "Couldn’t verify OCR status from the server. Try a scan or check host secrets."
+          );
+        }
       }
       if (!cancelled && getPlatform().ocr.supportsLiveCamera()) {
         try {
@@ -799,6 +827,8 @@ export function ReceiptScanFlow({
           {step === "capture" && (
             <ReceiptCaptureStage
               ocrConfigured={ocrConfigured}
+              ocrHealth={ocrHealth}
+              ocrStatusMessage={ocrStatusMessage}
               cameraOn={cameraOn}
               cameraError={cameraError}
               videoRef={videoRef}

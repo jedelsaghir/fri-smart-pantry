@@ -54,12 +54,26 @@ export type OcrDetectResult = {
   reason?: string;
 };
 
+/** Client-safe OCR diagnostics (mirrors server OcrServerStatus shape). */
+export type OcrClientStatus = {
+  /** True when a server API key is present (may still be auth/network degraded). */
+  configured: boolean;
+  keyPresent: boolean;
+  health: "missing" | "ok" | "auth_failed" | "network" | "model" | "error" | "unknown";
+  message: string;
+  provider?: string;
+  model?: string;
+};
+
 export interface OcrProvider {
   readonly id: string;
   readonly mode: "demo" | "live" | "unavailable";
   detectFromImage(imageDataUrl: string | null): Promise<OcrDetectResult>;
   supportsLiveCamera(): boolean;
+  /** True when a server key is present — not the same as “xAI probe succeeded”. */
   isConfigured(): Promise<boolean>;
+  /** Rich health for scan banner (optional on demo adapters). */
+  getStatus?(): Promise<OcrClientStatus>;
 }
 
 export interface PushProvider {

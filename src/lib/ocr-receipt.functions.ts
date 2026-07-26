@@ -14,29 +14,178 @@ import {
 import type { OcrDetectResult } from "@/platform/types";
 
 const MAX_IMAGE_CHARS = 12_000_000; // ~9MB base64 budget
+const HEALTH_PROBE_TIMEOUT_MS = 6_000;
 
-function getApiKey(): string | undefined {
-  // Server env only (not VITE_*)
-  return process.env.XAI_API_KEY || process.env.xai_api_key || undefined;
+function readEnv(name: string): string | undefined {
+  try {
+    const v = process.env[name];
+    if (typeof v !== "string") return undefined;
+    const t = v.trim();
+    if (!t || t === "undefined" || t === "null") return undefined;
+    return t;
+  } catch {
+    return undefined;
+  }
 }
 
-function getModel(): string {
-  return process.env.XAI_OCR_MODEL || process.env.XAI_MODEL || "grok-4.5";
+/**
+ * Resolve xAI API key from server env only (never VITE_*).
+ * Tries common aliases used by hosts / dashboards.
+ */
+export function getApiKey(): string | undefined {
+  return (
+    readEnv("XAI_API_KEY") ||
+    readEnv("xai_api_key") ||
+    readEnv("XAI_KEY") ||
+    readEnv("GROK_API_KEY") ||
+    undefined
+  );
 }
+
+export function getModel(): string {
+  return readEnv("XAI_OCR_MODEL") || readEnv("XAI_MODEL") || "grok-4.5";
+}
+
+/** Server OCR health — safe to send to the client (no key material). */
+export type OcrHealth =
+  | "missing"
+  | "ok"
+  | "auth_failed"
+  | "network"
+  | "model"
+  | "error";
 
 export type OcrServerStatus = {
+  /**
+   * True when a non-empty API key is present on the server.
+   * Prefer this over treating "auth_failed" as unconfigured.
+   */
   configured: boolean;
+  keyPresent: boolean;
+  health: OcrHealth;
+  /** Short, safe banner / toast copy — never includes the key */
+  message: string;
   provider: "xai";
   model: string;
 };
 
+function statusForMissing(model: string): OcrServerStatus {
+  return {
+    configured: false,
+    keyPresent: false,
+    health: "missing",
+    message:
+      "OCR is not configured. Set XAI_API_KEY on the server (Lovable secrets / host env) — never VITE_*.",
+    provider: "xai",
+    model,
+  };
+}
+
+/**
+ * Lightweight xAI probe: GET /v1/models with the server key.
+ * Distinguishes missing key vs auth vs network vs other failures.
+ * Never returns or logs the key value.
+ */
+export async function probeXaiHealth(
+  key: string,
+  model: string
+): Promise<Omit<OcrServerStatus, "provider" | "model"> & { provider?: "xai"; model?: string }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HEALTH_PROBE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch("https://api.x.ai/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+
+    if (response.ok) {
+      return {
+        configured: true,
+        keyPresent: true,
+        health: "ok",
+        message: "Receipt vision is ready.",
+      };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        configured: true,
+        keyPresent: true,
+        health: "auth_failed",
+        message:
+          "API key is set, but xAI rejected it (auth). Check XAI_API_KEY in server secrets.",
+      };
+    }
+
+    if (response.status === 404 || response.status === 422) {
+      return {
+        configured: true,
+        keyPresent: true,
+        health: "model",
+        message: `API key is set, but the models probe failed (${response.status}). Scanning may still work — try a photo.`,
+      };
+    }
+
+    // Other HTTP errors — key is present; don't claim "not configured"
+    return {
+      configured: true,
+      keyPresent: true,
+      health: "error",
+      message: `API key is set, but xAI returned ${response.status}. Try again or check xAI status.`,
+    };
+  } catch (err) {
+    const aborted =
+      (err instanceof Error && err.name === "AbortError") ||
+      (err instanceof Error && /abort/i.test(err.message));
+    return {
+      configured: true,
+      keyPresent: true,
+      health: "network",
+      message: aborted
+        ? "API key is set, but the xAI health check timed out. Scanning may still work."
+        : "API key is set, but we couldn’t reach xAI (network). Check outbound access and try again.",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export const getOcrServerStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<OcrServerStatus> => {
-    return {
-      configured: Boolean(getApiKey()),
-      provider: "xai",
-      model: getModel(),
-    };
+    const model = getModel();
+    const key = getApiKey();
+
+    if (!key) {
+      return statusForMissing(model);
+    }
+
+    try {
+      const probe = await probeXaiHealth(key, model);
+      return {
+        configured: true,
+        keyPresent: true,
+        health: probe.health,
+        message: probe.message,
+        provider: "xai",
+        model,
+      };
+    } catch {
+      // Key exists — never report as unconfigured when probe code throws
+      return {
+        configured: true,
+        keyPresent: true,
+        health: "error",
+        message:
+          "API key is set, but the health check failed unexpectedly. Try scanning a receipt.",
+        provider: "xai",
+        model,
+      };
+    }
   }
 );
 
@@ -108,12 +257,13 @@ export const ocrReceiptFromImage = createServerFn({ method: "POST" })
           return await ocrViaChatCompletions(key, model, data.imageDataUrl, controller.signal);
         }
         const errText = await response.text().catch(() => "");
+        const safeSnippet = sanitizeApiErrorSnippet(errText) || response.statusText;
         return {
           ok: false,
           mode: "live",
           provider: "xai",
           items: [],
-          reason: `Vision API error ${response.status}: ${errText.slice(0, 200) || response.statusText}`,
+          reason: mapVisionHttpError(response.status, safeSnippet),
         };
       }
 
@@ -126,12 +276,38 @@ export const ocrReceiptFromImage = createServerFn({ method: "POST" })
         mode: "live",
         provider: "xai",
         items: [],
-        reason: message.includes("abort") ? "OCR timed out — try again" : message,
+        reason: message.includes("abort")
+          ? "OCR timed out — try again"
+          : /fetch|network|ECONN|ENOTFOUND/i.test(message)
+            ? "Couldn’t reach xAI (network). Try again in a moment."
+            : "OCR request failed. Try again or check server logs.",
       };
     } finally {
       clearTimeout(timeout);
     }
   });
+
+/** Strip anything that might look like a bearer token from error bodies */
+function sanitizeApiErrorSnippet(raw: string): string {
+  return raw
+    .replace(/Bearer\s+[A-Za-z0-9._\-]+/gi, "Bearer [redacted]")
+    .replace(/sk-[A-Za-z0-9._\-]+/g, "[redacted]")
+    .replace(/xai-[A-Za-z0-9._\-]+/gi, "[redacted]")
+    .slice(0, 180);
+}
+
+function mapVisionHttpError(status: number, snippet: string): string {
+  if (status === 401 || status === 403) {
+    return "xAI rejected the API key (auth). Check XAI_API_KEY on the server.";
+  }
+  if (status === 404 || status === 422) {
+    return `Vision model request failed (${status}). Check XAI_OCR_MODEL. ${snippet}`.trim();
+  }
+  if (status === 429) {
+    return "xAI rate limit hit — wait a moment and try again.";
+  }
+  return `Vision API error ${status}${snippet ? `: ${snippet}` : ""}`;
+}
 
 async function ocrViaChatCompletions(
   key: string,
@@ -163,12 +339,13 @@ async function ocrViaChatCompletions(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => "");
+    const safeSnippet = sanitizeApiErrorSnippet(errText) || response.statusText;
     return {
       ok: false,
       mode: "live",
       provider: "xai",
       items: [],
-      reason: `Vision API error ${response.status}: ${errText.slice(0, 200) || response.statusText}`,
+      reason: mapVisionHttpError(response.status, safeSnippet),
     };
   }
 

@@ -20,6 +20,15 @@ export const demoOcrProvider: OcrProvider = {
   async isConfigured() {
     return true;
   },
+  async getStatus() {
+    return {
+      configured: true,
+      keyPresent: true,
+      health: "ok" as const,
+      message: "Demo OCR ready (test adapter).",
+      provider: "demo-ocr",
+    };
+  },
   async detectFromImage(imageDataUrl: string | null) {
     await new Promise((r) => setTimeout(r, 40));
     if (!imageDataUrl) {

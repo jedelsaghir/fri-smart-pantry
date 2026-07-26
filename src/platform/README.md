@@ -35,10 +35,24 @@ Camera / library photo
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `XAI_API_KEY` | Yes for live OCR | Server-only xAI key ([console.x.ai](https://console.x.ai)) |
+| `XAI_API_KEY` | Yes for live OCR | Server-only xAI key ([console.x.ai](https://console.x.ai)) — **not** `VITE_*` |
 | `XAI_OCR_MODEL` | No | Defaults to `grok-4.5` |
 
 Without `XAI_API_KEY`, `detectFromImage` returns `ok: false` and **zero invented items**.
+
+### OCR health / scan banner
+
+`getOcrServerStatus` probes the server and returns a **safe** status (never the key value):
+
+| `health` | Meaning | Banner |
+|----------|---------|--------|
+| `missing` | No server key | “OCR not configured” |
+| `ok` | Key present + xAI models probe succeeded | No banner |
+| `auth_failed` | Key present, xAI 401/403 | “OCR key rejected” |
+| `network` | Key present, probe timed out / fetch failed | “OCR network issue” |
+| `model` / `error` | Key present, other probe failure | Soft warning; scanning may still work |
+
+`isConfigured()` is **true when a key is present**, even if the health probe failed — so a flaky network check no longer looks like a missing secret.
 
 ### Swap / test
 

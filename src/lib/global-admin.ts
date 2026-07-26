@@ -24,7 +24,7 @@ import { clearSyncCreds } from "@/lib/sync-session";
  */
 export const GLOBAL_APP_ADMIN_EMAIL = "jed.el.saghir@hotmail.com";
 
-const FORCED_LOGOUT_KEY = "friggg-forced-logout-ids";
+const FORCED_LOGOUT_KEY = STORAGE_KEYS.FORCED_LOGOUT_IDS;
 
 export function normalizeAdminEmail(email: string | null | undefined): string {
   return (email || "").trim().toLowerCase();

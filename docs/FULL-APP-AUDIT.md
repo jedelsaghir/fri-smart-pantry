@@ -98,6 +98,37 @@ Grouped by severity (Critical → Nit). IDs are stable for tracking.
 
 ### Medium
 
+> **Progress (Medium pass):** All M-01…M-24 addressed. See status table below.
+
+| ID | Status | Fix summary |
+|----|--------|-------------|
+| **M-01** | **Done** | Keys centralized in `STORAGE_KEYS` |
+| **M-02** | **Done** | Session one-time migrate with account/profile email |
+| **M-03** | **Done** | Qty 0 → delete confirm; empty-stock messaging |
+| **M-04** | **Done** | Shopping uses `sameProduct` (with M-10) |
+| **M-05** | **Done** | Result summary shows failed photo count |
+| **M-06** | **Done** | Total vs lines mismatch banner on result |
+| **M-07** | **Done** | Multipack keeps size label e.g. `(6×330ml)` |
+| **M-08** | **Done** | 12 recipes + looser `ingredientMatchesPantry` |
+| **M-09** | **Done** | Cook confirm/toast lists missing ingredients |
+| **M-10** | **Done** | Generate list merges by sameProduct |
+| **M-11** | **Done** | Finances use receipt/dominant currency symbols |
+| **M-12** | **Done** | `resolveInviteForJoin` single path in LoginScreen |
+| **M-13** | **Done** | Revoke clears local + idempotent cloud |
+| **M-14** | **Done** | Settings “In-app alerts” copy (not OS push claim) |
+| **M-15** | **Done** | iOS install banner + Share instructions |
+| **M-16** | **Done** | `PantryItemList` window of 48 + show more |
+| **M-17** | **Done** | Snapshot strips large photos when payload huge |
+| **M-18** | **Done** | `ui/README.md` documents unused kit |
+| **M-19** | **Done** | Invite-resolve + recipe/split unit tests |
+| **M-20** | **Done** | FIXLIST + AUTH/README refreshed |
+| **M-21** | **Done** | `processGenRef` cancels OCR setState after close |
+| **M-22** | **Done** | Unique demo account ids |
+| **M-23** | **Done** | Rate limits on sync/invite/OCR (shared with H-14) |
+| **M-24** | **Done** | `feature-flags.ts` + env-driven `createPlatform` |
+
+#### Original Medium descriptions (reference)
+
 | ID | Area | Type | Description | Where | Impact | Suggested fix |
 |----|------|------|-------------|-------|--------|---------------|
 | **M-01** | Auth | Inconsistency | `AUTH_SESSION_KEY` not in `STORAGE_KEYS`; forced-logout key hardcoded separately. | `auth.ts`, `global-admin.ts`, `storage-keys.ts` | Fragmented storage inventory | Centralize all keys |

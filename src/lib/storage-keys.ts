@@ -1,4 +1,4 @@
-/** Single source of truth for localStorage keys (P2-3) */
+/** Single source of truth for localStorage / session keys (M-01) */
 
 export const STORAGE_KEYS = {
   ITEMS: "friggg-items",
@@ -16,6 +16,14 @@ export const STORAGE_KEYS = {
   THEME: "friggg-theme",
   NOTIFICATIONS: "friggg-notifications",
   INSTALL_DISMISSED: "friggg-install-dismissed",
+  /** Structured auth session (JSON AuthSession) */
+  AUTH_SESSION: "friggg-auth-session",
+  /** Local admin force-logout id list */
+  FORCED_LOGOUT_IDS: "friggg-forced-logout-ids",
+  /** Camera denied sticky (sessionStorage) */
+  CAMERA_DENIED: "friggg-camera-denied",
+  /** Sync meta (last pull/push clocks) */
+  SYNC_META: "friggg-sync-meta",
 } as const;
 
 export type StorageKeyName = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

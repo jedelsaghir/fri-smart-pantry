@@ -268,7 +268,8 @@ export function isLocalPantryEmpty(): boolean {
   }
 }
 
-export const LOCAL_SYNC_META_KEY = "friggg-sync-meta";
+/** @deprecated Prefer STORAGE_KEYS.SYNC_META */
+export const LOCAL_SYNC_META_KEY = STORAGE_KEYS.SYNC_META;
 
 export type LocalSyncMeta = {
   lastPulledAt?: string;

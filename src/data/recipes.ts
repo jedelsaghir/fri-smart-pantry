@@ -1,5 +1,6 @@
 import type { Recipe } from "@/types/pantry";
 
+/** Expanded static pack (M-08) — still offline; matching is intentionally loose. */
 export const ALL_RECIPES: Recipe[] = [
   {
     id: "r1",
@@ -8,8 +9,8 @@ export const ALL_RECIPES: Recipe[] = [
     time: "10 min",
     servings: 2,
     ingredients: [
-      { name: "Free-range eggs", qty: 3, unit: "pcs" },
-      { name: "Whole milk", qty: 0.1, unit: "L" },
+      { name: "eggs", qty: 3, unit: "pcs" },
+      { name: "milk", qty: 0.1, unit: "L" },
     ],
     category: "Breakfast",
   },
@@ -20,8 +21,8 @@ export const ALL_RECIPES: Recipe[] = [
     time: "5 min",
     servings: 1,
     ingredients: [
-      { name: "Greek yogurt", qty: 1, unit: "tub" },
-      { name: "Baby spinach", qty: 0.5, unit: "bag" },
+      { name: "yogurt", qty: 1, unit: "tub" },
+      { name: "spinach", qty: 0.5, unit: "bag" },
     ],
     category: "Breakfast",
   },
@@ -32,8 +33,8 @@ export const ALL_RECIPES: Recipe[] = [
     time: "8 min",
     servings: 2,
     ingredients: [
-      { name: "Cherry tomatoes", qty: 1, unit: "pack" },
-      { name: "Baby spinach", qty: 1, unit: "bag" },
+      { name: "tomato", qty: 1, unit: "pack" },
+      { name: "spinach", qty: 1, unit: "bag" },
     ],
     category: "Lunch",
   },
@@ -44,9 +45,9 @@ export const ALL_RECIPES: Recipe[] = [
     time: "12 min",
     servings: 2,
     ingredients: [
-      { name: "Free-range eggs", qty: 4, unit: "pcs" },
-      { name: "Aged cheddar", qty: 50, unit: "g" },
-      { name: "Whole milk", qty: 0.05, unit: "L" },
+      { name: "eggs", qty: 4, unit: "pcs" },
+      { name: "cheese", qty: 50, unit: "g" },
+      { name: "milk", qty: 0.05, unit: "L" },
     ],
     category: "Breakfast",
   },
@@ -57,8 +58,8 @@ export const ALL_RECIPES: Recipe[] = [
     time: "20 min",
     servings: 3,
     ingredients: [
-      { name: "Chicken thighs", qty: 300, unit: "g" },
-      { name: "Baby spinach", qty: 1, unit: "bag" },
+      { name: "chicken", qty: 300, unit: "g" },
+      { name: "spinach", qty: 1, unit: "bag" },
     ],
     category: "Dinner",
   },
@@ -69,9 +70,83 @@ export const ALL_RECIPES: Recipe[] = [
     time: "7 min",
     servings: 2,
     ingredients: [
-      { name: "Cherry tomatoes", qty: 0.5, unit: "pack" },
-      { name: "Aged cheddar", qty: 40, unit: "g" },
+      { name: "tomato", qty: 0.5, unit: "pack" },
+      { name: "cheese", qty: 40, unit: "g" },
+      { name: "bread", qty: 2, unit: "pcs" },
     ],
     category: "Snack",
+  },
+  {
+    id: "r7",
+    name: "Pasta with Oil",
+    emoji: "🍝",
+    time: "15 min",
+    servings: 2,
+    ingredients: [
+      { name: "pasta", qty: 200, unit: "g" },
+      { name: "oil", qty: 1, unit: "tbsp" },
+    ],
+    category: "Dinner",
+  },
+  {
+    id: "r8",
+    name: "Avocado Toast",
+    emoji: "🥑",
+    time: "8 min",
+    servings: 1,
+    ingredients: [
+      { name: "avocado", qty: 1, unit: "pcs" },
+      { name: "bread", qty: 2, unit: "pcs" },
+    ],
+    category: "Breakfast",
+  },
+  {
+    id: "r9",
+    name: "Simple Rice Bowl",
+    emoji: "🍚",
+    time: "25 min",
+    servings: 2,
+    ingredients: [
+      { name: "rice", qty: 150, unit: "g" },
+      { name: "chicken", qty: 150, unit: "g" },
+    ],
+    category: "Dinner",
+  },
+  {
+    id: "r10",
+    name: "Berry Yogurt",
+    emoji: "🫐",
+    time: "3 min",
+    servings: 1,
+    ingredients: [
+      { name: "yogurt", qty: 1, unit: "tub" },
+      { name: "berry", qty: 0.5, unit: "pack" },
+    ],
+    category: "Snack",
+  },
+  {
+    id: "r11",
+    name: "Fish & Greens",
+    emoji: "🐟",
+    time: "18 min",
+    servings: 2,
+    ingredients: [
+      { name: "fish", qty: 250, unit: "g" },
+      { name: "spinach", qty: 1, unit: "bag" },
+    ],
+    category: "Dinner",
+  },
+  {
+    id: "r12",
+    name: "Cheesy Pasta Bake",
+    emoji: "🧀",
+    time: "30 min",
+    servings: 3,
+    ingredients: [
+      { name: "pasta", qty: 250, unit: "g" },
+      { name: "cheese", qty: 100, unit: "g" },
+      { name: "milk", qty: 0.2, unit: "L" },
+    ],
+    category: "Dinner",
   },
 ];

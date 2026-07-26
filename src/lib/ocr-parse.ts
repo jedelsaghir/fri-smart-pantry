@@ -86,14 +86,26 @@ export function normalizeUnit(unit: unknown, qty: number): string {
  * - "Eggs 6-pack" / "pack of 6" → qty 6, unit pcs
  * Does not invent products — only reinterprets existing name+qty.
  */
+export type MultipackResult = {
+  name: string;
+  qty: number;
+  unit: string;
+  /** e.g. "330ml" unit size for multipacks — not summed into pantry qty (M-07) */
+  packSizeLabel?: string;
+  /** True when qty is pack count and price is typically line total for the multipack */
+  isMultipack?: boolean;
+};
+
 export function applyMultipackQtyUnit(
   name: string,
   qty: number,
   unit: string
-): { name: string; qty: number; unit: string } {
+): MultipackResult {
   let n = name.trim();
   let q = qty > 0 && Number.isFinite(qty) ? qty : 1;
   let u = unit;
+  let packSizeLabel: string | undefined;
+  let isMultipack = false;
 
   // "6x330ml", "6 x 1,5 L", "12×25cl"
   const multi = n.match(
@@ -102,6 +114,10 @@ export function applyMultipackQtyUnit(
   if (multi) {
     const packCount = parseInt(multi[1], 10);
     if (packCount >= 2 && packCount <= 48) {
+      const sizeNum = multi[2].replace(",", ".");
+      const sizeUnit = (multi[3] || "").toLowerCase();
+      packSizeLabel = sizeUnit ? `${sizeNum}${sizeUnit}` : sizeNum;
+      isMultipack = true;
       // Prefer pack count as qty when OCR left qty at 1
       if (q === 1 || q === packCount) {
         q = packCount;
@@ -113,6 +129,10 @@ export function applyMultipackQtyUnit(
         .replace(/\s{2,}/g, " ")
         .trim();
       if (cleaned.length >= 2) n = cleaned;
+      // Keep size in name for clarity if short product name
+      if (packSizeLabel && n.length < 40 && !n.includes(packSizeLabel)) {
+        n = `${n} (${packCount}×${packSizeLabel})`.slice(0, 80);
+      }
     }
   } else {
     // "6-pack", "6 pack", "pack of 6"
@@ -125,6 +145,7 @@ export function applyMultipackQtyUnit(
         : 0;
     if (count >= 2 && count <= 48 && (q === 1 || q === count)) {
       q = count;
+      isMultipack = true;
       if (!u || u === "pcs" || u === "pack") u = "pcs";
       const cleaned = n
         .replace(/\bpack\s+of\s+\d{1,2}\b/gi, " ")
@@ -137,55 +158,84 @@ export function applyMultipackQtyUnit(
 
   // Qty string like "2x" already parsed poorly — leave caps
   if (q > 10_000) q = 1;
-  return { name: n.slice(0, 80), qty: q, unit: normalizeUnit(u, q) };
+  return {
+    name: n.slice(0, 80),
+    qty: q,
+    unit: normalizeUnit(u, q),
+    packSizeLabel,
+    isMultipack: isMultipack || undefined,
+  };
 }
+
+export type TotalSanityResult = {
+  items: OcrLineItem[];
+  /** M-06: surface when line sum and receipt total disagree materially */
+  mismatch?: { lineSum: number; total: number; ratio: number };
+};
 
 /**
  * Light total-vs-line-sum sanity: nudge confidence only (never add/remove items).
  * - Lines sum close to total → slight confidence boost
- * - Lines sum far off → slight confidence dip (send borderline lines to review)
+ * - Lines sum far off → slight confidence dip + mismatch flag for UI
  */
 export function applyTotalLineSanity(
   items: OcrLineItem[],
   total: number | null | undefined
 ): OcrLineItem[] {
+  return applyTotalLineSanityDetailed(items, total).items;
+}
+
+export function applyTotalLineSanityDetailed(
+  items: OcrLineItem[],
+  total: number | null | undefined
+): TotalSanityResult {
   if (total == null || !Number.isFinite(total) || total <= 0 || items.length === 0) {
-    return items;
+    return { items };
   }
   const priced = items.filter((i) => typeof i.price === "number" && i.price! > 0);
-  if (priced.length < 2) return items;
+  if (priced.length < 2) return { items };
 
   const lineSum =
     Math.round(priced.reduce((s, i) => s + (i.price as number), 0) * 100) / 100;
-  if (lineSum <= 0) return items;
+  if (lineSum <= 0) return { items };
 
   const ratio = lineSum / total;
 
   // Healthy agreement
   if (ratio >= 0.88 && ratio <= 1.12) {
-    return items.map((i) => ({
-      ...i,
-      confidence: Math.min(
-        1,
-        Math.round(((typeof i.confidence === "number" ? i.confidence : 0.75) + 0.03) * 1000) /
-          1000
-      ),
-    }));
+    return {
+      items: items.map((i) => ({
+        ...i,
+        confidence: Math.min(
+          1,
+          Math.round(((typeof i.confidence === "number" ? i.confidence : 0.75) + 0.03) * 1000) /
+            1000
+        ),
+      })),
+    };
   }
 
-  // Material mismatch — soft dip only
+  // Material mismatch — soft dip + flag for review UI
   if (ratio < 0.55 || ratio > 1.9) {
-    return items.map((i) => ({
-      ...i,
-      confidence: Math.max(
-        0.35,
-        Math.round(((typeof i.confidence === "number" ? i.confidence : 0.75) * 0.9) * 1000) /
-          1000
-      ),
-    }));
+    return {
+      items: items.map((i) => ({
+        ...i,
+        confidence: Math.max(
+          0.35,
+          Math.round(((typeof i.confidence === "number" ? i.confidence : 0.75) * 0.9) * 1000) /
+            1000
+        ),
+      })),
+      mismatch: { lineSum, total, ratio },
+    };
   }
 
-  return items;
+  // Mild disagreement — still flag softly
+  if (ratio < 0.8 || ratio > 1.25) {
+    return { items, mismatch: { lineSum, total, ratio } };
+  }
+
+  return { items };
 }
 
 /** Confidence band for review chips */
@@ -222,6 +272,8 @@ export type ParsedReceiptOcr = {
   total: number | null;
   currency: string;
   items: OcrLineItem[];
+  /** Present when priced lines disagree with receipt total (M-06) */
+  totalMismatch?: { lineSum: number; receiptTotal: number };
 };
 
 /**
@@ -320,9 +372,21 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
       100;
   }
 
-  items = applyTotalLineSanity(items, total);
+  const sanity = applyTotalLineSanityDetailed(items, total);
+  items = sanity.items;
 
-  return { store, total, currency, items };
+  return {
+    store,
+    total,
+    currency,
+    items,
+    totalMismatch: sanity.mismatch
+      ? {
+          lineSum: sanity.mismatch.lineSum,
+          receiptTotal: sanity.mismatch.total,
+        }
+      : undefined,
+  };
 }
 
 export function enrichOcrItems(items: OcrLineItem[]): OcrLineItem[] {

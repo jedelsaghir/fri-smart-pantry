@@ -72,7 +72,13 @@ export function useShoppingList({
 
         if (isBelowMin || isRunningLow) {
           const buyQty = Math.max(min - item.qty, 1);
-          if (!needed.some((n) => n.name.toLowerCase() === item.name.toLowerCase())) {
+          // M-10: merge by same product identity (name+unit), not name alone
+          const existing = needed.find((n) =>
+            sameProduct(n, { name: item.name, unit: item.unit })
+          );
+          if (existing) {
+            existing.qty = Math.max(existing.qty, buyQty);
+          } else {
             needed.push({
               id: `shop-${item.id}-${Date.now()}`,
               name: item.name,

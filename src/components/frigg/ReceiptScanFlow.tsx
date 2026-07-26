@@ -101,6 +101,8 @@ export function ReceiptScanFlow({
   const pantryToastShownRef = useRef(false);
   /** scanItemId → pantry row id from last onItemsAdded (H-04) */
   const pantryIdByScanIdRef = useRef<Map<string, string>>(new Map());
+  /** M-21: ignore setState after close / new process */
+  const processGenRef = useRef(0);
   const ocrMetaRef = useRef<OcrMeta>({});
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -290,6 +292,7 @@ export function ReceiptScanFlow({
   };
 
   const handleClose = () => {
+    processGenRef.current += 1; // cancel in-flight OCR (M-21)
     resetFlow();
     onClose();
   };
@@ -393,6 +396,9 @@ export function ReceiptScanFlow({
 
     photosRef.current = photoList;
     stopCamera();
+    const gen = ++processGenRef.current;
+    const stillLive = () => processGenRef.current === gen;
+
     setStep("processing");
     setErrorMessage(null);
     receiptSavedRef.current = false;
@@ -415,6 +421,7 @@ export function ReceiptScanFlow({
 
       // Progressive pipeline: enhance photo i, start OCR immediately, then enhance i+1
       for (let i = 0; i < total; i++) {
+        if (!stillLive()) return;
         setProcessPhase("enhance");
         setProcessLabel(total === 1 ? "Enhancing photo…" : "Enhancing…");
         setProcessSub(
@@ -440,6 +447,7 @@ export function ReceiptScanFlow({
         } catch {
           enhanced = photoList[i].dataUrl;
         }
+        if (!stillLive()) return;
 
         setPhotoStates((prev) => {
           const next = [...prev];
@@ -456,6 +464,7 @@ export function ReceiptScanFlow({
 
         const idx = i;
         const job = platform.ocr.detectFromImage(enhanced).then((result) => {
+          if (!stillLive()) return;
           settled[idx] = result;
           readDone += 1;
           setPhotoStates((prev) => {
@@ -474,14 +483,18 @@ export function ReceiptScanFlow({
       }
 
       await Promise.all(ocrJobs);
+      if (!stillLive()) return;
 
       setProcessPhase("merge");
       setProcessLabel("Merging & matching…");
       setProcessSub("Overlap merge · fuzzy match · non-pantry filter");
       setProcessProgress(92);
       await new Promise((r) => setTimeout(r, 280));
+      if (!stillLive()) return;
 
-      const merged = mergeOcrResults(settled as OcrDetectResult[]);
+      const settledList = settled.filter(Boolean) as OcrDetectResult[];
+      const photoErrors = settledList.filter((r) => !r.ok).length;
+      const merged = mergeOcrResults(settledList);
 
       if (!merged.ok || merged.items.length === 0) {
         const msg = multiPhotoErrorMessage(settled as OcrDetectResult[]);
@@ -547,11 +560,28 @@ export function ReceiptScanFlow({
       const pantryBound = results.filter((r) => !excludedItems.some((e) => e.id === r.id));
       setDetected(pantryBound);
 
+      // M-06: light total vs lines check on merged items
+      let totalMismatch: ScanOutcomeSummary["totalMismatch"];
+      if (merged.total != null && merged.items.length > 1) {
+        const lineSum =
+          Math.round(
+            merged.items.reduce((s, i) => s + (typeof i.price === "number" ? i.price : 0), 0) * 100
+          ) / 100;
+        if (lineSum > 0) {
+          const ratio = lineSum / merged.total;
+          if (ratio < 0.8 || ratio > 1.25) {
+            totalMismatch = { lineSum, receiptTotal: merged.total };
+          }
+        }
+      }
+
       const summary: ScanOutcomeSummary = {
         added: autoAdded,
         updated: autoUpdated,
         review: ambiguous.length,
         skipped: skippedNonFood,
+        photoErrors: photoErrors > 0 ? photoErrors : undefined,
+        totalMismatch,
       };
 
       if (ambiguous.length > 0) {

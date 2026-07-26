@@ -14,6 +14,7 @@ import {
   canMakeRecipeFully,
   countRecipeAvailability,
   filterAndSortRecipes,
+  missingRecipeIngredients,
 } from "@/lib/recipe-helpers";
 import type { ConfirmRequest } from "@/components/frigg/ConfirmDialog";
 
@@ -71,17 +72,23 @@ export function useRecipes({
 
   const cookRecipe = useCallback(
     (recipe: Recipe) => {
+      const missing = missingRecipeIngredients(items, recipe);
       const preview = recipe.ingredients
         .map((ing) => `${ing.qty} ${ing.unit} ${ing.name}`)
         .join(", ");
+      const missNote =
+        missing.length > 0
+          ? ` May be short on: ${missing.map((m) => m.name).join(", ")}.`
+          : "";
       requestConfirm({
         title: `Cook ${recipe.name}?`,
-        description: `This will deduct from your pantry where stock allows: ${preview}.`,
+        description: `This will deduct from your pantry where stock allows: ${preview}.${missNote}`,
         confirmLabel: "Cook & deduct",
         onConfirm: () => {
           const snapshot = JSON.parse(JSON.stringify(items)) as typeof items;
           const { next, used } = deductIngredients(items, recipe.ingredients);
           setItems(next);
+          const stillMissing = missingRecipeIngredients(next, recipe);
 
           if (used.length > 0) {
             used.forEach((name) => {
@@ -91,7 +98,11 @@ export function useRecipes({
               if (found) rememberPantryItem(found, "pantry_delete");
             });
             toast.success(`Used in ${recipe.name}`, {
-              description: `Deducted: ${used.join(", ")}`,
+              description:
+                `Deducted: ${used.join(", ")}` +
+                (stillMissing.length
+                  ? ` · Not fully covered: ${stillMissing.map((m) => m.name).join(", ")}`
+                  : ""),
               action: {
                 label: "Undo",
                 onClick: () => setItems(snapshot),

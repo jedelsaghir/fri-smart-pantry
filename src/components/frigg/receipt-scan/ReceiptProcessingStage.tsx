@@ -179,6 +179,10 @@ export type ScanOutcomeSummary = {
   updated: number;
   review: number;
   skipped: number;
+  /** M-05: photos that failed OCR while others succeeded */
+  photoErrors?: number;
+  /** M-06 */
+  totalMismatch?: { lineSum: number; receiptTotal: number };
 };
 
 export function ReceiptResultStage({
@@ -206,6 +210,19 @@ export function ReceiptResultStage({
         {resultOk ? "All set" : "Couldn’t finish"}
       </p>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground max-w-xs">{resultMessage}</p>
+
+      {resultOk && summary?.photoErrors && summary.photoErrors > 0 && (
+        <p className="mt-3 max-w-xs rounded-2xl bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-200 leading-snug">
+          {summary.photoErrors} photo{summary.photoErrors === 1 ? "" : "s"} couldn’t be read —
+          other photos were still used. You can retake those sections.
+        </p>
+      )}
+      {resultOk && summary?.totalMismatch && (
+        <p className="mt-2 max-w-xs rounded-2xl bg-secondary/60 px-3 py-2 text-[11px] text-muted-foreground leading-snug">
+          Line items sum ≈ {summary.totalMismatch.lineSum.toFixed(2)} but receipt total is{" "}
+          {summary.totalMismatch.receiptTotal.toFixed(2)}. Double-check review if needed.
+        </p>
+      )}
 
       {resultOk && summary && (summary.added > 0 || summary.updated > 0 || summary.skipped > 0 || summary.review > 0) && (
         <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-xs">

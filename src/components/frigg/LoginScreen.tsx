@@ -6,14 +6,14 @@ import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   acceptInviteAndCreateAccount,
   clearInviteFromUrl,
-  getInviteContext,
   readInviteCodeFromLocation,
   registerOwnerAccount,
   signInWithAccount,
   type PendingInviteContext,
 } from "@/lib/family";
 import { pullAndMergeOnLogin } from "@/lib/run-household-sync";
-import { acceptMemberInvite, resolveInviteFromCloud } from "@/lib/member-invite";
+import { acceptMemberInvite } from "@/lib/member-invite";
+import { resolveInviteForJoin } from "@/lib/invite-resolve";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -37,7 +37,7 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
 
   const emojiOptions = ["👩‍🍳", "👤", "🧑‍🌾", "👨‍🍳", "🌿", "🧒", "👨", "👩"];
 
-  // Resolve invite from URL / local demo / cloud registry (unique per member e.g. Krista)
+  // M-12: single ordered invite resolver (local → cloud)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -50,57 +50,35 @@ export function LoginScreen({ onLogin, forcedInviteCode, onClearForcedInvite }: 
         setProfileEmoji(ctx.memberEmoji || "👤");
         try {
           localStorage.setItem(STORAGE_KEYS.PENDING_INVITE, ctx.code);
-        } catch {}
+        } catch {
+          /* ignore */
+        }
+      };
+
+      const tryCode = async (c: string, forced: boolean) => {
+        const result = await resolveInviteForJoin(c);
+        if (cancelled) return;
+        if (result.ok) {
+          applyCtx(result.ctx);
+          return;
+        }
+        if (forced) {
+          toast.error("Invite not found", { description: result.reason });
+          onClearForcedInvite?.();
+        } else {
+          toast.error("Invite not found", { description: result.reason });
+        }
       };
 
       if (code) {
-        // 1) Same-device / owner simulation
-        const local = getInviteContext(code);
-        if (local) {
-          applyCtx(local);
-        } else {
-          // 2) Cross-device: resolve Krista’s invite from cloud by unique code
-          const cloud = await resolveInviteFromCloud(code);
-          if (cloud) {
-            applyCtx({
-              code: cloud.code,
-              memberId: cloud.memberId,
-              memberName: cloud.memberName,
-              memberEmoji: cloud.memberEmoji,
-              householdName: cloud.householdName,
-            });
-          } else if (forcedInviteCode) {
-            toast.error("Invite not found", {
-              description: "This member invite is no longer valid or not published yet.",
-            });
-            onClearForcedInvite?.();
-          } else {
-            toast.error("Invite not found", {
-              description:
-                "Ask the household owner to open Manage Family → Copy invite link again (publishes to cloud).",
-            });
-          }
-        }
+        await tryCode(code, Boolean(forcedInviteCode));
       } else {
         try {
           const pending = localStorage.getItem(STORAGE_KEYS.PENDING_INVITE);
-          if (pending) {
-            const local = getInviteContext(pending);
-            if (local) applyCtx(local);
-            else {
-              const cloud = await resolveInviteFromCloud(pending);
-              if (cloud) {
-                applyCtx({
-                  code: cloud.code,
-                  memberId: cloud.memberId,
-                  memberName: cloud.memberName,
-                  memberEmoji: cloud.memberEmoji,
-                  householdName: cloud.householdName,
-                });
-              }
-            }
-          }
-        } catch {}
+          if (pending) await tryCode(pending, false);
+        } catch {
+          /* ignore */
+        }
       }
       if (!cancelled) setInviteChecked(true);
     })();

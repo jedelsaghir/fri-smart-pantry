@@ -1,18 +1,16 @@
 # UI kit (`src/components/ui`)
 
-This folder is mostly **shadcn/ui scaffold** from the TanStack template.
+shadcn/Radix primitives shipped with the Lovable/TanStack template.
 
-## Used by Friġġ product code
+## Used by Friġġ product screens
 
-- `alert-dialog` — confirmations
-- `button` — via some primitives
-- `drawer` — details, settings, family, alerts, add sheet
-- `input` — forms, database, log purchase
-- `switch` — dark mode, in-app alerts
-- `sonner` — toasts (via root)
+| Component | Used in |
+|-----------|---------|
+| `drawer` | Add sheet, settings, family, item details, finances |
+| `input` | Forms across app |
+| `switch` | Settings |
+| `alert-dialog` | Confirms |
 
-## Scaffold only (not wired into Friġġ flows)
+Most other files here are **template inventory** (accordion, calendar, chart, sidebar, …) and are **not required** for the pantry product path. They remain for optional future UI work; do not import them lightly (bundle cost).
 
-Examples: `accordion`, `calendar`, `carousel`, `chart`, `command`, `form`, `sidebar`, `table`, `tabs`, etc.
-
-Safe to ignore for product work unless you adopt them. Prefer not bulk-deleting without a cleanup PR — Lovable templates may reintroduce them.
+M-18: Prefer product components under `src/components/frigg/` over adding new ui-kit surface area.

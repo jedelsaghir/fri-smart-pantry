@@ -305,7 +305,9 @@ export function SettingsDrawer({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="font-semibold">Install app</div>
-                <div className="text-xs text-muted-foreground">Add Friġġ to your home screen</div>
+                <div className="text-xs text-muted-foreground">
+                  Android: Install prompt. iPhone: Safari → Share → Add to Home Screen.
+                </div>
               </div>
               <button
                 type="button"

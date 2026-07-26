@@ -98,12 +98,38 @@ export async function publishMemberInvite(opts: {
   }
 }
 
-/** Owner cancels invite — invalidates cloud code */
+/**
+ * Owner cancels invite — invalidates cloud code when online.
+ * M-13: always clear local pending state so offline revoke still feels complete;
+ * cloud revoke is best-effort and idempotent on the server.
+ */
 export async function revokeMemberInvite(opts: {
   code: string;
   ownerCreds: SyncCreds;
-}): Promise<{ ok: boolean; reason?: string }> {
+}): Promise<{ ok: boolean; reason?: string; localCleared?: boolean }> {
+  let localCleared = false;
   try {
+    // Clear pending invite marker + pending status on matching member
+    const code = opts.code.trim();
+    try {
+      const pending = localStorage.getItem(STORAGE_KEYS.PENDING_INVITE);
+      if (pending && pending.trim() === code) {
+        localStorage.removeItem(STORAGE_KEYS.PENDING_INVITE);
+        localCleared = true;
+      }
+      const members = loadFamilyMembers().map((m) => {
+        if (m.inviteCode?.trim() === code && m.status === "pending") {
+          localCleared = true;
+          return { ...m, status: "pending" as const, inviteCode: generateInviteCode() };
+        }
+        return m;
+      });
+      // Rotate invite code so old link stops working locally
+      saveFamilyMembers(members);
+    } catch {
+      /* ignore */
+    }
+
     const result = await revokeHouseholdInvite({
       data: {
         email: opts.ownerCreds.email,
@@ -111,8 +137,26 @@ export async function revokeMemberInvite(opts: {
         code: opts.code,
       },
     });
-    return result.ok ? { ok: true } : { ok: false, reason: result.reason };
+    if (result.ok) return { ok: true, localCleared };
+    // Offline / cloud fail but local was cleared
+    if (localCleared) {
+      return {
+        ok: true,
+        localCleared: true,
+        reason: result.reason
+          ? `Local invite cleared. Cloud: ${result.reason}`
+          : "Local invite cleared; cloud revoke pending.",
+      };
+    }
+    return { ok: false, reason: result.reason };
   } catch (e) {
+    if (localCleared) {
+      return {
+        ok: true,
+        localCleared: true,
+        reason: "Local invite cleared; cloud unreachable.",
+      };
+    }
     return {
       ok: false,
       reason: e instanceof Error ? e.message : "Could not revoke invite",

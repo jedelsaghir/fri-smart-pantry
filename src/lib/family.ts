@@ -507,7 +507,8 @@ export async function signInWithAccount(
       if (!strength.ok) return { ok: false, error: strength.error };
       const passwordHash = await hashPassword(normalized, password);
       const demo: FamilyAccount = {
-        id: "acct-demo-owner",
+        // M-22: unique id per email (never fixed acct-demo-owner)
+        id: `acct-demo-${normalized.replace(/[^a-z0-9]/g, "").slice(0, 24)}-${Date.now().toString(36)}`,
         memberId: "you",
         email: normalized,
         passwordHash,

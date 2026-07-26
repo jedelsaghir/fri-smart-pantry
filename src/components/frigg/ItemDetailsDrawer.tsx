@@ -478,6 +478,7 @@ function DetailsBody({
           <TapNumberControl
             value={item.qty}
             onChange={(qty) => {
+              // M-03: 0 triggers delete confirm (not silent wipe of the row)
               if (qty <= 0) {
                 onRequestDelete?.(item.id);
                 return;
@@ -489,7 +490,8 @@ function DetailsBody({
             valueClassName="text-2xl"
           />
           <p className="mt-1 px-0.5 text-[11px] text-muted-foreground">
-            Tap the number to type. Setting quantity to 0 asks to delete the item.
+            Tap the number to type. Setting quantity to 0 asks to remove the item (not leave a blank
+            row).
           </p>
           {onRequestDelete && (
             <button

@@ -33,6 +33,7 @@ import { buildAlertItems } from "@/lib/pantry-alerts";
 import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
 import { PantryAddSheet } from "./PantryAddSheet";
 import { PantryEmptyState as EmptyState } from "./PantryEmptyState";
+import { PantryItemList } from "./PantryItemList";
 import { AlertsDrawer } from "./AlertsDrawer";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { FamilyDrawer } from "./FamilyDrawer";
@@ -658,22 +659,28 @@ export function PantryScreen() {
               </div>
             )}
 
-            {pwa.showInstallBanner && pwa.installPromptEvent && (
+            {pwa.showInstallBanner && (
               <div className="mt-3 flex items-center gap-3 rounded-3xl border border-border/60 bg-card px-4 py-2.5 text-sm">
                 <div className="text-xl">📱</div>
                 <div className="flex-1 min-w-0">
                   <span className="font-semibold">Add Friġġ to Home Screen</span>
-                  <span className="ml-1 text-muted-foreground text-xs">
-                    for the full app experience.
+                  <span className="ml-1 text-muted-foreground text-xs block sm:inline">
+                    {pwa.isIos
+                      ? pwa.iosInstallHint
+                      : pwa.installPromptEvent
+                        ? "for the full app experience."
+                        : "Use your browser menu → Install / Add to Home Screen."}
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={pwa.handleInstall}
-                  className="rounded-2xl bg-brand px-3.5 py-1.5 text-xs font-semibold text-brand-foreground active:scale-[0.985] transition"
+                  className="rounded-2xl bg-brand px-3.5 py-1.5 text-xs font-semibold text-brand-foreground active:scale-[0.985] transition shrink-0"
                 >
-                  Add
+                  {pwa.installPromptEvent ? "Add" : "How"}
                 </button>
                 <button
+                  type="button"
                   onClick={pwa.dismissInstall}
                   className="text-muted-foreground/70 px-1 active:text-foreground"
                   aria-label="Dismiss install prompt"
@@ -690,25 +697,12 @@ export function PantryScreen() {
                 onScan={() => setScanOpen(true)}
               />
             ) : (
-              <div className="mt-5 flex flex-col gap-4" style={{ width: "100%" }}>
-                {[...current]
-                  .sort((a, b) =>
-                    a.name.localeCompare(b.name, undefined, {
-                      sensitivity: "base",
-                      numeric: true,
-                    })
-                  )
-                  .map((item) => (
-                    <div key={item.id} className="w-full" style={{ width: "100%" }}>
-                      <ItemCard
-                        item={item}
-                        storage={active}
-                        onOpenDetails={() => openItemDetails(item, active)}
-                        onDelete={() => handleDeleteItem(item.id)}
-                      />
-                    </div>
-                  ))}
-              </div>
+              <PantryItemList
+                items={current}
+                storage={active}
+                onOpenDetails={openItemDetails}
+                onDelete={handleDeleteItem}
+              />
             )}
           </>
         )}

@@ -210,13 +210,12 @@ export function usePantry(options: UsePantryOptions = {}) {
   /**
    * Patch any fields on an item across all storages and keep the open
    * details drawer in sync (live save).
-   * Qty is clamped to ≥ 1 — removal must go through removeItem + confirm (P0-1).
+   * M-03: qty may be 0 (empty stock) without deleting; removal still uses removeItem + confirm.
    */
   const patchItem = useCallback((id: string, patch: Partial<PantryItem>) => {
     const normalized: Partial<PantryItem> = { ...patch };
     if (typeof normalized.qty === "number") {
-      // Never auto-delete via qty; keep at least 1. Use removeItem to delete.
-      normalized.qty = Math.max(1, Math.floor(normalized.qty));
+      normalized.qty = Math.max(0, Math.floor(normalized.qty));
     }
     if (typeof normalized.minStock === "number") {
       normalized.minStock = Math.max(0, normalized.minStock);

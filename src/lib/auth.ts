@@ -22,7 +22,8 @@ import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 export type AuthMode = "demo" | "production";
 
-export const AUTH_SESSION_KEY = "friggg-auth-session";
+/** @deprecated Use STORAGE_KEYS.AUTH_SESSION — kept as alias for imports */
+export const AUTH_SESSION_KEY = STORAGE_KEYS.AUTH_SESSION;
 export const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export type AuthSession = {
@@ -90,7 +91,7 @@ export function createAuthSession(
 
 export function writeAuthSession(session: AuthSession): void {
   try {
-    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(session));
     localStorage.setItem(STORAGE_KEYS.LOGGED_IN, "true");
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, session.userId);
   } catch {
@@ -100,7 +101,7 @@ export function writeAuthSession(session: AuthSession): void {
 
 export function clearAuthSession(): void {
   try {
-    localStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
     localStorage.removeItem(STORAGE_KEYS.LOGGED_IN);
     // Keep CURRENT_USER for optional recovery; clear on full logout callers may remove it
   } catch {
@@ -108,32 +109,67 @@ export function clearAuthSession(): void {
   }
 }
 
+function emailForUserId(userId: string): string {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+    if (raw) {
+      const accounts = JSON.parse(raw) as Array<{ id?: string; email?: string }>;
+      const hit = accounts.find((a) => a.id === userId);
+      if (hit?.email?.trim()) return hit.email.trim().toLowerCase();
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PROFILE);
+    if (raw) {
+      const p = JSON.parse(raw) as { email?: string; accountId?: string };
+      if (p.email?.trim() && (!p.accountId || p.accountId === userId)) {
+        return p.email.trim().toLowerCase();
+      }
+      if (p.email?.trim()) return p.email.trim().toLowerCase();
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
 export function readAuthSession(): AuthSession | null {
   try {
-    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    const raw = localStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
     if (raw) {
       const s = JSON.parse(raw) as AuthSession;
-      if (s?.v === 1 && s.userId && s.email && typeof s.expiresAt === "number") {
+      if (s?.v === 1 && s.userId && typeof s.expiresAt === "number") {
         if (Date.now() > s.expiresAt) {
           clearAuthSession();
           return null;
         }
-        return s;
+        // M-02: heal empty / placeholder emails once
+        if (!s.email || s.email === "legacy@local") {
+          const email = emailForUserId(s.userId);
+          if (email) {
+            const healed = { ...s, email };
+            writeAuthSession(healed);
+            return healed;
+          }
+        }
+        if (s.email) return s;
       }
     }
   } catch {
     /* ignore */
   }
 
-  // Legacy: LOGGED_IN=true without structured session → soft-upgrade if current user exists
+  // Legacy: LOGGED_IN=true without structured session → one-time upgrade (M-02)
   try {
     if (localStorage.getItem(STORAGE_KEYS.LOGGED_IN) !== "true") return null;
     const userId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     if (!userId) return null;
-    // Build provisional session (email filled on next login if missing)
-    const session = createAuthSession(userId, "legacy@local");
-    // Don't write yet — caller may hydrate email from accounts
-    return { ...session, email: "" };
+    const email = emailForUserId(userId) || "local@device";
+    const session = createAuthSession(userId, email);
+    writeAuthSession(session);
+    return session;
   } catch {
     return null;
   }
@@ -142,11 +178,7 @@ export function readAuthSession(): AuthSession | null {
 /** True if a non-expired session exists (or legacy logged-in flag with user id). */
 export function isSessionAuthenticated(): boolean {
   const s = readAuthSession();
-  if (s && s.userId && (s.email || s.email === "")) {
-    // legacy soft session: email empty is ok if LOGGED_IN
-    if (!s.email) {
-      return localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === "true";
-    }
+  if (s && s.userId) {
     return Date.now() <= s.expiresAt;
   }
   return false;

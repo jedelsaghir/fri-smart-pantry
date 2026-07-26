@@ -44,6 +44,37 @@ const CATEGORY_COLORS = [
   "#7a8a9a",
 ];
 
+function moneySymbol(currency?: string): string {
+  const c = (currency || "EUR").toUpperCase();
+  if (c === "USD" || c === "US$") return "$";
+  if (c === "GBP") return "£";
+  if (c === "EUR") return "€";
+  return c + " ";
+}
+
+function formatMoney(amount: number, currency?: string): string {
+  const sym = moneySymbol(currency);
+  return `${sym}${amount.toFixed(2)}`;
+}
+
+/** Dominant currency among receipts (M-11); falls back to EUR */
+function dominantCurrency(receipts: StoredReceipt[]): string {
+  const counts = new Map<string, number>();
+  for (const r of receipts) {
+    const c = (r.currency || "EUR").toUpperCase();
+    counts.set(c, (counts.get(c) || 0) + 1);
+  }
+  let best = "EUR";
+  let n = 0;
+  for (const [c, v] of counts) {
+    if (v > n) {
+      best = c;
+      n = v;
+    }
+  }
+  return best;
+}
+
 function FinancialsScreenInner({
   receipts,
   onDeleteReceipt,
@@ -54,6 +85,7 @@ function FinancialsScreenInner({
   onAddReceipt?: (receipt: StoredReceipt) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const displayCurrency = useMemo(() => dominantCurrency(receipts), [receipts]);
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [logStore, setLogStore] = useState("");
@@ -162,7 +194,7 @@ function FinancialsScreenInner({
               Total from saved receipts
             </div>
             <div className="mt-1 font-display text-[42px] leading-none font-medium tracking-[-0.025em] text-foreground">
-              €{totalFormatted}
+              {moneySymbol(displayCurrency)}{totalFormatted}
             </div>
             <div className="mt-3 text-xs text-muted-foreground">
               {receipts.length} receipt{receipts.length === 1 ? "" : "s"}
@@ -190,7 +222,7 @@ function FinancialsScreenInner({
             <Input
               value={logTotal}
               onChange={(e) => setLogTotal(e.target.value)}
-              placeholder="Total €"
+              placeholder={`Total (${displayCurrency})`}
               inputMode="decimal"
               className="h-11 rounded-2xl"
             />
@@ -248,7 +280,7 @@ function FinancialsScreenInner({
             <div className="text-sm font-semibold tracking-[0.005em] text-foreground/90">
               By category
             </div>
-            <div className="text-[11px] text-muted-foreground">€{categoryTotal.toFixed(1)}</div>
+            <div className="text-[11px] text-muted-foreground">{moneySymbol(displayCurrency)}{categoryTotal.toFixed(1)}</div>
           </div>
 
           <div className="elevated-card rounded-3xl p-4">
@@ -270,7 +302,7 @@ function FinancialsScreenInner({
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [`€${Number(value).toFixed(2)}`, ""]}
+                    formatter={(value: number) => [formatMoney(Number(value), displayCurrency), ""]}
                     contentStyle={{
                       backgroundColor: "var(--color-card)",
                       border: "1px solid var(--color-border)",
@@ -295,7 +327,7 @@ function FinancialsScreenInner({
                       {cat.name}
                     </span>
                     <span className="tabular-nums text-muted-foreground">
-                      €{cat.amount.toFixed(1)} · {pct}%
+                      {moneySymbol(displayCurrency)}{cat.amount.toFixed(1)} · {pct}%
                     </span>
                   </li>
                 );
@@ -353,7 +385,7 @@ function FinancialsScreenInner({
                   {monthInsight.receiptCount === 1 ? "" : "s"} this month
                 </span>
                 <span className="font-semibold tabular-nums text-foreground">
-                  €{monthInsight.monthTotal.toFixed(2)}
+                  {formatMoney(monthInsight.monthTotal, displayCurrency)}
                 </span>
               </div>
 
@@ -386,13 +418,13 @@ function FinancialsScreenInner({
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                          {s.visits} visit{s.visits === 1 ? "" : "s"} · avg €
+                          {s.visits} visit{s.visits === 1 ? "" : "s"} · avg {moneySymbol(displayCurrency)}
                           {s.avgBasket.toFixed(2)} / trip
                         </p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-semibold tabular-nums">
-                          €{s.totalSpend.toFixed(2)}
+                          {formatMoney(s.totalSpend, displayCurrency)}
                         </p>
                         <p className="text-[10px] text-muted-foreground tabular-nums">
                           {Math.round(s.share * 100)}%
@@ -413,7 +445,7 @@ function FinancialsScreenInner({
                         formatter={(value: number, _n, item) => {
                           const row = item?.payload as { avg?: number; visits?: number };
                           return [
-                            `€${Number(value).toFixed(2)} total · avg €${(row?.avg ?? 0).toFixed(2)} (${row?.visits ?? 0} trips)`,
+                            `${formatMoney(Number(value), displayCurrency)} total · avg ${formatMoney(row?.avg ?? 0, displayCurrency)} (${row?.visits ?? 0} trips)`,
                             "Spend",
                           ];
                         }}
@@ -493,7 +525,7 @@ function FinancialsScreenInner({
                         {r.store}
                       </p>
                       <p className="shrink-0 text-sm font-semibold tabular-nums">
-                        €{r.total.toFixed(2)}
+                        {formatMoney(r.total, r.currency || displayCurrency)}
                       </p>
                     </div>
                     <p className="mt-0.5 text-[12px] text-muted-foreground">
@@ -527,7 +559,7 @@ function FinancialsScreenInner({
                   {selected.store}
                 </DrawerTitle>
                 <p className="text-sm text-muted-foreground">
-                  {formatReceiptDate(selected.date)} · €{selected.total.toFixed(2)}
+                  {formatReceiptDate(selected.date)} · {formatMoney(selected.total, selected.currency || displayCurrency)}
                 </p>
               </DrawerHeader>
 
@@ -591,7 +623,7 @@ function FinancialsScreenInner({
                           </p>
                         </div>
                         <p className="shrink-0 text-sm font-semibold tabular-nums">
-                          €{item.price.toFixed(2)}
+                          {formatMoney(item.price, selected.currency || displayCurrency)}
                         </p>
                       </li>
                     ))}
@@ -599,7 +631,7 @@ function FinancialsScreenInner({
                   <div className="mt-3 flex items-center justify-between px-1 pt-1 border-t border-border/40">
                     <span className="text-sm font-semibold">Total</span>
                     <span className="text-base font-semibold tabular-nums">
-                      €{selected.total.toFixed(2)}
+                      {formatMoney(selected.total, selected.currency || displayCurrency)}
                     </span>
                   </div>
                 </div>

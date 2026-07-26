@@ -69,6 +69,7 @@ export function normalizeUnit(unit: unknown, qty: number): string {
   if (["ml", "milliliter", "millilitre"].includes(u)) return "ml";
   if (["g", "gr", "gram", "grams"].includes(u)) return "g";
   if (["kg", "kilo", "kilogram"].includes(u)) return "kg";
+  if (["cl", "centiliter", "centilitre"].includes(u)) return "cl";
   if (["pack", "packs", "pk"].includes(u)) return "pack";
   if (["bag", "bags"].includes(u)) return "bag";
   if (["bottle", "btl"].includes(u)) return "bottle";
@@ -76,6 +77,124 @@ export function normalizeUnit(unit: unknown, qty: number): string {
   if (["loaf", "loaves"].includes(u)) return "loaf";
   if (["bunch"].includes(u)) return "bunch";
   return u.slice(0, 12);
+}
+
+/**
+ * Improve qty/unit for multipack patterns in product names, e.g.:
+ * - "Cola 6x330ml" → qty 6, unit pcs (count of packs/bottles)
+ * - "Water 2 x 1.5L" → qty 2, unit pcs
+ * - "Eggs 6-pack" / "pack of 6" → qty 6, unit pcs
+ * Does not invent products — only reinterprets existing name+qty.
+ */
+export function applyMultipackQtyUnit(
+  name: string,
+  qty: number,
+  unit: string
+): { name: string; qty: number; unit: string } {
+  let n = name.trim();
+  let q = qty > 0 && Number.isFinite(qty) ? qty : 1;
+  let u = unit;
+
+  // "6x330ml", "6 x 1,5 L", "12×25cl"
+  const multi = n.match(
+    /(?:^|[\s(,.-])(\d{1,2})\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(ml|cl|l|g|kg)?\b/i
+  );
+  if (multi) {
+    const packCount = parseInt(multi[1], 10);
+    if (packCount >= 2 && packCount <= 48) {
+      // Prefer pack count as qty when OCR left qty at 1
+      if (q === 1 || q === packCount) {
+        q = packCount;
+        u = "pcs";
+      }
+      // Soften name: keep product, drop the multipack size tail when it's the only size cue
+      const cleaned = n
+        .replace(/\s*[-,]?\s*\d{1,2}\s*[x×]\s*\d+(?:[.,]\d+)?\s*(ml|cl|l|g|kg)?\b/gi, " ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      if (cleaned.length >= 2) n = cleaned;
+    }
+  } else {
+    // "6-pack", "6 pack", "pack of 6"
+    const packOf = n.match(/\bpack\s+of\s+(\d{1,2})\b/i);
+    const nPack = n.match(/\b(\d{1,2})\s*-?\s*packs?\b/i);
+    const count = packOf
+      ? parseInt(packOf[1], 10)
+      : nPack
+        ? parseInt(nPack[1], 10)
+        : 0;
+    if (count >= 2 && count <= 48 && (q === 1 || q === count)) {
+      q = count;
+      if (!u || u === "pcs" || u === "pack") u = "pcs";
+      const cleaned = n
+        .replace(/\bpack\s+of\s+\d{1,2}\b/gi, " ")
+        .replace(/\b\d{1,2}\s*-?\s*packs?\b/gi, " ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      if (cleaned.length >= 2) n = cleaned;
+    }
+  }
+
+  // Qty string like "2x" already parsed poorly — leave caps
+  if (q > 10_000) q = 1;
+  return { name: n.slice(0, 80), qty: q, unit: normalizeUnit(u, q) };
+}
+
+/**
+ * Light total-vs-line-sum sanity: nudge confidence only (never add/remove items).
+ * - Lines sum close to total → slight confidence boost
+ * - Lines sum far off → slight confidence dip (send borderline lines to review)
+ */
+export function applyTotalLineSanity(
+  items: OcrLineItem[],
+  total: number | null | undefined
+): OcrLineItem[] {
+  if (total == null || !Number.isFinite(total) || total <= 0 || items.length === 0) {
+    return items;
+  }
+  const priced = items.filter((i) => typeof i.price === "number" && i.price! > 0);
+  if (priced.length < 2) return items;
+
+  const lineSum =
+    Math.round(priced.reduce((s, i) => s + (i.price as number), 0) * 100) / 100;
+  if (lineSum <= 0) return items;
+
+  const ratio = lineSum / total;
+
+  // Healthy agreement
+  if (ratio >= 0.88 && ratio <= 1.12) {
+    return items.map((i) => ({
+      ...i,
+      confidence: Math.min(
+        1,
+        Math.round(((typeof i.confidence === "number" ? i.confidence : 0.75) + 0.03) * 1000) /
+          1000
+      ),
+    }));
+  }
+
+  // Material mismatch — soft dip only
+  if (ratio < 0.55 || ratio > 1.9) {
+    return items.map((i) => ({
+      ...i,
+      confidence: Math.max(
+        0.35,
+        Math.round(((typeof i.confidence === "number" ? i.confidence : 0.75) * 0.9) * 1000) /
+          1000
+      ),
+    }));
+  }
+
+  return items;
+}
+
+/** Confidence band for review chips */
+export type ConfidenceBand = "high" | "medium" | "low";
+
+export function confidenceBand(confidence: number): ConfidenceBand {
+  if (confidence >= 0.85) return "high";
+  if (confidence >= 0.65) return "medium";
+  return "low";
 }
 
 /** Strip markdown fences and extract first JSON object/array from model text */
@@ -131,24 +250,36 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
     else if (Array.isArray(o.line_items)) rows = o.line_items;
   }
 
-  const items: OcrLineItem[] = [];
+  let items: OcrLineItem[] = [];
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
     const r = row as Record<string, unknown>;
-    const name = String(r.name ?? r.description ?? r.item ?? "").trim();
+    let name = String(r.name ?? r.description ?? r.item ?? "").trim();
     if (!name || name.length < 2) continue;
 
     let qty = 1;
     if (typeof r.qty === "number" && Number.isFinite(r.qty) && r.qty > 0) qty = r.qty;
     else if (typeof r.quantity === "number" && r.quantity > 0) qty = r.quantity;
     else if (typeof r.qty === "string") {
-      const n = parseFloat(r.qty.replace(",", "."));
-      if (Number.isFinite(n) && n > 0) qty = n;
+      // Support "2x" / "2 x 1" qty strings
+      const multiQty = r.qty.match(/^(\d{1,2})\s*[x×]/i);
+      if (multiQty) {
+        const n = parseInt(multiQty[1], 10);
+        if (n >= 1) qty = n;
+      } else {
+        const n = parseFloat(r.qty.replace(",", "."));
+        if (Number.isFinite(n) && n > 0) qty = n;
+      }
     }
     // Cap absurd OCR qty glitches
     if (qty > 10_000) qty = 1;
 
-    const unit = normalizeUnit(r.unit ?? r.uom, qty);
+    let unit = normalizeUnit(r.unit ?? r.uom, qty);
+
+    const multipack = applyMultipackQtyUnit(name, qty, unit);
+    name = multipack.name;
+    qty = multipack.qty;
+    unit = multipack.unit;
 
     let price: number | undefined;
     const priceRaw = r.price ?? r.line_total ?? r.amount ?? r.total;
@@ -189,18 +320,25 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
       100;
   }
 
+  items = applyTotalLineSanity(items, total);
+
   return { store, total, currency, items };
 }
 
 export function enrichOcrItems(items: OcrLineItem[]): OcrLineItem[] {
-  return items.map((item) => ({
-    ...item,
-    emoji: item.emoji || emojiForItemName(item.name),
-    storage: item.storage || guessStorage(item.name),
-    unit: normalizeUnit(item.unit, item.qty),
-    confidence:
-      typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : 0.75,
-  }));
+  return items.map((item) => {
+    const multi = applyMultipackQtyUnit(item.name, item.qty, item.unit || "pcs");
+    return {
+      ...item,
+      name: multi.name,
+      qty: multi.qty,
+      unit: multi.unit,
+      emoji: item.emoji || emojiForItemName(multi.name),
+      storage: item.storage || guessStorage(multi.name),
+      confidence:
+        typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : 0.75,
+    };
+  });
 }
 
 /** Pull assistant text from xAI / OpenAI-compatible Responses API body */
@@ -260,8 +398,10 @@ Read the receipt image and return ONLY valid JSON (no markdown) with this shape:
 }
 Rules:
 - Only include grocery / household product lines that appear on the receipt.
+- Never invent products that are not visible on the receipt.
 - Skip store address, payment, tax-only lines, card numbers, barcodes, thank-you lines.
 - qty must be positive; default 1 if unclear.
+- Multipacks: "6x330ml" or "2 x 1.5L" → qty = pack count (e.g. 6 or 2), unit = pcs (or pack), name without the multipack size suffix when possible.
 - unit examples: pcs, L, ml, g, kg, pack, bag, bottle, tub, loaf.
 - price is the line total for that product (not unit price) when available; omit if unknown.
 - confidence is 0..1 for how sure you are of the line.

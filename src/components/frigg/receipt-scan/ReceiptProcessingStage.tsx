@@ -1,19 +1,50 @@
 "use client";
 
-import { Loader2, Check, Aperture } from "lucide-react";
+import { Loader2, Check, Aperture, ScanText, GitMerge } from "lucide-react";
 import type { CapturedPhoto } from "./types";
+
+export type PhotoProcessState = "pending" | "enhancing" | "reading" | "done" | "error";
 
 export function ReceiptProcessingStage({
   processLabel,
   processSub,
   processProgress,
   photos,
+  photoStates = [],
+  phase = "enhance",
 }: {
   processLabel: string;
   processSub: string;
   processProgress: number;
   photos: CapturedPhoto[];
+  /** Per-photo pipeline state for multi-photo progressive UI */
+  photoStates?: PhotoProcessState[];
+  phase?: "enhance" | "read" | "merge";
 }) {
+  const phases = [
+    {
+      key: "enhance" as const,
+      label: "Enhance",
+      done: phase === "read" || phase === "merge" || processProgress >= 40,
+      active: phase === "enhance" || processProgress < 40,
+      icon: Aperture,
+    },
+    {
+      key: "read" as const,
+      label: "Read",
+      done: phase === "merge" || processProgress >= 90,
+      active: phase === "read" || (processProgress >= 40 && processProgress < 90),
+      icon: ScanText,
+    },
+    {
+      key: "merge" as const,
+      label: "Merge",
+      done: processProgress >= 100,
+      active: phase === "merge" || (processProgress >= 90 && processProgress < 100),
+      icon: GitMerge,
+    },
+  ];
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[420px] text-center pt-4 px-2">
       <div className="relative mb-8 size-28">
@@ -25,8 +56,10 @@ export function ReceiptProcessingStage({
         />
         <div className="absolute inset-0 grid place-items-center">
           <div className="grid size-14 place-items-center rounded-2xl bg-secondary/85 shadow-inner">
-            {processProgress < 40 ? (
+            {phase === "enhance" || processProgress < 40 ? (
               <Aperture className="size-7 text-brand animate-pulse" />
+            ) : phase === "merge" || processProgress >= 90 ? (
+              <GitMerge className="size-7 text-brand animate-pulse" />
             ) : (
               <Loader2 className="size-7 animate-spin text-brand" />
             )}
@@ -41,37 +74,30 @@ export function ReceiptProcessingStage({
         </p>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-1.5 mb-5 max-w-[300px]">
-        {(
-          [
-            { label: "Enhance", done: processProgress >= 40, active: processProgress < 40 },
-            {
-              label: "Read",
-              done: processProgress >= 90,
-              active: processProgress >= 40 && processProgress < 90,
-            },
-            {
-              label: "Match",
-              done: processProgress >= 100,
-              active: processProgress >= 90 && processProgress < 100,
-            },
-          ] as const
-        ).map((s) => (
-          <span
-            key={s.label}
-            className={
-              "rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition " +
-              (s.active
-                ? "bg-brand/15 text-brand ring-1 ring-brand/20"
-                : s.done
-                  ? "bg-[color-mix(in_oklab,var(--color-fresh)_14%,var(--color-secondary))] text-[var(--color-fresh)]"
-                  : "bg-secondary/60 text-muted-foreground/70")
-            }
-          >
-            {s.done && !s.active ? "✓ " : ""}
-            {s.label}
-          </span>
-        ))}
+      <div className="flex flex-wrap justify-center gap-1.5 mb-5 max-w-[320px]">
+        {phases.map((s) => {
+          const Icon = s.icon;
+          return (
+            <span
+              key={s.label}
+              className={
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition " +
+                (s.active
+                  ? "bg-brand/15 text-brand ring-1 ring-brand/20"
+                  : s.done
+                    ? "bg-[color-mix(in_oklab,var(--color-fresh)_14%,var(--color-secondary))] text-[var(--color-fresh)]"
+                    : "bg-secondary/60 text-muted-foreground/70")
+              }
+            >
+              {s.done && !s.active ? (
+                "✓ "
+              ) : s.active ? (
+                <Icon className="size-3 opacity-80" />
+              ) : null}
+              {s.label}
+            </span>
+          );
+        })}
       </div>
 
       <div className="w-full max-w-[260px] mb-2 flex items-center justify-between text-[11px] font-medium text-muted-foreground tabular-nums">
@@ -92,25 +118,53 @@ export function ReceiptProcessingStage({
       </div>
 
       {photos.length > 0 && (
-        <div className="flex justify-center gap-1.5 flex-wrap max-w-[280px]">
+        <div className="flex justify-center gap-2 flex-wrap max-w-[300px]">
           {photos.map((p, i) => {
-            const done = processProgress >= 40 + ((i + 1) / Math.max(1, photos.length)) * 50;
+            const state: PhotoProcessState =
+              photoStates[i] ||
+              (processProgress >= 40 + ((i + 1) / Math.max(1, photos.length)) * 50
+                ? "done"
+                : processProgress >= 40
+                  ? "reading"
+                  : "pending");
+            const done = state === "done";
+            const active = state === "enhancing" || state === "reading";
             return (
-              <div
-                key={p.id}
-                className={
-                  "relative size-12 overflow-hidden rounded-lg ring-1 transition " +
-                  (done ? "ring-brand/40 opacity-100" : "ring-border/40 opacity-80")
-                }
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.dataUrl} alt="" className="size-full object-cover" />
-                {done && (
-                  <div className="absolute inset-0 grid place-items-center bg-black/30">
-                    <Check className="size-4 text-white" strokeWidth={2.5} />
-                  </div>
-                )}
-                <span className="sr-only">Photo {i + 1}</span>
+              <div key={p.id} className="flex flex-col items-center gap-1">
+                <div
+                  className={
+                    "relative size-12 overflow-hidden rounded-lg ring-1 transition " +
+                    (done
+                      ? "ring-brand/40 opacity-100"
+                      : active
+                        ? "ring-brand/60 opacity-100"
+                        : "ring-border/40 opacity-75")
+                  }
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.dataUrl} alt="" className="size-full object-cover" />
+                  {done && (
+                    <div className="absolute inset-0 grid place-items-center bg-black/30">
+                      <Check className="size-4 text-white" strokeWidth={2.5} />
+                    </div>
+                  )}
+                  {active && (
+                    <div className="absolute inset-0 grid place-items-center bg-black/25">
+                      <Loader2 className="size-4 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <span className="text-[9px] font-medium text-muted-foreground capitalize">
+                  {state === "pending"
+                    ? "Waiting"
+                    : state === "enhancing"
+                      ? "Enhance"
+                      : state === "reading"
+                        ? "Read"
+                        : state === "error"
+                          ? "Retry"
+                          : "Done"}
+                </span>
               </div>
             );
           })}
@@ -120,20 +174,29 @@ export function ReceiptProcessingStage({
   );
 }
 
+export type ScanOutcomeSummary = {
+  added: number;
+  updated: number;
+  review: number;
+  skipped: number;
+};
+
 export function ReceiptResultStage({
   resultOk,
   resultMessage,
+  summary,
 }: {
   resultOk: boolean;
   resultMessage: string;
+  summary?: ScanOutcomeSummary | null;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[360px] text-center px-4 animate-in fade-in duration-300">
+    <div className="flex flex-col items-center justify-center min-h-[360px] text-center px-4 animate-in fade-in duration-500">
       <div
         className={
-          "mx-auto mb-5 grid size-[4.75rem] place-items-center rounded-[1.75rem] text-3xl shadow-[0_1px_0_0_oklch(1_0_0/0.5)_inset,0_12px_28px_-12px_oklch(0.2_0.02_150/0.18)] " +
+          "mx-auto mb-5 grid size-[4.75rem] place-items-center rounded-[1.75rem] text-3xl shadow-[0_1px_0_0_oklch(1_0_0/0.5)_inset,0_12px_28px_-12px_oklch(0.2_0.02_150/0.18)] transition-transform duration-500 " +
           (resultOk
-            ? "bg-[color-mix(in_oklab,var(--color-fresh)_14%,var(--color-card))] text-[var(--color-fresh)]"
+            ? "bg-[color-mix(in_oklab,var(--color-fresh)_14%,var(--color-card))] text-[var(--color-fresh)] scale-100"
             : "bg-destructive/10 text-destructive")
         }
       >
@@ -143,6 +206,32 @@ export function ReceiptResultStage({
         {resultOk ? "All set" : "Couldn’t finish"}
       </p>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground max-w-xs">{resultMessage}</p>
+
+      {resultOk && summary && (summary.added > 0 || summary.updated > 0 || summary.skipped > 0 || summary.review > 0) && (
+        <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-xs">
+          {summary.added > 0 && (
+            <span className="rounded-full bg-brand/12 px-2.5 py-1 text-[11px] font-semibold text-brand tabular-nums">
+              {summary.added} added
+            </span>
+          )}
+          {summary.updated > 0 && (
+            <span className="rounded-full bg-sky-500/12 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300 tabular-nums">
+              {summary.updated} updated
+            </span>
+          )}
+          {summary.review > 0 && (
+            <span className="rounded-full bg-amber-500/12 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 tabular-nums">
+              {summary.review} to review
+            </span>
+          )}
+          {summary.skipped > 0 && (
+            <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground tabular-nums">
+              {summary.skipped} skipped
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="mt-8 flex gap-1.5">
         <span className="size-1.5 rounded-full bg-brand/60 animate-pulse" />
         <span
@@ -162,11 +251,14 @@ export function ReceiptErrorStage({
   errorMessage,
   photoCount,
   onRetry,
+  onRetryProcess,
   onClearAndRetry,
 }: {
   errorMessage: string | null;
   photoCount: number;
   onRetry: () => void;
+  /** Re-run OCR on the same photos (one-tap recovery) */
+  onRetryProcess?: () => void;
   onClearAndRetry: () => void;
 }) {
   return (
@@ -185,12 +277,26 @@ export function ReceiptErrorStage({
         <li>· Use even light; avoid heavy glare</li>
         <li>· Long receipts: a few clear sections work best</li>
       </ul>
+      {photoCount > 0 && onRetryProcess && (
+        <button
+          type="button"
+          onClick={onRetryProcess}
+          className="mt-6 w-full max-w-xs rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985]"
+        >
+          Retry processing
+        </button>
+      )}
       <button
         type="button"
         onClick={onRetry}
-        className="mt-6 w-full max-w-xs rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground"
+        className={
+          "w-full max-w-xs rounded-3xl py-3.5 text-sm font-semibold " +
+          (photoCount > 0 && onRetryProcess
+            ? "mt-2 border border-border bg-card text-foreground active:bg-secondary/60"
+            : "mt-6 bg-brand text-brand-foreground")
+        }
       >
-        Retry capture
+        {photoCount > 0 ? "Back to capture" : "Retry capture"}
       </button>
       {photoCount > 0 && (
         <button

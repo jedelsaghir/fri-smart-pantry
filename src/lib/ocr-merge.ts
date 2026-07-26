@@ -22,6 +22,7 @@ import {
   isPossiblyNonFood,
   shouldAutoExcludeNonPantry,
 } from "@/lib/non-pantry";
+import { applyMultipackQtyUnit, applyTotalLineSanity } from "@/lib/ocr-parse";
 import type { OcrDetectResult, OcrLineItem } from "@/platform/types";
 import type {
   DetectedItem,
@@ -167,10 +168,19 @@ export function mergeOcrResults(results: OcrDetectResult[]): OcrDetectResult {
     };
   }
 
-  const items = mergeOcrLineItems(okResults.map((r) => r.items));
+  const mergedRaw = mergeOcrLineItems(
+    okResults.map((r) =>
+      r.items.map((row) => {
+        const multi = applyMultipackQtyUnit(row.name, row.qty, row.unit || "pcs");
+        return { ...row, name: multi.name, qty: multi.qty, unit: multi.unit };
+      })
+    )
+  );
   const withStore = okResults.find((r) => r.store);
   const withTotal = okResults.find((r) => r.total != null);
   const withCurrency = okResults.find((r) => r.currency);
+  const total = withTotal?.total ?? null;
+  const items = applyTotalLineSanity(mergedRaw, total);
 
   return {
     ok: items.length > 0,
@@ -178,7 +188,7 @@ export function mergeOcrResults(results: OcrDetectResult[]): OcrDetectResult {
     provider: okResults[0].provider,
     items,
     store: withStore?.store ?? null,
-    total: withTotal?.total ?? null,
+    total,
     currency: withCurrency?.currency,
     reason:
       items.length === 0

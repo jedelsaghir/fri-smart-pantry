@@ -3,20 +3,52 @@
 import { Check, Trash2 } from "lucide-react";
 import type { DetectedItem, ReviewDisposition, StorageKey } from "@/types/pantry";
 import { BarcodeAssistButton } from "@/components/frigg/BarcodeAssistButton";
+import { confidenceBand, type ConfidenceBand } from "@/lib/ocr-parse";
+import { AUTO_ADD_CONFIDENCE } from "@/lib/ocr-merge";
 import { formatStorageLabel } from "./types";
+
+function ConfidenceChip({ confidence }: { confidence: number }) {
+  const band: ConfidenceBand = confidenceBand(confidence);
+  const pct = Math.round(confidence * 100);
+  const styles =
+    band === "high"
+      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
+      : band === "medium"
+        ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
+        : "bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300";
+  const label = band === "high" ? "High" : band === "medium" ? "Medium" : "Low";
+  return (
+    <span className={`rounded-full px-2 py-px text-[10px] font-semibold tabular-nums ${styles}`}>
+      {label} · {pct}%
+    </span>
+  );
+}
 
 export function ReceiptReviewStage({
   reviewItems,
   onUpdateItem,
   onRemoveItem,
+  onBatchKeepNonFood,
+  onBatchDiscardNonFood,
+  onBatchKeepLowConf,
+  onBatchDiscardLowConf,
 }: {
   reviewItems: DetectedItem[];
   onUpdateItem: (id: string, updates: Partial<DetectedItem>) => void;
   onRemoveItem: (id: string) => void;
+  onBatchKeepNonFood?: () => void;
+  onBatchDiscardNonFood?: () => void;
+  onBatchKeepLowConf?: () => void;
+  onBatchDiscardLowConf?: () => void;
 }) {
+  const nonFoodCount = reviewItems.filter((i) => i.possiblyNonFood).length;
+  const lowConfCount = reviewItems.filter(
+    (i) => !i.possiblyNonFood && i.confidence < AUTO_ADD_CONFIDENCE
+  ).length;
+
   return (
     <div>
-      <div className="mb-5">
+      <div className="mb-4">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="text-lg font-semibold tracking-tight">Review items</div>
           <div className="rounded-full bg-amber-100 px-2.5 py-px text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
@@ -28,12 +60,58 @@ export function ReceiptReviewStage({
         </p>
       </div>
 
+      {(nonFoodCount > 1 || lowConfCount > 1) && (
+        <div className="mb-4 space-y-2 rounded-2xl border border-border/50 bg-secondary/30 px-3 py-2.5">
+          {nonFoodCount > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {nonFoodCount} possible non-food
+              </span>
+              <button
+                type="button"
+                onClick={onBatchKeepNonFood}
+                className="rounded-full bg-brand/15 px-2.5 py-1 text-[11px] font-semibold text-brand active:bg-brand/25"
+              >
+                Keep all
+              </button>
+              <button
+                type="button"
+                onClick={onBatchDiscardNonFood}
+                className="rounded-full bg-background px-2.5 py-1 text-[11px] font-semibold text-foreground border border-border/60 active:bg-secondary"
+              >
+                Discard all
+              </button>
+            </div>
+          )}
+          {lowConfCount > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {lowConfCount} low confidence
+              </span>
+              <button
+                type="button"
+                onClick={onBatchKeepLowConf}
+                className="rounded-full bg-brand/15 px-2.5 py-1 text-[11px] font-semibold text-brand active:bg-brand/25"
+              >
+                Keep all
+              </button>
+              <button
+                type="button"
+                onClick={onBatchDiscardLowConf}
+                className="rounded-full bg-background px-2.5 py-1 text-[11px] font-semibold text-foreground border border-border/60 active:bg-secondary"
+              >
+                Discard all
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-3 pb-4">
         {reviewItems.map((item) => {
           const match = item.pantryMatch;
           const disposition: ReviewDisposition =
             item.disposition ?? (match ? "merge" : "add_new");
-          const isLow = item.confidence < 0.8;
           const isNonFoodSuspect = !!item.possiblyNonFood;
           const resultQtyPreview =
             match && disposition === "merge"
@@ -61,15 +139,11 @@ export function ReceiptReviewStage({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    <ConfidenceChip confidence={item.confidence} />
                     {isNonFoodSuspect && (
                       <span className="rounded-full bg-violet-100 dark:bg-violet-500/15 px-2 py-px text-[10px] font-medium text-violet-800 dark:text-violet-300">
                         Possibly non-food
                         {item.nonFoodReason ? ` · ${item.nonFoodReason}` : ""}
-                      </span>
-                    )}
-                    {isLow && !isNonFoodSuspect && (
-                      <span className="rounded-full bg-amber-100 dark:bg-amber-500/15 px-2 py-px text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                        Low confidence · {Math.round(item.confidence * 100)}%
                       </span>
                     )}
                     {match && !isNonFoodSuspect && (

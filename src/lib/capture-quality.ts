@@ -3,7 +3,7 @@
  * Runs on downscaled frames (~160px edge) so it stays cheap on mobile.
  */
 
-export type CaptureIssue = "blurry" | "dark" | "low_contrast" | "too_far";
+export type CaptureIssue = "blurry" | "dark" | "low_contrast" | "too_far" | "partial";
 
 export type CaptureQuality = {
   /** Laplacian variance (higher = sharper) */
@@ -17,6 +17,8 @@ export type CaptureQuality = {
   issues: CaptureIssue[];
   /** Calm one-line guidance, or null when OK */
   message: string | null;
+  /** Short issue label for chips, e.g. "Blurry" */
+  issueLabel: string | null;
   ok: boolean;
 };
 
@@ -24,8 +26,51 @@ function luma(r: number, g: number, b: number) {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
+/** Priority order for guidance (first match wins) */
+const ISSUE_PRIORITY: CaptureIssue[] = [
+  "blurry",
+  "dark",
+  "low_contrast",
+  "partial",
+  "too_far",
+];
+
+export function qualityIssueLabel(issue: CaptureIssue): string {
+  switch (issue) {
+    case "blurry":
+      return "Blurry";
+    case "dark":
+      return "Too dark";
+    case "low_contrast":
+      return "Low contrast";
+    case "too_far":
+      return "Too far";
+    case "partial":
+      return "Partial";
+    default:
+      return "Check framing";
+  }
+}
+
+export function qualityIssueMessage(issue: CaptureIssue): string {
+  switch (issue) {
+    case "blurry":
+      return "Hold steady — text looks soft";
+    case "dark":
+      return "Need more light for clear text";
+    case "low_contrast":
+      return "Boost light so print stands out";
+    case "too_far":
+      return "Move closer — fill the frame with the receipt";
+    case "partial":
+      return "Receipt may be cut off — include full width";
+    default:
+      return "Adjust framing for a clearer shot";
+  }
+}
+
 /**
- * Analyze a video frame (or canvas) for blur / lighting / fill.
+ * Analyze a video frame (or canvas) for blur / lighting / fill / partial crop.
  * Uses a small offscreen canvas for speed.
  */
 export function analyzeCaptureQuality(
@@ -41,6 +86,7 @@ export function analyzeCaptureQuality(
     fillRatio: 0,
     issues: ["blurry", "dark"],
     message: "Hold steady and point at the receipt",
+    issueLabel: "Getting ready",
     ok: false,
   };
 
@@ -97,8 +143,7 @@ export function analyzeCaptureQuality(
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
-      const lap =
-        gray[i - w] + gray[i + w] + gray[i - 1] + gray[i + 1] - 4 * gray[i];
+      const lap = gray[i - w] + gray[i + w] + gray[i - 1] + gray[i + 1] - 4 * gray[i];
       lapSum += lap;
       lapSq += lap * lap;
       lapN += 1;
@@ -125,23 +170,44 @@ export function analyzeCaptureQuality(
   }
   const fillRatio = content / gray.length;
 
+  // Edge content: high content on left XOR right (or top) suggests partial crop
+  const edgeBand = Math.max(2, Math.floor(w * 0.12));
+  let leftEdge = 0;
+  let rightEdge = 0;
+  let leftN = 0;
+  let rightN = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < edgeBand; x++) {
+      if (Math.abs(gray[y * w + x] - bg) > 18) leftEdge += 1;
+      leftN += 1;
+    }
+    for (let x = w - edgeBand; x < w; x++) {
+      if (Math.abs(gray[y * w + x] - bg) > 18) rightEdge += 1;
+      rightN += 1;
+    }
+  }
+  const leftFill = leftN ? leftEdge / leftN : 0;
+  const rightFill = rightN ? rightEdge / rightN : 0;
+  // One side almost empty while the other is busy + decent overall fill → partial
+  const partialSide =
+    fillRatio > 0.28 &&
+    ((leftFill < 0.12 && rightFill > 0.35) || (rightFill < 0.12 && leftFill > 0.35));
+
   const issues: CaptureIssue[] = [];
 
-  // Thresholds tuned for downscaled frames (empirically calm, not noisy)
+  // Thresholds tuned for downscaled frames (calm, not noisy)
   if (sharpness < 45) issues.push("blurry");
   if (brightness < 48) issues.push("dark");
   else if (contrast < 22) issues.push("low_contrast");
   if (fillRatio < 0.22) issues.push("too_far");
+  else if (partialSide) issues.push("partial");
 
-  let message: string | null = null;
-  if (issues.includes("blurry")) {
-    message = "Hold steady — looking a little soft";
-  } else if (issues.includes("dark")) {
-    message = "A bit more light helps the text";
-  } else if (issues.includes("low_contrast")) {
-    message = "Boost the light so print stands out";
-  } else if (issues.includes("too_far")) {
-    message = "Move closer — fill the frame with the receipt";
+  let primary: CaptureIssue | null = null;
+  for (const issue of ISSUE_PRIORITY) {
+    if (issues.includes(issue)) {
+      primary = issue;
+      break;
+    }
   }
 
   return {
@@ -150,30 +216,39 @@ export function analyzeCaptureQuality(
     contrast,
     fillRatio,
     issues,
-    message,
+    message: primary ? qualityIssueMessage(primary) : null,
+    issueLabel: primary ? qualityIssueLabel(primary) : null,
     ok: issues.length === 0,
   };
 }
 
-/** Prefer navigator.vibrate when available (Android); no-op on iOS Safari */
-export function hapticShutter(): void {
+function vibrateSafe(pattern: number | number[]): void {
   try {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      // Short double-tap feel — more “camera shutter” than a single buzz
-      navigator.vibrate([10, 24, 14]);
+      navigator.vibrate(pattern);
     }
   } catch {
-    /* ignore */
+    /* ignore — iOS Safari has no vibrate */
   }
+}
+
+/** Stronger shutter feedback (Android vibrate; visual handled in UI) */
+export function hapticShutter(): void {
+  // Triple pulse feels more like a mechanical shutter than a single buzz
+  vibrateSafe([12, 30, 18, 28, 10]);
 }
 
 /** Soft success tick after a photo is queued */
 export function hapticPhotoQueued(): void {
-  try {
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(8);
-    }
-  } catch {
-    /* ignore */
-  }
+  vibrateSafe([6, 40, 12]);
+}
+
+/** Light tick for retake / discard */
+export function hapticLight(): void {
+  vibrateSafe(6);
+}
+
+/** Gentle success when processing finishes cleanly */
+export function hapticSuccess(): void {
+  vibrateSafe([10, 50, 16]);
 }

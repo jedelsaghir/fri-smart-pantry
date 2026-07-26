@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { analyzeCaptureQuality } from "./capture-quality";
+import {
+  analyzeCaptureQuality,
+  qualityIssueLabel,
+  qualityIssueMessage,
+} from "./capture-quality";
 
 describe("analyzeCaptureQuality", () => {
   it("returns empty-safe result without a real video in node", () => {
@@ -11,5 +15,15 @@ describe("analyzeCaptureQuality", () => {
     const q = analyzeCaptureQuality(fake);
     expect(q.ok).toBe(false);
     expect(q.issues.length).toBeGreaterThan(0);
+    expect(q.issueLabel).toBeTruthy();
+  });
+});
+
+describe("qualityIssue copy", () => {
+  it("covers blurry dark far partial", () => {
+    expect(qualityIssueLabel("blurry")).toMatch(/blur/i);
+    expect(qualityIssueMessage("dark")).toMatch(/light/i);
+    expect(qualityIssueMessage("too_far")).toMatch(/closer|fill/i);
+    expect(qualityIssueMessage("partial")).toMatch(/cut|width|full/i);
   });
 });

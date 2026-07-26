@@ -8,13 +8,16 @@ import { buildReceiptFromScan, readFileAsDataUrl } from "@/lib/receipts";
 import { captureAndPrepareFrame, prepareImageForOcr } from "@/lib/ocr-image";
 import {
   analyzeCaptureQuality,
+  hapticLight,
   hapticPhotoQueued,
   hapticShutter,
+  hapticSuccess,
   type CaptureQuality,
 } from "@/lib/capture-quality";
 import { getPlatform } from "@/platform";
 import type { OcrDetectResult } from "@/platform/types";
 import {
+  AUTO_ADD_CONFIDENCE,
   mergeOcrResults,
   multiPhotoErrorMessage,
   ocrLinesToDetected,
@@ -33,6 +36,8 @@ import {
   ReceiptErrorStage,
   ReceiptProcessingStage,
   ReceiptResultStage,
+  type PhotoProcessState,
+  type ScanOutcomeSummary,
 } from "./receipt-scan/ReceiptProcessingStage";
 import {
   ReceiptRemoveConfirmDialog,
@@ -74,8 +79,12 @@ export function ReceiptScanFlow({
   const [shutterPulse, setShutterPulse] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [captureQuality, setCaptureQuality] = useState<CaptureQuality | null>(null);
+  const [photoStates, setPhotoStates] = useState<PhotoProcessState[]>([]);
+  const [processPhase, setProcessPhase] = useState<"enhance" | "read" | "merge">("enhance");
+  const [outcomeSummary, setOutcomeSummary] = useState<ScanOutcomeSummary | null>(null);
 
   const receiptSavedRef = useRef(false);
+  const photosRef = useRef<CapturedPhoto[]>([]);
   const pantryToastShownRef = useRef(false);
   const ocrMetaRef = useRef<OcrMeta>({});
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -209,9 +218,13 @@ export function ReceiptScanFlow({
     setShutterPulse(false);
     setCapturing(false);
     setCaptureQuality(null);
+    setPhotoStates([]);
+    setProcessPhase("enhance");
+    setOutcomeSummary(null);
     receiptSavedRef.current = false;
     pantryToastShownRef.current = false;
     ocrMetaRef.current = {};
+    photosRef.current = [];
   };
 
   const handleClose = () => {
@@ -287,10 +300,13 @@ export function ReceiptScanFlow({
     message: string;
     next: "review" | "error";
     errorText?: string;
+    summary?: ScanOutcomeSummary | null;
   }) => {
     setResultOk(opts.ok);
     setResultMessage(opts.message);
+    setOutcomeSummary(opts.summary ?? null);
     setStep("result");
+    if (opts.ok) hapticSuccess();
     clearResultTimer();
     resultTimerRef.current = setTimeout(() => {
       if (opts.next === "error") {
@@ -299,7 +315,7 @@ export function ReceiptScanFlow({
         return;
       }
       setStep("review");
-    }, opts.ok ? 1250 : 1400);
+    }, opts.ok ? 1400 : 1500);
   };
 
   const startProcessing = async (photoList: CapturedPhoto[]) => {
@@ -308,61 +324,95 @@ export function ReceiptScanFlow({
       return;
     }
 
+    photosRef.current = photoList;
     stopCamera();
     setStep("processing");
     setErrorMessage(null);
     receiptSavedRef.current = false;
     setProcessProgress(0);
-    setProcessLabel("Enhancing photos…");
+    setProcessPhase("enhance");
+    setPhotoStates(photoList.map(() => "pending"));
+    setProcessLabel("Enhancing…");
     setProcessSub(
       photoList.length === 1
         ? "Crop · contrast · sharpen for clearer text"
-        : `Enhancing ${photoList.length} photos for OCR`
+        : `Pipeline on ${photoList.length} photos — enhance, then read`
     );
 
     try {
       const platform = getPlatform();
       const total = photoList.length;
+      const settled: OcrDetectResult[] = new Array(total);
+      const ocrJobs: Promise<void>[] = [];
+      let readDone = 0;
 
-      const enhanced: string[] = [];
-      for (let i = 0; i < photoList.length; i++) {
-        setProcessSub(`Enhancing photo ${i + 1} of ${total}`);
-        setProcessProgress(Math.round(((i + 0.4) / total) * 35));
+      // Progressive pipeline: enhance photo i, start OCR immediately, then enhance i+1
+      for (let i = 0; i < total; i++) {
+        setProcessPhase("enhance");
+        setProcessLabel(total === 1 ? "Enhancing photo…" : "Enhancing…");
+        setProcessSub(
+          total === 1
+            ? "Crop · contrast · sharpen for clearer text"
+            : `Photo ${i + 1} of ${total} · enhance then read`
+        );
+        setPhotoStates((prev) => {
+          const next = [...prev];
+          next[i] = "enhancing";
+          return next;
+        });
+        // 0–35% for enhance wave
+        setProcessProgress(Math.round(((i + 0.35) / total) * 35));
+
+        let enhanced = photoList[i].dataUrl;
         try {
-          const ready = await prepareImageForOcr(photoList[i].dataUrl, {
+          enhanced = await prepareImageForOcr(photoList[i].dataUrl, {
             enhance: true,
             maxEdge: 1600,
             quality: 0.88,
           });
-          enhanced.push(ready);
         } catch {
-          enhanced.push(photoList[i].dataUrl);
+          enhanced = photoList[i].dataUrl;
         }
+
+        setPhotoStates((prev) => {
+          const next = [...prev];
+          next[i] = "reading";
+          return next;
+        });
+        setProcessPhase("read");
+        setProcessLabel(total === 1 ? "Reading receipt…" : "Reading photos…");
+        setProcessSub(
+          total === 1
+            ? "Vision OCR on your photo"
+            : `OCR running · ${readDone} of ${total} finished`
+        );
+
+        const idx = i;
+        const job = platform.ocr.detectFromImage(enhanced).then((result) => {
+          settled[idx] = result;
+          readDone += 1;
+          setPhotoStates((prev) => {
+            const next = [...prev];
+            next[idx] = result.ok ? "done" : "error";
+            return next;
+          });
+          setProcessProgress(35 + Math.round((readDone / total) * 50));
+          setProcessSub(
+            total === 1
+              ? "Vision OCR on your photo"
+              : `Read ${readDone} of ${total} photos`
+          );
+        });
+        ocrJobs.push(job);
       }
 
-      setProcessLabel("Reading receipt…");
-      setProcessSub(
-        total === 1 ? "Vision OCR on your photo" : `OCR on ${total} photos · merging lines`
-      );
-      setProcessProgress(40);
+      await Promise.all(ocrJobs);
 
-      let done = 0;
-      const settled = await Promise.all(
-        enhanced.map(async (dataUrl) => {
-          const result = await platform.ocr.detectFromImage(dataUrl);
-          done += 1;
-          setProcessProgress(40 + Math.round((done / total) * 50));
-          setProcessSub(
-            total === 1 ? "Vision OCR on your photo" : `Read ${done} of ${total} photos`
-          );
-          return result;
-        })
-      );
-
-      setProcessLabel("Matching your pantry…");
-      setProcessSub("Fuzzy match · merge overlaps · split review");
-      setProcessProgress(95);
-      await new Promise((r) => setTimeout(r, 320));
+      setProcessPhase("merge");
+      setProcessLabel("Merging & matching…");
+      setProcessSub("Overlap merge · fuzzy match · non-pantry filter");
+      setProcessProgress(92);
+      await new Promise((r) => setTimeout(r, 280));
 
       const merged = mergeOcrResults(settled as OcrDetectResult[]);
 
@@ -394,6 +444,11 @@ export function ReceiptScanFlow({
         excludedItems,
       } = splitAutoAndReview(results, pantryItems);
 
+      const autoUpdated = autoItems.filter(
+        (i) => i.pantryMatch && (i.disposition === "merge" || i.disposition === "update")
+      ).length;
+      const autoAdded = autoItems.length - autoUpdated;
+
       if (autoItems.length > 0) {
         onItemsAdded(
           autoItems.map(({ id, confidence, ...rest }) => rest),
@@ -419,27 +474,47 @@ export function ReceiptScanFlow({
       const pantryBound = results.filter((r) => !excludedItems.some((e) => e.id === r.id));
       setDetected(pantryBound);
 
+      const summary: ScanOutcomeSummary = {
+        added: autoAdded,
+        updated: autoUpdated,
+        review: ambiguous.length,
+        skipped: skippedNonFood,
+      };
+
       if (ambiguous.length > 0) {
         setReviewItems(ambiguous);
         const parts: string[] = [];
-        if (autoItems.length > 0) parts.push(`Added ${autoItems.length}`);
+        if (autoAdded > 0) parts.push(`Added ${autoAdded}`);
+        if (autoUpdated > 0) parts.push(`Updated ${autoUpdated}`);
         parts.push(`${ambiguous.length} to review`);
         if (skippedNonFood > 0) parts.push(`${skippedNonFood} skipped`);
         showResultThen({
           ok: true,
           message: parts.join(" · "),
           next: "review",
+          summary,
         });
       } else {
+        setOutcomeSummary(summary);
         setResultOk(true);
         setResultMessage(
           autoItems.length > 0
-            ? `Added ${autoItems.length} item${autoItems.length === 1 ? "" : "s"}` +
-                (skippedNonFood > 0 ? ` · ${skippedNonFood} non-food skipped` : "")
+            ? [
+                autoAdded > 0
+                  ? `Added ${autoAdded} item${autoAdded === 1 ? "" : "s"}`
+                  : null,
+                autoUpdated > 0
+                  ? `Updated ${autoUpdated}`
+                  : null,
+                skippedNonFood > 0 ? `${skippedNonFood} non-food skipped` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "Pantry updated"
             : skippedNonFood > 0
               ? "No pantry items on this receipt"
               : "Nothing to add"
         );
+        hapticSuccess();
         setStep("result");
         clearResultTimer();
         resultTimerRef.current = setTimeout(() => {
@@ -450,7 +525,7 @@ export function ReceiptScanFlow({
             onNavigateToPantry?.();
             handleClose();
           }
-        }, 1250);
+        }, 1450);
       }
     } catch (err) {
       const text =
@@ -521,7 +596,11 @@ export function ReceiptScanFlow({
           toast.error("Could not capture frame");
           return;
         }
-        setPhotos((prev) => [...prev, { id: createPhotoId(), dataUrl: prepared }]);
+        setPhotos((prev) => {
+          const next = [...prev, { id: createPhotoId(), dataUrl: prepared }];
+          photosRef.current = next;
+          return next;
+        });
         hapticPhotoQueued();
       } catch {
         toast.error("Could not capture frame");
@@ -532,7 +611,22 @@ export function ReceiptScanFlow({
   };
 
   const removePhoto = (id: string) => {
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    hapticLight();
+    setPhotos((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      photosRef.current = next;
+      return next;
+    });
+  };
+
+  const retakeLastPhoto = () => {
+    hapticLight();
+    setPhotos((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.slice(0, -1);
+      photosRef.current = next;
+      return next;
+    });
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -555,7 +649,11 @@ export function ReceiptScanFlow({
       if (next.length === 0) {
         toast.error("No images selected");
       } else {
-        setPhotos((prev) => [...prev, ...next]);
+        setPhotos((prev) => {
+          const merged = [...prev, ...next];
+          photosRef.current = merged;
+          return merged;
+        });
         toast.success(
           next.length === 1 ? "Photo added" : `${next.length} photos added`,
           { description: "Tap Process Receipt when ready." }
@@ -580,6 +678,37 @@ export function ReceiptScanFlow({
     if (!pendingRemoveReviewId) return;
     setReviewItems((prev) => prev.filter((item) => item.id !== pendingRemoveReviewId));
     setPendingRemoveReviewId(null);
+  };
+
+  const batchKeepNonFood = () => {
+    setReviewItems((prev) =>
+      prev.map((i) =>
+        i.possiblyNonFood
+          ? { ...i, possiblyNonFood: false, disposition: "add_new" as const }
+          : i
+      )
+    );
+  };
+  const batchDiscardNonFood = () => {
+    setReviewItems((prev) => prev.filter((i) => !i.possiblyNonFood));
+  };
+  const batchKeepLowConf = () => {
+    // Keep: clear nothing — items stay for confirm. Soft nudge: ensure disposition set.
+    setReviewItems((prev) =>
+      prev.map((i) =>
+        !i.possiblyNonFood && i.confidence < AUTO_ADD_CONFIDENCE
+          ? { ...i, disposition: i.disposition ?? (i.pantryMatch ? "merge" : "add_new") }
+          : i
+      )
+    );
+    toast.message("Kept low-confidence items", {
+      description: "Confirm when ready — edit names if needed.",
+    });
+  };
+  const batchDiscardLowConf = () => {
+    setReviewItems((prev) =>
+      prev.filter((i) => i.possiblyNonFood || i.confidence >= AUTO_ADD_CONFIDENCE)
+    );
   };
 
   const confirmReview = () => {
@@ -684,6 +813,7 @@ export function ReceiptScanFlow({
               onProcess={() => void startProcessing(photos)}
               onUpload={(e) => void handleUpload(e)}
               onRemovePhoto={removePhoto}
+              onRetakeLast={retakeLastPhoto}
             />
           )}
 
@@ -693,11 +823,17 @@ export function ReceiptScanFlow({
               processSub={processSub}
               processProgress={processProgress}
               photos={photos}
+              photoStates={photoStates}
+              phase={processPhase}
             />
           )}
 
           {step === "result" && (
-            <ReceiptResultStage resultOk={resultOk} resultMessage={resultMessage} />
+            <ReceiptResultStage
+              resultOk={resultOk}
+              resultMessage={resultMessage}
+              summary={outcomeSummary}
+            />
           )}
 
           {step === "error" && (
@@ -705,8 +841,10 @@ export function ReceiptScanFlow({
               errorMessage={errorMessage}
               photoCount={photoCount}
               onRetry={handleRetryFromError}
+              onRetryProcess={() => void startProcessing(photosRef.current.length ? photosRef.current : photos)}
               onClearAndRetry={() => {
                 setPhotos([]);
+                photosRef.current = [];
                 handleRetryFromError();
               }}
             />
@@ -717,6 +855,10 @@ export function ReceiptScanFlow({
               reviewItems={reviewItems}
               onUpdateItem={updateReviewItem}
               onRemoveItem={removeReviewItem}
+              onBatchKeepNonFood={batchKeepNonFood}
+              onBatchDiscardNonFood={batchDiscardNonFood}
+              onBatchKeepLowConf={batchKeepLowConf}
+              onBatchDiscardLowConf={batchDiscardLowConf}
             />
           )}
 

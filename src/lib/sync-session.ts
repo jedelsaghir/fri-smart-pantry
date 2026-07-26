@@ -2,14 +2,16 @@
  * Client-side sync session — remembers credentials for background push
  * (sessionStorage only; never long-lived cookies / localStorage).
  *
- * Plain password is held only for the browser tab session so multi-device
- * household push/pull can re-auth. It is never written to localStorage accounts.
+ * H-02: When sessionStorage is empty after tab restore, cloud push stops.
+ * We surface `needsSyncPassword()` so Settings can re-prompt calmly.
+ * Plain password is never written to localStorage accounts (hashed only).
  */
 
 import type { SyncCreds } from "@/lib/household-sync";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 const SESSION_CREDS_KEY = "friggg-sync-creds";
+const SYNC_NEEDS_PASSWORD_KEY = "friggg-sync-needs-password";
 
 export function saveSyncCreds(creds: SyncCreds): void {
   try {
@@ -20,6 +22,7 @@ export function saveSyncCreds(creds: SyncCreds): void {
         password: creds.password,
       })
     );
+    sessionStorage.removeItem(SYNC_NEEDS_PASSWORD_KEY);
   } catch {
     /* ignore */
   }
@@ -28,8 +31,35 @@ export function saveSyncCreds(creds: SyncCreds): void {
 export function clearSyncCreds(): void {
   try {
     sessionStorage.removeItem(SESSION_CREDS_KEY);
+    sessionStorage.removeItem(SYNC_NEEDS_PASSWORD_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+/** Mark that the user is signed in but must re-enter password for cloud sync. */
+export function markSyncNeedsPassword(): void {
+  try {
+    sessionStorage.setItem(SYNC_NEEDS_PASSWORD_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * True when local auth session exists but sync credentials are missing
+ * (typical after new tab / browser restart with hashed accounts only).
+ */
+export function needsSyncPassword(): boolean {
+  try {
+    if (loadSyncCreds()) return false;
+    if (sessionStorage.getItem(SYNC_NEEDS_PASSWORD_KEY) === "1") return true;
+    // Signed-in locally but no session password
+    const loggedIn = localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === "true";
+    const userId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    return Boolean(loggedIn && userId);
+  } catch {
+    return false;
   }
 }
 
@@ -55,7 +85,10 @@ export function loadSyncCreds(): SyncCreds | null {
   try {
     const userId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     const accountsRaw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-    if (!userId || !accountsRaw) return null;
+    if (!userId || !accountsRaw) {
+      markSyncNeedsPasswordIfSignedIn();
+      return null;
+    }
     const accounts = JSON.parse(accountsRaw) as Array<{
       id: string;
       email?: string;
@@ -74,5 +107,16 @@ export function loadSyncCreds(): SyncCreds | null {
     /* ignore */
   }
 
+  markSyncNeedsPasswordIfSignedIn();
   return null;
+}
+
+function markSyncNeedsPasswordIfSignedIn(): void {
+  try {
+    if (localStorage.getItem(STORAGE_KEYS.LOGGED_IN) === "true") {
+      markSyncNeedsPassword();
+    }
+  } catch {
+    /* ignore */
+  }
 }

@@ -41,11 +41,14 @@ describe("hashPassword", () => {
 describe("getAuthMode", () => {
   const prev = import.meta.env.VITE_AUTH_MODE;
   afterEach(() => {
-    // restore
     (import.meta.env as { VITE_AUTH_MODE?: string }).VITE_AUTH_MODE = prev;
   });
-  it("defaults to demo", () => {
-    (import.meta.env as { VITE_AUTH_MODE?: string }).VITE_AUTH_MODE = undefined;
+  it("respects explicit demo", () => {
+    (import.meta.env as { VITE_AUTH_MODE?: string }).VITE_AUTH_MODE = "demo";
     expect(getAuthMode()).toBe("demo");
+  });
+  it("respects explicit production", () => {
+    (import.meta.env as { VITE_AUTH_MODE?: string }).VITE_AUTH_MODE = "production";
+    expect(getAuthMode()).toBe("production");
   });
 });

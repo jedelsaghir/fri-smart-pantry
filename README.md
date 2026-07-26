@@ -36,8 +36,15 @@ Full breakdown: [`docs/AUTH.md`](docs/AUTH.md).
 Do not treat this as full production identity (no email verify / OAuth yet). For family pantry data with shared passwords it is a practical step up from plain-text local accounts.
 
 ```bash
-# Stricter client behaviour (no silent account auto-create on sign-in)
-export VITE_AUTH_MODE=production
+# Production builds default to production auth (no silent auto-create).
+# Force demo auto-create even on a prod host:
+export VITE_AUTH_MODE=demo
+
+# Optional: show Global Admin panel for the designated operator email
+export VITE_ENABLE_GLOBAL_ADMIN=1
+
+# Optional: enable Family drawer “simulate member” (debug only)
+export VITE_FAMILY_SIMULATE=1
 ```
 
 ### Pluggable platform (OCR / sync / push)

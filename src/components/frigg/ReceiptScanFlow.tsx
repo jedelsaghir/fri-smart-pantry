@@ -87,10 +87,20 @@ export function ReceiptScanFlow({
   const [photoStates, setPhotoStates] = useState<PhotoProcessState[]>([]);
   const [processPhase, setProcessPhase] = useState<"enhance" | "read" | "merge">("enhance");
   const [outcomeSummary, setOutcomeSummary] = useState<ScanOutcomeSummary | null>(null);
+  /** H-11: sticky camera-denied — stop re-prompt loops in installed PWAs */
+  const [cameraDeniedSticky, setCameraDeniedSticky] = useState(() => {
+    try {
+      return sessionStorage.getItem("friggg-camera-denied") === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const receiptSavedRef = useRef(false);
   const photosRef = useRef<CapturedPhoto[]>([]);
   const pantryToastShownRef = useRef(false);
+  /** scanItemId → pantry row id from last onItemsAdded (H-04) */
+  const pantryIdByScanIdRef = useRef<Map<string, string>>(new Map());
   const ocrMetaRef = useRef<OcrMeta>({});
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -153,28 +163,52 @@ export function ReceiptScanFlow({
         }
       }
       if (!cancelled && getPlatform().ocr.supportsLiveCamera()) {
+        // H-11: don't re-request after sticky deny — library-only mode
+        let denied = false;
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 1920 },
-            },
-          });
-          if (cancelled) {
-            stream.getTracks().forEach((t) => t.stop());
-            return;
-          }
-          streamRef.current = stream;
-          setCameraOn(true);
-          setCameraError(null);
+          denied = sessionStorage.getItem("friggg-camera-denied") === "1";
         } catch {
+          denied = false;
+        }
+        if (denied) {
           if (!cancelled) {
-            setCameraError(
-              "Camera permission denied or unavailable. You can still add photos from your library."
-            );
+            setCameraDeniedSticky(true);
             setCameraOn(false);
+            setCameraError(
+              "Camera access was denied earlier. Use Add from Library, or reset permission in browser settings."
+            );
+          }
+        } else {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1280 },
+                height: { ideal: 1920 },
+              },
+            });
+            if (cancelled) {
+              stream.getTracks().forEach((t) => t.stop());
+              return;
+            }
+            streamRef.current = stream;
+            setCameraOn(true);
+            setCameraError(null);
+            setCameraDeniedSticky(false);
+          } catch {
+            if (!cancelled) {
+              try {
+                sessionStorage.setItem("friggg-camera-denied", "1");
+              } catch {
+                /* ignore */
+              }
+              setCameraDeniedSticky(true);
+              setCameraError(
+                "Camera permission denied. You can still add photos from your library."
+              );
+              setCameraOn(false);
+            }
           }
         }
       }
@@ -309,7 +343,12 @@ export function ReceiptScanFlow({
 
   const finishExpiryAssist = (signals: ExpiryAssistSignal[]) => {
     if (signals.length > 0) {
-      onExpirySignals?.(signals);
+      // Attach pantry row ids when we recorded them from addScannedItems
+      const enriched = signals.map((s) => ({
+        ...s,
+        pantryItemId: s.pantryItemId || pantryIdByScanIdRef.current.get(s.scanItemId),
+      }));
+      onExpirySignals?.(enriched);
       const photoN = signals.filter((s) => s.labelPhotoDataUrl).length;
       const daysN = signals.filter((s) => typeof s.daysLeft === "number").length;
       const parts: string[] = [];
@@ -478,10 +517,16 @@ export function ReceiptScanFlow({
       const autoAdded = autoItems.length - autoUpdated;
 
       if (autoItems.length > 0) {
-        onItemsAdded(
+        const mapped = onItemsAdded(
           autoItems.map(({ id, confidence, ...rest }) => rest),
           { silent: true }
         );
+        if (Array.isArray(mapped)) {
+          mapped.forEach((row) => {
+            const scan = autoItems[row.scanIndex];
+            if (scan) pantryIdByScanIdRef.current.set(scan.id, row.pantryItemId);
+          });
+        }
       }
 
       setProcessProgress(100);
@@ -576,6 +621,12 @@ export function ReceiptScanFlow({
       setCameraError("Camera not available in this browser. Use Add from Library instead.");
       return;
     }
+    if (cameraDeniedSticky) {
+      setCameraError(
+        "Camera was denied earlier this session. Use Add from Library, or allow camera in browser settings and reopen Scan."
+      );
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -587,9 +638,21 @@ export function ReceiptScanFlow({
       });
       streamRef.current = stream;
       setCameraOn(true);
+      setCameraDeniedSticky(false);
+      try {
+        sessionStorage.removeItem("friggg-camera-denied");
+      } catch {
+        /* ignore */
+      }
     } catch {
+      try {
+        sessionStorage.setItem("friggg-camera-denied", "1");
+      } catch {
+        /* ignore */
+      }
+      setCameraDeniedSticky(true);
       setCameraError(
-        "Camera permission denied or unavailable. You can still add photos from your library."
+        "Camera permission denied. You can still add photos from your library."
       );
       setCameraOn(false);
     }
@@ -754,7 +817,13 @@ export function ReceiptScanFlow({
 
     const toAdd = reviewItems.map(({ id, confidence, ...rest }) => rest);
     if (toAdd.length > 0) {
-      onItemsAdded(toAdd, { silent: true });
+      const mapped = onItemsAdded(toAdd, { silent: true });
+      if (Array.isArray(mapped)) {
+        mapped.forEach((row) => {
+          const scan = reviewItems[row.scanIndex];
+          if (scan) pantryIdByScanIdRef.current.set(scan.id, row.pantryItemId);
+        });
+      }
     }
 
     const reviewIds = new Set(reviewItems.map((r) => r.id));

@@ -40,7 +40,7 @@ export function FamilyDrawer({
   householdName: string;
   members: FamilyMember[];
   activityLog: ActivityLogEntry[];
-  onSimulateMember: (name: string) => void;
+  onSimulateMember?: (name: string) => void;
   onManageFamily: () => void;
   isGlobalAdmin?: boolean;
   onOpenGlobalAdmin?: () => void;
@@ -64,14 +64,9 @@ export function FamilyDrawer({
               <div className="text-sm font-semibold mb-2">Members</div>
               <div className="space-y-2">
                 {members.map((m) => (
-                  <button
+                  <div
                     key={m.id}
-                    type="button"
-                    onClick={() => {
-                      onSimulateMember(m.name);
-                      onOpenChange(false);
-                    }}
-                    className="touch-target w-full flex items-center gap-3 rounded-2xl bg-secondary/60 px-4 py-3 text-left active:bg-secondary/80 transition"
+                    className="flex items-center gap-3 rounded-2xl bg-secondary/60 px-4 py-3"
                   >
                     <div className="text-2xl" aria-hidden>
                       {m.emoji}
@@ -79,16 +74,47 @@ export function FamilyDrawer({
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{m.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {m.isYou ? "Online now" : "Active recently"}
+                        {m.isYou
+                          ? "You"
+                          : m.status === "pending"
+                            ? "Invite pending"
+                            : m.email
+                              ? m.email
+                              : "Household member"}
                       </div>
                     </div>
-                    <div className="text-xs text-[var(--color-fresh)] shrink-0">Simulate</div>
-                  </button>
+                  </div>
                 ))}
               </div>
-              <p className="text-[11px] text-muted-foreground mt-2">
-                Demo: tap a member to simulate them updating the shared pantry.
+              <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+                Real multi-device updates use Manage Family invites and cloud sync — not simulated
+                taps.
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  onManageFamily();
+                  onOpenChange(false);
+                }}
+                className="mt-2 w-full rounded-2xl border border-border/60 bg-card py-2.5 text-xs font-semibold active:bg-secondary/60"
+              >
+                Manage family &amp; invites
+              </button>
+              {/* H-06: optional demo sim only when parent still wires it */}
+              {onSimulateMember &&
+                String(import.meta.env?.VITE_FAMILY_SIMULATE || "").toLowerCase() === "1" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const other = members.find((m) => !m.isYou);
+                      if (other) onSimulateMember(other.name);
+                      onOpenChange(false);
+                    }}
+                    className="mt-2 w-full text-[11px] text-muted-foreground underline"
+                  >
+                    Demo: simulate member update
+                  </button>
+                )}
             </div>
 
             <div>

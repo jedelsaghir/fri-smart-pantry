@@ -91,8 +91,9 @@ export function GlobalAdminPanel({
       onForceSignedOut?.();
       return;
     }
-    toast.success("Force logout simulated", {
-      description: `${target.name || target.email} will need to sign in again (simulated).`,
+    // H-07: honest copy — this device only; no remote session revoke
+    toast.message("Local flag only", {
+      description: `${target.name || target.email}: marked for re-sign-in on this browser only — not a server-side session revoke.`,
     });
     refresh();
   };
@@ -114,7 +115,7 @@ export function GlobalAdminPanel({
               Admin Panel
             </h1>
             <p className="truncate text-[13px] text-muted-foreground tracking-[-0.01em]">
-              All registered users · App-wide
+              This device only · not a multi-tenant admin
             </p>
           </div>
           <div

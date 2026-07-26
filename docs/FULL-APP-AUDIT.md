@@ -56,6 +56,27 @@ Grouped by severity (Critical → Nit). IDs are stable for tracking.
 
 ### High
 
+> **Progress (High pass):** All H-01…H-14 addressed in code. Status column: **Done**.
+
+| ID | Status | Fix summary |
+|----|--------|-------------|
+| **H-01** | **Done** | `getAuthMode()`: PROD defaults to production; explicit `VITE_AUTH_MODE=demo` required for auto-create |
+| **H-02** | **Done** | `needsSyncPassword()` + Settings amber banner; Sync now asks for re-sign-in when session password missing |
+| **H-03** | **Done** | Deterministic `getDefaultDaysLeft` (no Math.random) |
+| **H-04** | **Done** | `addScannedItems` returns pantry ids; expiry signals prefer `pantryItemId` |
+| **H-05** | **Done** | Expiry assist skip-primary copy; honest “no auto-read dates” |
+| **H-06** | **Done** | Family drawer no longer simulates by default; Manage Family primary; sim only with `VITE_FAMILY_SIMULATE=1` |
+| **H-07** | **Done** | Force logout honest “local flag only”; admin panel gated with `VITE_ENABLE_GLOBAL_ADMIN` (+ DEV) |
+| **H-08** | **Done** | Memory backend `multiDeviceWarning` (prior must-fix) + Settings surface |
+| **H-09** | **Done** | ~20-char invite codes; 7-day expiry; rate limits on resolve/accept |
+| **H-10** | **Done** | `ocr-serverfn-split.test.ts` asserts thin functions + server helpers |
+| **H-11** | **Done** | Sticky `friggg-camera-denied` session flag; library-only after deny |
+| **H-12** | **Done** | Trailing push + `ok:false busy` (prior must-fix) |
+| **H-13** | **Done** | Extracted `PantryEmptyState`; PantryScreen reduced (~880 lines) |
+| **H-14** | **Done** | In-process rate limits on pull/push/invite/OCR (`rate-limit.server.ts`) |
+
+#### Original High descriptions (reference)
+
 | ID | Area | Type | Description | Where | Impact | Suggested fix |
 |----|------|------|-------------|-------|--------|---------------|
 | **H-01** | Auth | Shortcoming | **Default `VITE_AUTH_MODE=demo`** auto-creates accounts on unknown email sign-in. Easy to ship “prod” without flipping the flag. | `auth.ts` `getAuthMode`; `family.ts` `signInWithAccount` | Account squatting / unexpected auto-owners | Default production on Lovable prod; require explicit demo flag |

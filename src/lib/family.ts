@@ -40,10 +40,13 @@ export type PendingInviteContext = {
   householdName: string;
 };
 
-/** Short unique invite code (URL-safe) */
+/**
+ * Unique invite code (URL-safe). H-09: longer codes reduce guessing risk.
+ * ~20 chars base36 ≈ strong enough for household invite links.
+ */
 export function generateInviteCode(): string {
-  const part = () => Math.random().toString(36).slice(2, 8);
-  return `${part()}${part()}`.slice(0, 10);
+  const part = () => Math.random().toString(36).slice(2, 10);
+  return `${part()}${part()}${part()}`.slice(0, 20);
 }
 
 export function createMemberId(): string {

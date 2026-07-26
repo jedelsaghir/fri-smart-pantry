@@ -69,29 +69,31 @@ export function getDefaultMinStock(name: string): number {
   return 2;
 }
 
-/** Realistic default fridge shelf life (days) for newly scanned / added items */
+/**
+ * Deterministic default shelf life (days) — H-03: no Math.random().
+ * Same name + storage always yields the same baseline so alerts stay stable.
+ */
 export function getDefaultDaysLeft(name: string, targetStorage: StorageKey = "fridge"): number {
   const lower = name.toLowerCase();
   const isFreezer = targetStorage === "freezer";
+  const isPantry = targetStorage === "pantry";
 
   // Meats / proteins
   if (lower.includes("chicken") || lower.includes("thigh") || lower.includes("breast")) {
-    return isFreezer ? 120 + Math.floor(Math.random() * 30) : 4 + Math.floor(Math.random() * 2);
+    return isFreezer ? 180 : 4;
   }
   if (lower.includes("beef") || lower.includes("steak") || lower.includes("ground")) {
-    return isFreezer ? 150 : 3 + Math.floor(Math.random() * 2);
+    return isFreezer ? 150 : 3;
   }
   if (lower.includes("fish") || lower.includes("salmon") || lower.includes("shrimp")) {
-    return isFreezer ? 90 : 2 + Math.floor(Math.random() * 1);
+    return isFreezer ? 90 : 2;
   }
 
   // Dairy
-  if (lower.includes("milk")) return isFreezer ? 90 : 12 + Math.floor(Math.random() * 4);
-  if (lower.includes("yogurt") || lower.includes("greek"))
-    return isFreezer ? 75 : 8 + Math.floor(Math.random() * 4);
-  if (lower.includes("cheese") || lower.includes("cheddar"))
-    return isFreezer ? 180 : 18 + Math.floor(Math.random() * 6);
-  if (lower.includes("egg")) return isFreezer ? 180 : 18 + Math.floor(Math.random() * 6);
+  if (lower.includes("milk")) return isFreezer ? 90 : 12;
+  if (lower.includes("yogurt") || lower.includes("greek")) return isFreezer ? 75 : 10;
+  if (lower.includes("cheese") || lower.includes("cheddar")) return isFreezer ? 180 : 21;
+  if (lower.includes("egg")) return isFreezer ? 180 : 21;
 
   // Produce
   if (
@@ -100,21 +102,18 @@ export function getDefaultDaysLeft(name: string, targetStorage: StorageKey = "fr
     lower.includes("herb") ||
     lower.includes("basil")
   ) {
-    return isFreezer ? 180 : 4 + Math.floor(Math.random() * 3);
+    return isFreezer ? 180 : 5;
   }
-  if (lower.includes("tomato") || lower.includes("cherry"))
-    return isFreezer ? 120 : 5 + Math.floor(Math.random() * 3);
-  if (lower.includes("avocado")) return isFreezer ? 90 : 4 + Math.floor(Math.random() * 2);
-  if (lower.includes("berry") || lower.includes("frozen"))
-    return isFreezer ? 200 : 5 + Math.floor(Math.random() * 3);
+  if (lower.includes("tomato") || lower.includes("cherry")) return isFreezer ? 120 : 6;
+  if (lower.includes("avocado")) return isFreezer ? 90 : 4;
+  if (lower.includes("berry") || lower.includes("frozen")) return isFreezer ? 200 : 5;
 
   // Pantry staples
-  if (lower.includes("bread")) return isFreezer ? 120 : 6 + Math.floor(Math.random() * 3);
-  if (lower.includes("pasta") || lower.includes("rice")) return 45 + Math.floor(Math.random() * 15);
-  if (lower.includes("oil")) return 120 + Math.floor(Math.random() * 30);
+  if (lower.includes("bread")) return isFreezer ? 120 : 6;
+  if (lower.includes("pasta") || lower.includes("rice")) return isPantry || isFreezer ? 180 : 45;
+  if (lower.includes("oil")) return 180;
 
-  const base = isFreezer ? 120 : 7 + Math.floor(Math.random() * 5);
-  return Math.max(1, base);
+  return isFreezer ? 120 : isPantry ? 90 : 7;
 }
 
 /** Days to add to expiration when moving an item into the freezer */
@@ -368,13 +367,22 @@ export function usePantry(options: UsePantryOptions = {}) {
    *   - add_new: always create a new row
    * P1-8: set latestPrice on matching items.
    */
+  /**
+   * Add scanned items. Returns pantry item ids touched (created or merged) in
+   * the same order as `scanned` so expiry photos can attach by id (H-04).
+   */
   const addScannedItems = useCallback(
-    (scanned: ScannedItemInput[], options: { silent?: boolean } = {}) => {
-      if (scanned.length === 0) return;
+    (
+      scanned: ScannedItemInput[],
+      options: { silent?: boolean } = {}
+    ): Array<{ scanIndex: number; pantryItemId: string; storage: StorageKey }> => {
+      if (scanned.length === 0) return [];
 
       let mergedCount = 0;
       let updatedCount = 0;
       let createdCount = 0;
+      const results: Array<{ scanIndex: number; pantryItemId: string; storage: StorageKey }> =
+        [];
 
       setItems((prev) => {
         let next: PantryItemsByStorage = {
@@ -445,6 +453,11 @@ export function usePantry(options: UsePantryOptions = {}) {
                 };
               }
 
+              results.push({
+                scanIndex: index,
+                pantryItemId: matchId,
+                storage: target,
+              });
               if (disposition === "update") updatedCount += 1;
               else mergedCount += 1;
 
@@ -478,11 +491,31 @@ export function usePantry(options: UsePantryOptions = {}) {
               [target]: [...next[target], newItem],
             };
             createdCount += 1;
+            results.push({
+              scanIndex: index,
+              pantryItemId: newItem.id,
+              storage: target,
+            });
           } else {
             const beforeLen = next[target].length;
             next = applyIncomingToStorage(next, target, newItem, { mergePrice: true });
-            if (next[target].length === beforeLen) mergedCount += 1;
-            else createdCount += 1;
+            if (next[target].length === beforeLen) {
+              mergedCount += 1;
+              // Merged into existing — find by name+unit
+              const hit = next[target].find((i) => sameProduct(i, newItem));
+              results.push({
+                scanIndex: index,
+                pantryItemId: hit?.id || newItem.id,
+                storage: target,
+              });
+            } else {
+              createdCount += 1;
+              results.push({
+                scanIndex: index,
+                pantryItemId: newItem.id,
+                storage: target,
+              });
+            }
           }
 
           next = applyPriceToMatchingItems(
@@ -520,6 +553,7 @@ export function usePantry(options: UsePantryOptions = {}) {
             ? `added ${createdCount}, restocked ${mergedCount + updatedCount}`
             : `added ${count} item${count > 1 ? "s" : ""}`;
       onActivity?.("You", activity);
+      return results;
     },
     [onActivity]
   );
@@ -527,12 +561,13 @@ export function usePantry(options: UsePantryOptions = {}) {
   const dismissBanner = useCallback(() => setAddedBanner(null), []);
 
   /**
-   * Attach post-scan label photos / days-left to pantry rows matched by name+unit+storage.
-   * Prefer rows in the signal's storage; fall back to any storage with same product.
+   * Attach post-scan label photos / days-left.
+   * H-04: prefer pantryItemId when present; fall back to name+unit+storage.
    */
   const applyExpirySignals = useCallback(
     (
       signals: Array<{
+        pantryItemId?: string;
         name: string;
         unit: string;
         storage: StorageKey;
@@ -559,22 +594,36 @@ export function usePantry(options: UsePantryOptions = {}) {
           }
           if (Object.keys(patch).length === 0) continue;
 
-          const tryMatch = (list: PantryItem[]): number =>
-            list.findIndex((i) => sameProduct(i, { name: signal.name, unit: signal.unit }));
-
-          // Prefer target storage, then any
           let foundStorage: StorageKey | null = null;
-          let idx = tryMatch(next[signal.storage]);
-          if (idx >= 0) foundStorage = signal.storage;
-          else {
+          let idx = -1;
+
+          if (signal.pantryItemId) {
             for (const st of ["fridge", "freezer", "pantry"] as StorageKey[]) {
-              idx = tryMatch(next[st]);
-              if (idx >= 0) {
+              const i = next[st].findIndex((row) => row.id === signal.pantryItemId);
+              if (i >= 0) {
                 foundStorage = st;
+                idx = i;
                 break;
               }
             }
           }
+
+          if (foundStorage == null) {
+            const tryMatch = (list: PantryItem[]): number =>
+              list.findIndex((i) => sameProduct(i, { name: signal.name, unit: signal.unit }));
+            idx = tryMatch(next[signal.storage]);
+            if (idx >= 0) foundStorage = signal.storage;
+            else {
+              for (const st of ["fridge", "freezer", "pantry"] as StorageKey[]) {
+                idx = tryMatch(next[st]);
+                if (idx >= 0) {
+                  foundStorage = st;
+                  break;
+                }
+              }
+            }
+          }
+
           if (foundStorage == null || idx < 0) continue;
           next[foundStorage] = next[foundStorage].map((item, i) =>
             i === idx ? { ...item, ...patch } : item

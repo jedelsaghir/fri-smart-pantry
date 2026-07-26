@@ -209,21 +209,22 @@ export function ReceiptExpiryAssistStage({
       </div>
 
       <div className="mt-6 space-y-2">
-        <button
-          type="button"
-          onClick={() => finish(false)}
-          className="w-full rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition flex items-center justify-center gap-2"
-        >
-          <Check className="size-4" />
-          Save &amp; finish
-        </button>
+        {/* H-05: Skip is the primary, calm action — notes are optional */}
         <button
           type="button"
           onClick={() => finish(true)}
+          className="w-full rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition flex items-center justify-center gap-2"
+        >
+          <SkipForward className="size-4" />
+          {EXPIRY_ASSIST_COPY.skipPrimary}
+        </button>
+        <button
+          type="button"
+          onClick={() => finish(false)}
           className="w-full py-2.5 text-sm font-medium text-muted-foreground active:text-foreground inline-flex items-center justify-center gap-1.5"
         >
-          <SkipForward className="size-3.5" />
-          Skip — finish without photos
+          <Check className="size-3.5" />
+          {EXPIRY_ASSIST_COPY.saveSecondary}
         </button>
       </div>
     </div>

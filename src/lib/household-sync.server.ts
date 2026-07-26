@@ -17,7 +17,11 @@ import {
   type HouseholdSyncAccount,
   type HouseholdSyncSnapshot,
 } from "@/lib/household-sync";
+import { checkRateLimit, rateKey } from "@/lib/rate-limit.server";
 import type { FamilyMember } from "@/types/pantry";
+
+/** Invite links expire after 7 days (H-09) */
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type StoredRecord = {
   passwordHash: string;
@@ -300,6 +304,13 @@ export function validatePullInput(data: PullInput): PullInput {
 export async function runPullHouseholdSync(
   data: PullInput
 ): Promise<{ ok: true; snapshot: HouseholdSyncSnapshot | null } | { ok: false; reason: string }> {
+  const rl = checkRateLimit(rateKey("pull", data.email), {
+    limit: 40,
+    windowMs: 60_000,
+    label: "Too many sync pulls",
+  });
+  if (!rl.ok) return { ok: false, reason: rl.message };
+
   const hash = await hashSyncPassword(data.email, data.password);
   const record = await getHouseholdRecord(data.email);
   if (!record) return { ok: true, snapshot: null };
@@ -333,6 +344,13 @@ export async function runPushHouseholdSync(
   | { ok: false; reason: string; remoteUpdatedAt?: string }
 > {
   try {
+    const rl = checkRateLimit(rateKey("push", data.email), {
+      limit: 60,
+      windowMs: 60_000,
+      label: "Too many sync pushes",
+    });
+    if (!rl.ok) return { ok: false, reason: rl.message };
+
     const hash = await hashSyncPassword(data.email, data.password);
     const existing = await getHouseholdRecord(data.email);
     if (existing && existing.passwordHash !== hash) {
@@ -462,9 +480,23 @@ export async function runResolveHouseholdInvite(data: ResolveInviteInput): Promi
     }
   | { ok: false; reason: string }
 > {
+  const rl = checkRateLimit(rateKey("invite-resolve", data.code), {
+    limit: 20,
+    windowMs: 60_000,
+    label: "Too many invite lookups",
+  });
+  if (!rl.ok) return { ok: false, reason: rl.message };
+
   const invite = await kvGetJson<HouseholdInviteRecord>(inviteKey(data.code));
   if (!invite) {
     return { ok: false, reason: "Invite not found. Ask the owner to copy the link again." };
+  }
+  const created = Date.parse(invite.createdAt || "");
+  if (!Number.isNaN(created) && Date.now() - created > INVITE_TTL_MS) {
+    return {
+      ok: false,
+      reason: "This invite has expired. Ask the owner to send a new link.",
+    };
   }
   if (invite.status === "accepted") {
     if (invite.acceptedEmail === "__revoked__") {
@@ -511,9 +543,23 @@ export async function runAcceptHouseholdInvite(data: AcceptInviteInput): Promise
   | { ok: false; reason: string }
 > {
   try {
+    const rl = checkRateLimit(rateKey("invite-accept", data.email || data.code), {
+      limit: 10,
+      windowMs: 60_000,
+      label: "Too many invite accepts",
+    });
+    if (!rl.ok) return { ok: false, reason: rl.message };
+
     const invite = await kvGetJson<HouseholdInviteRecord>(inviteKey(data.code));
     if (!invite) {
       return { ok: false, reason: "Invite not found. Ask the owner to re-copy the invite link." };
+    }
+    const created = Date.parse(invite.createdAt || "");
+    if (!Number.isNaN(created) && Date.now() - created > INVITE_TTL_MS) {
+      return {
+        ok: false,
+        reason: "This invite has expired. Ask the owner to send a new link.",
+      };
     }
     if (invite.status === "accepted" && invite.acceptedEmail !== data.email) {
       return { ok: false, reason: "This invite was already used by someone else." };

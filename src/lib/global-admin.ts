@@ -17,7 +17,11 @@ import {
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { clearSyncCreds } from "@/lib/sync-session";
 
-/** Sole global app admin email (case-insensitive). */
+/**
+ * Designated app-admin email (case-insensitive).
+ * H-05/H-07: panel is still localStorage-only — not multi-tenant. Production builds
+ * require VITE_ENABLE_GLOBAL_ADMIN=1 so the panel is not ambient theater.
+ */
 export const GLOBAL_APP_ADMIN_EMAIL = "jed.el.saghir@hotmail.com";
 
 const FORCED_LOGOUT_KEY = "friggg-forced-logout-ids";
@@ -26,9 +30,18 @@ export function normalizeAdminEmail(email: string | null | undefined): string {
   return (email || "").trim().toLowerCase();
 }
 
-/** True only when the given email is the designated global App Admin. */
+/** True when email matches admin AND the panel is explicitly enabled for this build. */
 export function isGlobalAppAdmin(email: string | null | undefined): boolean {
-  return normalizeAdminEmail(email) === GLOBAL_APP_ADMIN_EMAIL;
+  if (normalizeAdminEmail(email) !== GLOBAL_APP_ADMIN_EMAIL) return false;
+  try {
+    const flag = String(import.meta.env?.VITE_ENABLE_GLOBAL_ADMIN || "").toLowerCase();
+    if (flag === "1" || flag === "true" || flag === "yes") return true;
+    // Local dev may open the panel without the flag for operator convenience
+    if (import.meta.env?.DEV) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
 }
 
 /** Resolve signed-in email from profile / accounts (browser only). */
@@ -256,7 +269,8 @@ export function removeGlobalUser(user: GlobalRegisteredUser): {
 }
 
 /**
- * Simulated force logout. If target is the current session, signs them out immediately.
+ * H-07: Local-only “force logout” — marks account id for re-auth on this browser.
+ * Does NOT revoke sessions on other devices (no server session store yet).
  */
 export function forceLogoutUser(user: GlobalRegisteredUser): {
   ok: boolean;

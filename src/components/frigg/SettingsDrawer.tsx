@@ -21,7 +21,7 @@ import {
 import { APP_BUILD } from "@/lib/app-build";
 import { readLocalSyncMeta } from "@/lib/household-sync";
 import { flushHouseholdPush, pullAndMergeOnLogin } from "@/lib/run-household-sync";
-import { loadSyncCreds } from "@/lib/sync-session";
+import { loadSyncCreds, needsSyncPassword } from "@/lib/sync-session";
 import { listLocalAccounts, wipeAllFriggLocalData } from "@/lib/reset-app";
 import { getPlatform } from "@/platform";
 
@@ -127,8 +127,9 @@ export function SettingsDrawer({
   const handleSyncNow = async () => {
     const creds = loadSyncCreds();
     if (!creds) {
-      toast.error("Sign in again", {
-        description: "Cloud sync needs your email & password for this session.",
+      toast.error("Password needed for sync", {
+        description:
+          "Cloud sync uses your password for this tab only. Sign out and sign in again to restore multi-device upload.",
       });
       return;
     }
@@ -394,6 +395,14 @@ export function SettingsDrawer({
                 and profile.
               </p>
             </div>
+            {/* H-02: re-enter password after tab restart (sessionStorage cleared) */}
+            {needsSyncPassword() && (
+              <p className="text-[11px] leading-snug rounded-xl bg-amber-500/10 px-2.5 py-2 text-amber-900 dark:text-amber-200">
+                You&apos;re signed in on this device, but cloud sync needs your password again for
+                this browser tab. Use <span className="font-semibold">Sync now</span> after signing
+                out and back in, or open Login once more with the same account.
+              </p>
+            )}
             <div className="rounded-2xl bg-secondary/50 px-3 py-2.5 text-[12px] space-y-1">
               <div className="flex justify-between gap-2">
                 <span className="text-muted-foreground">Backend</span>

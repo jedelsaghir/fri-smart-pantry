@@ -33,13 +33,24 @@ export type AuthSession = {
   expiresAt: number;
 };
 
-/** Client auth strictness — production disables demo auto-create on sign-in */
+/**
+ * Client auth strictness.
+ * H-01: Production builds default to `production` (no auto-create on sign-in).
+ * Explicit `VITE_AUTH_MODE=demo` is required for demo auto-create, including in prod hosts used for demos.
+ * Dev (`import.meta.env.DEV`) still defaults to demo unless overridden.
+ */
 export function getAuthMode(): AuthMode {
   try {
-    const mode = String(import.meta.env?.VITE_AUTH_MODE || "demo").toLowerCase();
-    return mode === "production" ? "production" : "demo";
-  } catch {
+    const explicit = String(import.meta.env?.VITE_AUTH_MODE || "")
+      .trim()
+      .toLowerCase();
+    if (explicit === "production" || explicit === "prod") return "production";
+    if (explicit === "demo") return "demo";
+    // No explicit flag: prod hosts → production; local dev → demo
+    if (import.meta.env?.PROD) return "production";
     return "demo";
+  } catch {
+    return "production";
   }
 }
 

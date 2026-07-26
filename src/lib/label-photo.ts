@@ -16,12 +16,17 @@ export async function compressLabelPhoto(
   });
 }
 
-/** User-facing limits for the expiry photo step */
+/**
+ * User-facing copy for the optional expiry photo step (H-05).
+ * Biases toward skip; does not claim OCR of dates.
+ */
 export const EXPIRY_ASSIST_COPY = {
-  title: "Capture expiry labels?",
+  title: "Add expiry notes? (optional)",
   subtitle:
-    "Optional — snap a product date label so you can check it later. Skip anytime.",
+    "Skip anytime — your items are already in the pantry. Only add a photo or days-left if you want a quick reference.",
   honesty:
-    "We keep a small photo on this device with the item. Auto-reading dates from labels isn’t reliable yet — set days left yourself if you can see the date.",
-  empty: "No items from this scan to attach photos to.",
+    "We do not auto-read dates from photos yet. A small photo stays on this device only as a visual reminder; type days left yourself if you can see the date.",
+  empty: "No items from this scan to attach notes to.",
+  skipPrimary: "Skip — done",
+  saveSecondary: "Save notes & finish",
 } as const;

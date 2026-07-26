@@ -6,8 +6,8 @@ This document describes what Friġġ auth does today, what was hardened, and wha
 
 | Mode | Env | Behaviour |
 |------|-----|-----------|
-| **demo** (default) | `VITE_AUTH_MODE` unset or `demo` | Sign-in with a new email may auto-create a hashed local owner account (legacy convenience). Password min length 4. |
-| **production** | `VITE_AUTH_MODE=production` | No auto-create on sign-in. Must register via onboarding/invite. Password min length 8. |
+| **demo** | `VITE_AUTH_MODE=demo` (explicit) or local **dev** without flag | Sign-in with a new email may auto-create a hashed local owner account. Password min length 4. |
+| **production** (default on `import.meta.env.PROD`) | unset on prod hosts, or `VITE_AUTH_MODE=production` | No auto-create on sign-in. Must register via onboarding/invite. Password min length 8. |
 
 Server-side household sync always hashes the password with `hashSyncPassword` (email + password + salt version). Mode only affects **client** registration/sign-in UX rules.
 

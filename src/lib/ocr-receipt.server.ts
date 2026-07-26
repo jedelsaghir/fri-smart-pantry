@@ -16,6 +16,7 @@ import {
   extractResponseText,
   parseReceiptOcrPayload,
 } from "@/lib/ocr-parse";
+import { checkRateLimit, rateKey } from "@/lib/rate-limit.server";
 import type { OcrDetectResult } from "@/platform/types";
 
 export const MAX_IMAGE_CHARS = 12_000_000; // ~9MB base64 budget
@@ -310,6 +311,21 @@ async function ocrViaChatCompletions(
 
 /** Full OCR path for ocrReceiptFromImage handler. */
 export async function runOcrReceiptFromImage(imageDataUrl: string): Promise<OcrDetectResult> {
+  const rl = checkRateLimit(rateKey("ocr", "global"), {
+    limit: 30,
+    windowMs: 60_000,
+    label: "Too many receipt scans",
+  });
+  if (!rl.ok) {
+    return {
+      ok: false,
+      mode: "live",
+      provider: "xai",
+      items: [],
+      reason: rl.message,
+    };
+  }
+
   const key = getApiKey();
   if (!key) {
     return {

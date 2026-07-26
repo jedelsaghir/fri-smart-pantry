@@ -24,6 +24,8 @@ export type ScanStep =
 export type ExpiryAssistSignal = {
   /** Stable key within this scan session (detected item id) */
   scanItemId: string;
+  /** Pantry row id when known (H-04) — preferred over name match */
+  pantryItemId?: string;
   name: string;
   unit: string;
   storage: StorageKey;
@@ -46,7 +48,9 @@ export interface ReceiptScanFlowProps {
   onItemsAdded: (
     items: Array<Omit<DetectedItem, "confidence" | "id">>,
     options?: { silent?: boolean }
-  ) => void;
+  ) =>
+    | void
+    | Array<{ scanIndex: number; pantryItemId: string; storage: StorageKey }>;
   /** Persist full receipt (photo + line items) for Finances history */
   onReceiptSaved?: (receipt: StoredReceipt) => void;
   /** Optional label photos + days-left after a successful scan */

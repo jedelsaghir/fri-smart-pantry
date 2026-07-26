@@ -208,6 +208,19 @@ export function collectHouseholdEmails(
 }
 
 /**
+ * Decision for secondary household emails during fan-out (N-07).
+ * Never uses plain passwords — only existing cloud hash or snapshot hash.
+ */
+export function fanOutSecondaryAction(
+  existingPasswordHash: string | undefined | null,
+  snapshotAccountHash: string | undefined | null
+): "update" | "seed" | "skip" {
+  if (existingPasswordHash) return "update";
+  if (snapshotAccountHash) return "seed";
+  return "skip";
+}
+
+/**
  * Write snapshot for primary + every known household email that already has a
  * cloud record. Preserves each email's existing passwordHash — never requires
  * or stores plain passwords. Hash-only accounts in the snapshot can seed a new
@@ -230,23 +243,23 @@ export async function fanOutHousehold(
   for (const em of emails) {
     try {
       const existing = await getHouseholdRecord(em);
-      if (existing?.passwordHash) {
+      const acct = (safe.accounts || []).find((a) => a.email?.toLowerCase() === em);
+      const action = fanOutSecondaryAction(existing?.passwordHash, acct?.passwordHash);
+      if (action === "update" && existing?.passwordHash) {
         // Update shared household blob; keep invitee/owner's own auth hash
         backend = await setHouseholdRecord(em, {
           passwordHash: existing.passwordHash,
           snapshot: { ...safe, email: em },
         });
-        continue;
-      }
-      // Seed only when snapshot already carries a passwordHash for this email
-      // (set during invite accept — never plain password).
-      const acct = (safe.accounts || []).find((a) => a.email?.toLowerCase() === em);
-      if (acct?.passwordHash) {
+      } else if (action === "seed" && acct?.passwordHash) {
+        // Seed only when snapshot already carries a passwordHash for this email
+        // (set during invite accept — never plain password).
         backend = await setHouseholdRecord(em, {
           passwordHash: acct.passwordHash,
           snapshot: { ...safe, email: em },
         });
       }
+      // action === "skip": no cloud record and no hash → do not invent credentials
     } catch {
       /* skip bad account */
     }

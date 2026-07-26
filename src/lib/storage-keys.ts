@@ -1,4 +1,7 @@
-/** Single source of truth for localStorage / session keys (M-01) */
+/**
+ * Single source of truth for localStorage / session keys (M-01, N-01).
+ * Prefix `friggg-*` is intentional (legacy product slug) — not a typo of Friġġ.
+ */
 
 export const STORAGE_KEYS = {
   ITEMS: "friggg-items",

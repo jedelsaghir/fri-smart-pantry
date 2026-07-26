@@ -1,6 +1,6 @@
 # Friġġ fix / status list
 
-Updated after Critical, High, and Medium audit passes. See `docs/FULL-APP-AUDIT.md` for the full backlog.
+Updated after Critical, High, Medium, and Low+Nit audit passes. See `docs/FULL-APP-AUDIT.md` for the full backlog.
 
 ## Done — Critical (C-01…C-07)
 
@@ -38,6 +38,10 @@ Auth production default, sync re-prompt, deterministic shelf life, expiry by id,
 | M-23 | Server rate limits (already H-14; auth/sync/OCR) |
 | M-24 | `platform/feature-flags.ts` env-driven factory |
 
+## Done — Low (L-01…L-25) + Nit (N-01…N-20)
+
+Shared item-status thresholds; confidence aligned to auto-add; freezer reverse; offline invite visual; manual barcode; package rename + typecheck + CI template (`docs/github-actions-ci.yml`); admin env email; FOUC theme script; offline honesty; scan focus trap + outcome toast; SafeImage; finances skeleton; emoji sheet; money helpers; fan-out hash-only tests; activity cap; warm splash; quality pause when hidden; README sync.
+
 ## Still open
 
-Low / Nit items in `FULL-APP-AUDIT.md` (a11y, virtualization full, unused UI purge, E2E Playwright, etc.).
+Section **C Suggestions** in `FULL-APP-AUDIT.md` only (not required for this pass): E2E Playwright, full a11y axe pass, CRDT sync, server sessions, etc.

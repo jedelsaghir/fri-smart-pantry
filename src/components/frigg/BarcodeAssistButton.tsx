@@ -162,7 +162,30 @@ export function BarcodeAssistButton({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-[2px] p-4">
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-[2px] p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Barcode assist"
+          onKeyDown={(e) => {
+            // L-10: basic focus cycle inside barcode overlay
+            if (e.key !== "Tab") return;
+            const root = e.currentTarget;
+            const nodes = root.querySelectorAll<HTMLElement>(
+              'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+            if (!nodes.length) return;
+            const first = nodes[0];
+            const last = nodes[nodes.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }}
+        >
           <div className="w-full max-w-sm rounded-3xl bg-background shadow-2xl overflow-hidden border border-border/40">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
               <div>
@@ -171,6 +194,7 @@ export function BarcodeAssistButton({
               </div>
               <button
                 type="button"
+                autoFocus
                 onClick={() => {
                   setOpen(false);
                   stop();
@@ -197,10 +221,77 @@ export function BarcodeAssistButton({
                 </div>
               )}
             </div>
-            <p className="px-4 py-3 text-[11px] text-muted-foreground leading-relaxed">
-              Uses your camera when supported. Product names come from Open Food Facts when
-              online — if lookup fails, type the name yourself.
-            </p>
+            {/* L-13: manual barcode entry when detector unsupported */}
+            <div className="px-4 py-3 space-y-2 border-t border-border/40">
+              <label className="block text-[11px] font-medium text-muted-foreground">
+                Or type barcode / GTIN
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 4006381333931"
+                  className="h-10 flex-1 rounded-2xl border border-border/60 bg-secondary/40 px-3 text-sm outline-none focus:border-brand/40"
+                  id="frigg-manual-barcode"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const el = e.target as HTMLInputElement;
+                      void (async () => {
+                        const code = el.value.trim();
+                        if (!code) return;
+                        setBusy(true);
+                        setHint("Looking up…");
+                        const product = await lookupBarcodeProduct(code);
+                        setBusy(false);
+                        if (product) {
+                          onPrefill(product);
+                          toast.success("Barcode found", { description: product.name });
+                        } else {
+                          onPrefill({ barcode: code, name: "", unit: "pcs", source: "local" });
+                          toast.message("Code saved", {
+                            description: barcodeErrorMessage("lookup_failed"),
+                          });
+                        }
+                        setOpen(false);
+                        stop();
+                      })();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="rounded-2xl bg-brand px-3 text-xs font-semibold text-brand-foreground"
+                  onClick={() => {
+                    const el = document.getElementById(
+                      "frigg-manual-barcode"
+                    ) as HTMLInputElement | null;
+                    const code = el?.value.trim();
+                    if (!code) return;
+                    void (async () => {
+                      setBusy(true);
+                      const product = await lookupBarcodeProduct(code);
+                      setBusy(false);
+                      if (product) {
+                        onPrefill(product);
+                        toast.success("Barcode found", { description: product.name });
+                      } else {
+                        onPrefill({ barcode: code, name: "", unit: "pcs", source: "local" });
+                        toast.message("Code noted", {
+                          description: "Enter a name on the form if lookup failed.",
+                        });
+                      }
+                      setOpen(false);
+                      stop();
+                    })();
+                  }}
+                >
+                  Look up
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Camera scan when supported. Names from Open Food Facts when online.
+              </p>
+            </div>
           </div>
         </div>
       )}

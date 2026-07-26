@@ -1,5 +1,7 @@
 /**
  * Dashboard greeting — always personal to the signed-in user (never a demo name).
+ * L-01: single source of truth is `friggg-profile` via `usePreferences` /
+ * `loadStoredProfile` — callers pass that full name only (not family-drawer drafts).
  */
 
 export function firstNameFromDisplayName(name: string | undefined | null): string {

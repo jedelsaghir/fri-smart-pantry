@@ -3,6 +3,7 @@
  */
 
 import type { PantryItemsByStorage, StorageKey } from "@/types/pantry";
+import { alertReasonForDaysLeft, isExpiringSoon } from "@/lib/item-status";
 
 export type AlertRow = {
   id: string;
@@ -16,17 +17,12 @@ export function buildAlertItems(items: PantryItemsByStorage): AlertRow[] {
   const rows: AlertRow[] = [];
   (["fridge", "freezer", "pantry"] as StorageKey[]).forEach((storage) => {
     items[storage].forEach((item) => {
-      if (item.daysLeft <= 3) {
+      if (isExpiringSoon(item.daysLeft)) {
         rows.push({
           id: `${item.id}-exp`,
           emoji: item.emoji,
           name: item.name,
-          reason:
-            item.daysLeft <= 0
-              ? "Expired"
-              : item.daysLeft === 1
-                ? "Use today"
-                : `${item.daysLeft}d left`,
+          reason: alertReasonForDaysLeft(item.daysLeft),
           storage,
         });
       } else if (item.qty < (item.minStock ?? 2)) {

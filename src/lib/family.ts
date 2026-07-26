@@ -7,6 +7,7 @@ import {
   validatePasswordStrength,
   verifyPassword,
 } from "@/lib/auth";
+import { buildLocalQrDataUrl } from "@/lib/local-qr";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 export const FAMILY_MEMBERS_KEY = STORAGE_KEYS.FAMILY_MEMBERS;
@@ -107,9 +108,9 @@ export function buildWhatsAppInviteLink(opts: {
   return `https://wa.me/?text=${encoded}`;
 }
 
-/** QR image URL (no npm dep; works in browser) */
+/** Offline invite visual (L-08) — no third-party host; copy link remains primary share. */
 export function buildQrImageUrl(data: string, size = 200): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=12&data=${encodeURIComponent(data)}`;
+  return buildLocalQrDataUrl(data, size);
 }
 
 export function readInviteCodeFromLocation(): string | null {
@@ -128,14 +129,19 @@ export function readInviteCodeFromLocation(): string | null {
   return null;
 }
 
+/** N-15: always strip invite params from the address bar after read/join. */
 export function clearInviteFromUrl(): void {
   if (typeof window === "undefined") return;
   try {
     const url = new URL(window.location.href);
     url.searchParams.delete("invite");
     url.searchParams.delete("join");
-    if (url.hash.includes("invite")) url.hash = "";
-    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    // Clear hash invite forms entirely (including #invite=… and #?invite=)
+    if (url.hash && /invite/i.test(url.hash)) {
+      url.hash = "";
+    }
+    const cleaned = url.pathname + url.search + (url.hash || "");
+    window.history.replaceState({}, "", cleaned);
   } catch {}
 }
 

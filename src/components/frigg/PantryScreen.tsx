@@ -597,9 +597,11 @@ export function PantryScreen() {
         ) : isFinancesView ? (
           <Suspense
             fallback={
-              <div className="py-16 text-center text-sm text-muted-foreground">
-                Loading finances…
-              </div>
+              <div className="space-y-4 py-2" aria-busy="true" aria-label="Loading finances">
+              <div className="elevated-card h-36 animate-pulse rounded-3xl bg-secondary/50" />
+              <div className="elevated-card h-24 animate-pulse rounded-3xl bg-secondary/40" />
+              <div className="elevated-card h-40 animate-pulse rounded-3xl bg-secondary/35" />
+            </div>
             }
           >
             <FinancialsScreen
@@ -725,6 +727,7 @@ export function PantryScreen() {
         }
         badges={shopping.suggestedCount > 0 ? { list: shopping.suggestedCount } : {}}
         onChange={(key) => {
+          // N-03: nav is sealed to pantry | list | recipes | money — no "Coming soon"
           if (key === "pantry" || key === "list") {
             setActiveView(key as "pantry" | "list");
             if (key === "pantry") setActive("fridge");
@@ -732,9 +735,6 @@ export function PantryScreen() {
             setActiveView("recipes");
           } else if (key === "money") {
             setActiveView("finances");
-          } else {
-            setAddedBanner({ count: 0, message: "Coming soon" });
-            setTimeout(() => setAddedBanner(null), 1500);
           }
         }}
       />

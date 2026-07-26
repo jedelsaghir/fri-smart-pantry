@@ -34,6 +34,7 @@ import {
 } from "@/lib/member-invite";
 import { loadSyncCreds } from "@/lib/sync-session";
 import { flushHouseholdPush, pullAndMergeOnLogin } from "@/lib/run-household-sync";
+import { SafeImage } from "@/components/frigg/SafeImage";
 
 const AVATAR_EMOJIS = [
   "👤",
@@ -810,8 +811,7 @@ export function ManageFamilyPage({
               <div className="flex flex-col items-center py-2">
                 <div className="rounded-3xl bg-white p-4 shadow-inner ring-1 ring-border/30">
                   {qrUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <SafeImage
                       src={qrUrl}
                       alt={`QR invite for ${inviteSheetMember.name}`}
                       width={220}

@@ -5,6 +5,7 @@ import type { DetectedItem, ReviewDisposition, StorageKey } from "@/types/pantry
 import { BarcodeAssistButton } from "@/components/frigg/BarcodeAssistButton";
 import { confidenceBand, type ConfidenceBand } from "@/lib/ocr-parse";
 import { AUTO_ADD_CONFIDENCE } from "@/lib/ocr-merge";
+import { formatMoney } from "@/lib/money";
 import { formatStorageLabel } from "./types";
 
 function ConfidenceChip({ confidence }: { confidence: number }) {
@@ -88,19 +89,20 @@ export function ReceiptReviewStage({
               <span className="text-[11px] font-medium text-muted-foreground">
                 {lowConfCount} low confidence
               </span>
-              <button
-                type="button"
-                onClick={onBatchKeepLowConf}
-                className="rounded-full bg-brand/15 px-2.5 py-1 text-[11px] font-semibold text-brand active:bg-brand/25"
-              >
-                Keep all
-              </button>
+              {/* L-04: discard is the primary batch action for weak reads */}
               <button
                 type="button"
                 onClick={onBatchDiscardLowConf}
+                className="rounded-full bg-brand/15 px-2.5 py-1 text-[11px] font-semibold text-brand active:bg-brand/25"
+              >
+                Discard all low
+              </button>
+              <button
+                type="button"
+                onClick={onBatchKeepLowConf}
                 className="rounded-full bg-background px-2.5 py-1 text-[11px] font-semibold text-foreground border border-border/60 active:bg-secondary"
               >
-                Discard all
+                Keep all for confirm
               </button>
             </div>
           )}
@@ -282,7 +284,7 @@ export function ReceiptReviewStage({
                     <div className="text-xs text-muted-foreground">{item.unit}</div>
                     {typeof item.price === "number" && (
                       <div className="text-xs font-medium tabular-nums">
-                        €{item.price.toFixed(2)}
+                        {formatMoney(item.price, "EUR")}
                       </div>
                     )}
 

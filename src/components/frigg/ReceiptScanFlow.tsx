@@ -239,6 +239,8 @@ export function ReceiptScanFlow({
       return;
     }
     const tick = () => {
+      // N-19: pause quality sampling when tab is hidden (battery)
+      if (typeof document !== "undefined" && document.hidden) return;
       const video = videoRef.current;
       if (!video || video.readyState < 2) return;
       try {
@@ -249,13 +251,32 @@ export function ReceiptScanFlow({
     };
     tick();
     qualityTimerRef.current = setInterval(tick, 400);
+    const onVis = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
+      document.removeEventListener("visibilitychange", onVis);
       if (qualityTimerRef.current) {
         clearInterval(qualityTimerRef.current);
         qualityTimerRef.current = null;
       }
     };
   }, [open, cameraOn, step]);
+
+  // L-10: focus close control when scan overlay opens; restore on close
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    prevFocusRef.current =
+      typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
+    const t = window.setTimeout(() => closeBtnRef.current?.focus(), 50);
+    return () => {
+      window.clearTimeout(t);
+      prevFocusRef.current?.focus?.();
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -319,15 +340,27 @@ export function ReceiptScanFlow({
     onReceiptSaved?.(receipt);
   };
 
-  const leaveToPantry = () => {
-    if (!pantryToastShownRef.current) {
-      pantryToastShownRef.current = true;
-      toast.success("Pantry Updated", {
-        description: ocrMetaRef.current.store
-          ? `Saved receipt from ${ocrMetaRef.current.store}`
-          : "Receipt saved in Finances",
+  /** L-16: single outcome toast path for scan completion */
+  const emitScanOutcome = (kind: "pantry" | "labels", description?: string) => {
+    if (pantryToastShownRef.current) return;
+    pantryToastShownRef.current = true;
+    if (kind === "labels") {
+      toast.success("Labels saved", {
+        description: description || "Expiry notes attached",
       });
+      return;
     }
+    toast.success("Pantry Updated", {
+      description:
+        description ||
+        (ocrMetaRef.current.store
+          ? `Saved receipt from ${ocrMetaRef.current.store}`
+          : "Receipt saved in Finances"),
+    });
+  };
+
+  const leaveToPantry = () => {
+    emitScanOutcome("pantry");
     stopCamera();
     onNavigateToPantry?.();
     handleClose();
@@ -357,10 +390,7 @@ export function ReceiptScanFlow({
       const parts: string[] = [];
       if (photoN > 0) parts.push(`${photoN} label photo${photoN === 1 ? "" : "s"}`);
       if (daysN > 0) parts.push(`${daysN} date${daysN === 1 ? "" : "s"} set`);
-      toast.success("Labels saved", {
-        description: parts.join(" · ") || "Expiry notes attached",
-      });
-      pantryToastShownRef.current = true; // suppress second generic toast
+      emitScanOutcome("labels", parts.join(" · ") || "Expiry notes attached");
     }
     leaveToPantry();
   };
@@ -392,6 +422,19 @@ export function ReceiptScanFlow({
     if (photoList.length === 0) {
       toast.error("Add at least one photo");
       return;
+    }
+
+    // L-21: honest offline messaging — OCR needs network; no local photo queue yet
+    try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        toast.error("You're offline", {
+          description:
+            "Receipt reading needs a connection. Photos stay on this screen — reconnect and tap Process again (offline queue not available yet).",
+        });
+        return;
+      }
+    } catch {
+      /* ignore */
     }
 
     photosRef.current = photoList;
@@ -894,7 +937,30 @@ export function ReceiptScanFlow({
   const photoCount = photos.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Receipt scanner"
+      onKeyDown={(e) => {
+        // L-10: simple Tab cycle within overlay
+        if (e.key !== "Tab") return;
+        const root = e.currentTarget;
+        const focusable = root.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }}
+    >
       <div className="flex-1 flex flex-col bg-background rounded-t-3xl mt-auto max-h-[94dvh] overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border/60">
           <div className="min-w-0">
@@ -908,6 +974,7 @@ export function ReceiptScanFlow({
             )}
           </div>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={handleClose}
             className="touch-target grid size-10 place-items-center rounded-full bg-secondary/70 text-foreground/70 active:bg-secondary"

@@ -8,6 +8,7 @@ import {
 } from "./household-sync";
 import {
   collectHouseholdEmails,
+  fanOutSecondaryAction,
   shouldAcceptPush,
   sanitizeSnapshotForStore,
 } from "./household-sync.server";
@@ -150,6 +151,47 @@ describe("collectHouseholdEmails + sanitize snapshot", () => {
       ],
     });
     expect(s.accounts?.[0].password).toBeUndefined();
+    expect(s.accounts?.[0].passwordHash).toBe("h");
+  });
+});
+
+/** N-07: fan-out never invents credentials for hash-less secondaries */
+describe("fanOutSecondaryAction (hash-only accounts)", () => {
+  it("updates when cloud already has a passwordHash", () => {
+    expect(fanOutSecondaryAction("existing-hash", undefined)).toBe("update");
+    expect(fanOutSecondaryAction("existing-hash", "snapshot-hash")).toBe("update");
+  });
+
+  it("seeds only when snapshot carries a passwordHash and cloud has none", () => {
+    expect(fanOutSecondaryAction(undefined, "invitee-hash")).toBe("seed");
+    expect(fanOutSecondaryAction(null, "invitee-hash")).toBe("seed");
+  });
+
+  it("skips when neither cloud nor snapshot has a hash (no plain-password path)", () => {
+    expect(fanOutSecondaryAction(undefined, undefined)).toBe("skip");
+    expect(fanOutSecondaryAction(null, null)).toBe("skip");
+    expect(fanOutSecondaryAction("", "")).toBe("skip");
+  });
+});
+
+// keep file valid if previous block closed early — re-open strip test close was absorbed
+describe("sanitizeSnapshotForStore (continued)", () => {
+  it("is idempotent for hash-only accounts", () => {
+    const s = sanitizeSnapshotForStore({
+      version: HOUSEHOLD_SYNC_VERSION,
+      updatedAt: new Date().toISOString(),
+      email: "a@b.com",
+      accounts: [
+        {
+          id: "1",
+          memberId: "you",
+          email: "a@b.com",
+          passwordHash: "h",
+          name: "A",
+          emoji: "👤",
+        },
+      ],
+    });
     expect(s.accounts?.[0].passwordHash).toBe("h");
   });
 });

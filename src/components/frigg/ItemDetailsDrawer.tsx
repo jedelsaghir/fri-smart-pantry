@@ -12,7 +12,11 @@ import {
 } from "@/components/ui/drawer";
 import { getStatus } from "./ItemCard";
 import { defaultPriceUnit, getFreezerExtensionDays } from "@/hooks/usePantry";
+import { moneySymbol } from "@/lib/money";
 import type { DetailsItemState, PantryItem, StorageKey } from "@/types/pantry";
+
+/** N-09: display currency for price fields (EUR default until multi-currency prefs) */
+const PRICE_CURRENCY = "EUR";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -398,7 +402,7 @@ function DetailsBody({
               <span className="opacity-40">•</span>
               {editingPrice ? (
                 <span className="inline-flex items-center gap-1">
-                  <span className="text-muted-foreground">€</span>
+                  <span className="text-muted-foreground">{moneySymbol(PRICE_CURRENCY)}</span>
                   <input
                     ref={priceInputRef}
                     type="text"
@@ -432,7 +436,8 @@ function DetailsBody({
                 >
                   {item.latestPrice !== undefined ? (
                     <>
-                      €{formatPrice(item.latestPrice)}{" "}
+                      {moneySymbol(PRICE_CURRENCY)}
+                      {formatPrice(item.latestPrice)}{" "}
                       <span className="text-muted-foreground font-normal">/ {priceBasis}</span>
                     </>
                   ) : (
@@ -578,7 +583,9 @@ function DetailsBody({
             </div>
           </div>
           <div className="flex items-center gap-2 rounded-3xl bg-secondary/70 p-1">
-            <span className="pl-3 text-sm font-medium text-muted-foreground">€</span>
+            <span className="pl-3 text-sm font-medium text-muted-foreground">
+              {moneySymbol(PRICE_CURRENCY)}
+            </span>
             <input
               type="text"
               inputMode="decimal"

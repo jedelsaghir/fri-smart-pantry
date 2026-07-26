@@ -29,6 +29,8 @@ export function BottomNav({
                   <button
                     type="button"
                     onClick={() => onChange(it.key)}
+                    aria-label={it.label}
+                    aria-current={isActive ? "page" : undefined}
                     className={
                       "touch-target flex flex-col items-center justify-center gap-px rounded-2xl px-4 min-w-[4.25rem] py-2 text-[10px] font-semibold tracking-[0.01em] transition active:scale-[0.96] " +
                       (isActive

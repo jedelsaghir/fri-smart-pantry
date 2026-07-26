@@ -169,6 +169,25 @@ export function SettingsDrawer({
           <div className="elevated-card rounded-3xl p-4">
             {editingProfile ? (
               <div className="space-y-3">
+                {/* N-08: emoji chip sheet instead of free-text only */}
+                <div className="flex flex-wrap gap-1.5" role="listbox" aria-label="Choose emoji">
+                  {["👩‍🍳", "👤", "🧑‍🌾", "👨‍🍳", "🌿", "🧒", "👨", "👩", "🛒", "🏠"].map((em) => (
+                    <button
+                      key={em}
+                      type="button"
+                      role="option"
+                      aria-selected={profileDraft.emoji === em}
+                      onClick={() => onProfileDraftChange({ ...profileDraft, emoji: em })}
+                      className={`text-2xl p-2 rounded-2xl transition active:scale-95 ${
+                        profileDraft.emoji === em
+                          ? "bg-secondary ring-1 ring-border"
+                          : "opacity-70 hover:opacity-100"
+                      }`}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex gap-2">
                   <input
                     value={profileDraft.emoji}
@@ -176,7 +195,7 @@ export function SettingsDrawer({
                       onProfileDraftChange({ ...profileDraft, emoji: e.target.value })
                     }
                     className="h-11 w-14 rounded-2xl border border-border/50 bg-background/80 text-center text-xl"
-                    aria-label="Emoji"
+                    aria-label="Emoji (or pick above)"
                     maxLength={4}
                     enterKeyHint="next"
                   />
@@ -300,13 +319,15 @@ export function SettingsDrawer({
             />
           </div>
 
-          {/* Install */}
+          {/* Install + offline honesty (L-20) */}
           <div className="elevated-card rounded-3xl p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="font-semibold">Install app</div>
                 <div className="text-xs text-muted-foreground">
                   Android: Install prompt. iPhone: Safari → Share → Add to Home Screen.
+                  Offline keeps pantry data already on this device; receipt OCR &amp; cloud sync
+                  need a network connection.
                 </div>
               </div>
               <button
@@ -335,11 +356,12 @@ export function SettingsDrawer({
             />
           </div>
 
-          {/* Backup */}
-          <div className="elevated-card rounded-3xl p-4 space-y-2">
-            <div className="font-semibold">Backup</div>
+          {/* L-19: Backup promoted — primary export action + clear description */}
+          <div className="elevated-card rounded-3xl p-4 space-y-2 ring-1 ring-brand/15">
+            <div className="font-semibold">Backup &amp; export</div>
             <div className="text-xs text-muted-foreground">
-              Export or restore pantry, receipts, shopping list, database &amp; family (local only).
+              Download a JSON backup of pantry, receipts, shopping list, database &amp; family
+              (this device). Recommended before switching phones.
             </div>
             <div className="flex gap-2 pt-1">
               <button
@@ -352,7 +374,7 @@ export function SettingsDrawer({
                     toast.error("Could not export backup");
                   }
                 }}
-                className="touch-target flex-1 rounded-2xl border py-2.5 text-xs font-semibold active:bg-secondary/60"
+                className="touch-target flex-1 rounded-2xl bg-brand py-2.5 text-xs font-semibold text-brand-foreground active:scale-[0.985]"
               >
                 Export JSON
               </button>

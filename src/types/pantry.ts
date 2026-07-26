@@ -19,6 +19,7 @@ export interface PantryItem {
   /**
    * Optional compressed product-label / expiry photo (data URL).
    * Attached via post-scan expiry assist — not auto-OCR’d for dates.
+   * Keep under MAX_LABEL_PHOTO_CHARS (~100k) so sync/localStorage stay healthy (L-25).
    */
   labelPhotoDataUrl?: string;
   /** When the label photo was captured (ISO) */

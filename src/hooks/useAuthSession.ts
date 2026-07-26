@@ -23,12 +23,22 @@ export function useAuthSession(options?: {
     }
   });
   const [forcedInviteCode, setForcedInviteCode] = useState<string | null>(null);
-  const [showSplash, setShowSplash] = useState(true);
+  // N-16: skip long splash when already authenticated (warm session)
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return !isSessionAuthenticated();
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
-    const t = setTimeout(() => setShowSplash(false), 720);
+    if (!showSplash) return;
+    const ms = isAuthenticated ? 280 : 720;
+    const t = setTimeout(() => setShowSplash(false), ms);
     return () => clearTimeout(t);
-  }, []);
+  }, [showSplash, isAuthenticated]);
 
   // Re-check expiry when tab becomes visible (session may have lapsed)
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import type { PantryItem, ItemStatus, StorageKey } from "@/types/pantry";
+import { getItemStatus } from "@/lib/item-status";
 
 export type { PantryItem, ItemStatus };
 
@@ -215,11 +216,7 @@ export function ItemCard({
 }
 
 function getStatus(daysLeft: number): ItemStatus {
-  if (daysLeft <= 0) return { label: "Expired", color: "var(--color-expiring)" };
-  if (daysLeft <= 1) return { label: "Use today", color: "var(--color-expiring)" };
-  if (daysLeft <= 3) return { label: "Expiring soon", color: "var(--color-soon)" };
-  if (daysLeft <= 7) return { label: "Warning", color: "var(--color-soon)" };
-  return { label: "Fresh", color: "var(--color-fresh)" };
+  return getItemStatus(daysLeft);
 }
 
 export { getStatus };

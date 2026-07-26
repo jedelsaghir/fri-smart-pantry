@@ -238,12 +238,18 @@ export function applyTotalLineSanityDetailed(
   return { items };
 }
 
-/** Confidence band for review chips */
+/**
+ * Confidence band for review chips (L-03).
+ * Aligned with AUTO_ADD_CONFIDENCE (0.8): high ≥ 0.8, medium 0.65–0.8, low < 0.65.
+ */
 export type ConfidenceBand = "high" | "medium" | "low";
 
+export const CONFIDENCE_HIGH = 0.8; // matches AUTO_ADD_CONFIDENCE
+export const CONFIDENCE_MEDIUM = 0.65;
+
 export function confidenceBand(confidence: number): ConfidenceBand {
-  if (confidence >= 0.85) return "high";
-  if (confidence >= 0.65) return "medium";
+  if (confidence >= CONFIDENCE_HIGH) return "high";
+  if (confidence >= CONFIDENCE_MEDIUM) return "medium";
   return "low";
 }
 

@@ -54,7 +54,8 @@ export function useFamily(options?: UseFamilyOptions) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOG, JSON.stringify(activityLog.slice(0, 50)));
+      // N-14: hard cap activity log growth
+      localStorage.setItem(STORAGE_KEYS.ACTIVITY_LOG, JSON.stringify(activityLog.slice(0, 40)));
     } catch {
       /* ignore */
     }
@@ -64,7 +65,7 @@ export function useFamily(options?: UseFamilyOptions) {
   const [showManageFamily, setShowManageFamily] = useState(false);
 
   const addActivity = useCallback((user: string, action: string) => {
-    setActivityLog((prev) => [{ user, action, time: "just now" }, ...prev.slice(0, 49)]);
+    setActivityLog((prev) => [{ user, action, time: "just now" }, ...prev.slice(0, 39)]);
   }, []);
 
   const clearActivity = useCallback(() => {

@@ -12,7 +12,7 @@ Friġġ (pronounced "frig") is a thoughtfully designed pantry management experie
 
 Track quantities, set minimum stock levels, edit expiration dates, and move items between storage locations (with automatic freezer life extension). Scan receipts to quickly add items, generate intelligent shopping lists, browse recipe ideas that use what you have, and share with your household.
 
-Everything stays private on your device. Works beautifully as a Progressive Web App — install it for a native app-like experience, even offline.
+Works beautifully as a Progressive Web App — install it for a native app-like experience. **Offline** keeps pantry, shopping, and settings already stored on the device; **receipt OCR** and **cloud household sync** need a network connection (the service worker caches icons/manifest only, not the full JS shell).
 
 ## Security & demo limits (read this)
 
@@ -31,9 +31,21 @@ Full breakdown: [`docs/AUTH.md`](docs/AUTH.md).
 | OAuth / magic link | **Demo / TODO** | No third-party IdP yet. |
 | Receipt scan | **Live OCR** | `getPlatform().ocr` → xAI vision (`XAI_API_KEY`). |
 | Push notifications | Not implemented | In-app Alerts panel only |
-| Backup | Available | Settings export/import JSON |
+| Backup | Available | Settings → **Export JSON** (promoted) |
+| Package | `fri-smart-pantry` | `npm run typecheck` + `npm test` (CI on main) |
+| Storage keys | `friggg-*` | Intentional legacy prefix (see `src/lib/storage-keys.ts`) |
 
 Do not treat this as full production identity (no email verify / OAuth yet). For family pantry data with shared passwords it is a practical step up from plain-text local accounts.
+
+### Recent polish (audit Low + Nit)
+
+- Shared expiry thresholds (cards + alerts + recipes “use expiring”)
+- Offline invite visual (no third-party QR host); copy link remains primary
+- Manual barcode / GTIN entry when camera detector is missing
+- Freezer move-out reverses extension days
+- Quality sampling pauses when the tab is hidden; stronger capture scrim/contrast
+- Activity log capped; splash short-circuits on warm sessions
+- Finances loading skeleton; sealed bottom nav (no “Coming soon”)
 
 ```bash
 # Production builds default to production auth (no silent auto-create).
@@ -42,6 +54,7 @@ export VITE_AUTH_MODE=demo
 
 # Optional: show Global Admin panel for the designated operator email
 export VITE_ENABLE_GLOBAL_ADMIN=1
+export VITE_GLOBAL_ADMIN_EMAIL=you@example.com
 
 # Optional: enable Family drawer “simulate member” (debug only)
 export VITE_FAMILY_SIMULATE=1

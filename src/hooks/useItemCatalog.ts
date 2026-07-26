@@ -83,7 +83,46 @@ export function useItemCatalog() {
   const mergeGroups = useMemo(() => findMergeGroups(catalog), [catalog]);
 
   const applyMerge = useCallback((group: CatalogMergeGroup, primaryId: string) => {
-    setCatalog((prev) => mergeCatalogGroup(prev, primaryId, group.memberIds));
+    setCatalog((prev) => {
+      const primary = prev.find((c) => c.id === primaryId);
+      const next = mergeCatalogGroup(prev, primaryId, group.memberIds);
+      // L-18: cascade primary name onto matching pantry rows (same unit)
+      if (primary && typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem("friggg-items");
+          if (raw) {
+            const items = JSON.parse(raw) as {
+              fridge: Array<{ name: string; unit: string }>;
+              freezer: Array<{ name: string; unit: string }>;
+              pantry: Array<{ name: string; unit: string }>;
+            };
+            const aliases = new Set(
+              group.memberIds
+                .map((id) => prev.find((c) => c.id === id)?.name.toLowerCase())
+                .filter(Boolean) as string[]
+            );
+            aliases.add(primary.name.toLowerCase());
+            const rename = (list: typeof items.fridge) =>
+              list.map((row) =>
+                aliases.has(row.name.toLowerCase()) &&
+                row.unit.toLowerCase() === primary.unit.toLowerCase()
+                  ? { ...row, name: primary.name, emoji: primary.emoji || (row as { emoji?: string }).emoji }
+                  : row
+              );
+            const updated = {
+              fridge: rename(items.fridge || []),
+              freezer: rename(items.freezer || []),
+              pantry: rename(items.pantry || []),
+            };
+            localStorage.setItem("friggg-items", JSON.stringify(updated));
+            window.dispatchEvent(new Event("frigg-catalog-cascaded"));
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
   }, []);
 
   const suggest = useCallback(

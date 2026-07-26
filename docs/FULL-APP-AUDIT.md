@@ -160,6 +160,38 @@ Grouped by severity (Critical → Nit). IDs are stable for tracking.
 
 ### Low
 
+> **Progress (Low + Nit pass):** All L-01…L-25 and N-01…N-20 addressed. See status tables.
+
+| ID | Status | Fix summary |
+|----|--------|-------------|
+| **L-01** | **Done** | Greeting uses only `usePreferences` / `loadStoredProfile` full name |
+| **L-02** | **Done** | Scan FAB only when list non-empty; empty state owns CTAs |
+| **L-03** | **Done** | Confidence high≥0.8 aligned with `AUTO_ADD_CONFIDENCE` |
+| **L-04** | **Done** | Discard-all-low is primary batch action |
+| **L-05** | **Done** | Shared `item-status.ts` for cards + alerts |
+| **L-06** | **Done** | Freezer move-out reverses extension days |
+| **L-07** | **Done** | Manual log form uses elevated card + brand tokens |
+| **L-08** | **Done** | Offline invite SVG visual; no `api.qrserver.com` |
+| **L-09** | **Done** | More aria-labels (`BottomNav`, dialogs, forms) |
+| **L-10** | **Done** | Focus management + Tab cycle on scan/barcode overlays |
+| **L-11** | **Done** | Stronger black scrims on capture guidance chips |
+| **L-12** | **Done** | Stronger multi-ring visual shutter pulse for iOS |
+| **L-13** | **Done** | Manual GTIN entry + lookup in barcode assist |
+| **L-14** | **Done** | Removed `SEED` export; `EMPTY_PANTRY` only |
+| **L-15** | **Done** | package.json name `fri-smart-pantry` |
+| **L-16** | **Done** | Single `emitScanOutcome` toast path |
+| **L-17** | **Done** | `shouldApplyRemote` wired in pull paths |
+| **L-18** | **Done** | Catalog merge cascade renames pantry rows once |
+| **L-19** | **Done** | Backup section promoted; Export primary brand CTA |
+| **L-20** | **Done** | SW + Settings honest offline copy (icons only) |
+| **L-21** | **Done** | Offline process blocked with honest queue-not-yet message |
+| **L-22** | **Done** | `VITE_GLOBAL_ADMIN_EMAIL` + enable flag |
+| **L-23** | **Done** | Early theme script in `__root.tsx` |
+| **L-24** | **Done** | Recipes expiring filter uses `EXPIRING_SOON_DAYS` |
+| **L-25** | **Done** | Label photo ≤100k chars; oversized dropped |
+
+#### Original Low descriptions (reference)
+
 | ID | Area | Type | Description | Where | Impact | Suggested fix |
 |----|------|------|-------------|-------|--------|---------------|
 | **L-01** | UX | Nit / Inconsistency | Header greeting vs profile name paths multiple sources of truth. | `greeting.ts`, `usePreferences` | Occasional “there” | Single profile selector |
@@ -191,6 +223,31 @@ Grouped by severity (Critical → Nit). IDs are stable for tracking.
 ---
 
 ### Nit
+
+| ID | Status | Fix summary |
+|----|--------|-------------|
+| **N-01** | **Done** | Documented `friggg-*` prefix in `storage-keys.ts` |
+| **N-02** | **Done** | Finances Suspense skeleton cards |
+| **N-03** | **Done** | Removed “Coming soon” dead nav branch |
+| **N-04** | **Done** | Shared `SafeImage` component |
+| **N-05** | **Done** | Static imports only (no `require` in app code) |
+| **N-06** | **Done** | Canvas fixture tests for capture-quality |
+| **N-07** | **Done** | `fanOutSecondaryAction` unit tests (hash-only skip) |
+| **N-08** | **Done** | Settings emoji chip sheet (+ free-text fallback) |
+| **N-09** | **Done** | `money.ts` helpers in ItemDetails / review / finances |
+| **N-10** | **Done** | Kept `use-mobile` — used by shadcn sidebar |
+| **N-11** | **Done** | `npm run typecheck` script |
+| **N-12** | **Done** | CI workflow in `docs/github-actions-ci.yml` (copy to `.github/workflows/ci.yml` when token has `workflow` scope) |
+| **N-13** | **Done** | “Move down” only when fill ratio high |
+| **N-14** | **Done** | Activity log capped at 40 |
+| **N-15** | **Done** | Stronger `clearInviteFromUrl` hash/query strip |
+| **N-16** | **Done** | Warm session skips long splash |
+| **N-17** | **Done** | LEGACY_SEED strip documented (N-17 comment) |
+| **N-18** | **Done** | Admin panel spacing aligned to Manage Family |
+| **N-19** | **Done** | Quality timer pauses when `document.hidden` |
+| **N-20** | **Done** | README offline honesty + Low/Nit polish notes |
+
+#### Original Nit descriptions (reference)
 
 | ID | Area | Type | Description | Where | Impact | Suggested fix |
 |----|------|------|-------------|-------|--------|---------------|

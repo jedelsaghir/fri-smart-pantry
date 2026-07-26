@@ -35,10 +35,7 @@ export const EMPTY_PANTRY: PantryItemsByStorage = {
   pantry: [],
 };
 
-/** @deprecated Legacy name; same as EMPTY_PANTRY (no demo seed). */
-export const SEED = EMPTY_PANTRY;
-
-/** Old demo item ids — stripped once so existing installs lose bogus stock */
+/** Old demo item ids — stripped once so existing installs lose bogus stock (N-17). */
 const LEGACY_SEED_ITEM_IDS = new Set(["1", "2", "3", "4", "5", "6", "f1"]);
 
 function stripLegacySeedItems(data: PantryItemsByStorage): PantryItemsByStorage {
@@ -301,7 +298,11 @@ export function usePantry(options: UsePantryOptions = {}) {
     });
   }, []);
 
-  /** Move item to a different storage; extend expiration when freezing */
+  /**
+   * Move item between storages.
+   * L-06: moving *into* freezer extends days; moving *out* of freezer reverses
+   * the same heuristic extension (not a full shelf-life recalculation).
+   */
   const moveItem = useCallback(
     (id: string, fromStorage: StorageKey, toStorage: StorageKey) => {
       if (fromStorage === toStorage) return;
@@ -309,8 +310,12 @@ export function usePantry(options: UsePantryOptions = {}) {
       const sourceItem = items[fromStorage].find((i) => i.id === id);
       if (!sourceItem) return;
 
-      const extension =
+      const freezeExtension =
         toStorage === "freezer" && fromStorage !== "freezer"
+          ? getFreezerExtensionDays(sourceItem.name)
+          : 0;
+      const unfreezeReduction =
+        fromStorage === "freezer" && toStorage !== "freezer"
           ? getFreezerExtensionDays(sourceItem.name)
           : 0;
 
@@ -320,8 +325,10 @@ export function usePantry(options: UsePantryOptions = {}) {
         if (idx === -1) return prev;
 
         const item = { ...source[idx] };
-        if (extension > 0) {
-          item.daysLeft = item.daysLeft + extension;
+        if (freezeExtension > 0) {
+          item.daysLeft = item.daysLeft + freezeExtension;
+        } else if (unfreezeReduction > 0) {
+          item.daysLeft = Math.max(0, item.daysLeft - unfreezeReduction);
         }
 
         source.splice(idx, 1);
@@ -336,11 +343,18 @@ export function usePantry(options: UsePantryOptions = {}) {
 
       setDetailsItem((prev) => (prev && prev.item.id === id ? null : prev));
 
-      if (extension > 0) {
+      if (freezeExtension > 0) {
         toast.success(`Moved to Freezer`, {
-          description: `Expiration extended by +${extension} days`,
+          description: `Expiration extended by +${freezeExtension} days`,
         });
         onActivity?.("You", `moved ${sourceItem.name} to freezer`);
+      } else if (unfreezeReduction > 0) {
+        const dest =
+          toStorage === "pantry" ? "Pantry" : toStorage === "freezer" ? "Freezer" : "Fridge";
+        toast.success(`Moved to ${dest}`, {
+          description: `Freezer extension reversed (−${unfreezeReduction} days)`,
+        });
+        onActivity?.("You", `moved ${sourceItem.name} to ${dest.toLowerCase()}`);
       } else {
         const dest =
           toStorage === "pantry" ? "Pantry" : toStorage === "freezer" ? "Freezer" : "Fridge";
@@ -585,8 +599,15 @@ export function usePantry(options: UsePantryOptions = {}) {
         for (const signal of signals) {
           const patch: Partial<PantryItem> = {};
           if (signal.labelPhotoDataUrl) {
-            patch.labelPhotoDataUrl = signal.labelPhotoDataUrl;
-            patch.labelPhotoAt = new Date().toISOString();
+            // L-25: drop oversized label photos rather than bloating local/sync
+            const photo =
+              signal.labelPhotoDataUrl.length <= 100_000
+                ? signal.labelPhotoDataUrl
+                : undefined;
+            if (photo) {
+              patch.labelPhotoDataUrl = photo;
+              patch.labelPhotoAt = new Date().toISOString();
+            }
           }
           if (typeof signal.daysLeft === "number" && Number.isFinite(signal.daysLeft)) {
             patch.daysLeft = Math.max(0, Math.floor(signal.daysLeft));

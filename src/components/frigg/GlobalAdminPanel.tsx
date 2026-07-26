@@ -127,10 +127,11 @@ export function GlobalAdminPanel({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5">
-        <section className="elevated-card mb-5 rounded-[1.75rem] p-5">
-          <div className="mb-4 flex items-start gap-3">
-            <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-secondary text-xl shadow-inner ring-1 ring-border/40">
+      {/* N-18: spacing tokens aligned with Manage Family (elevated cards, 3xl radius, px-5 gaps) */}
+      <div className="mx-auto w-full max-w-md flex-1 overflow-y-auto px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4 space-y-4">
+        <section className="elevated-card rounded-3xl p-4">
+          <div className="mb-3 flex items-start gap-3">
+            <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-secondary text-xl shadow-inner ring-1 ring-border/40">
               <Users className="size-5 text-foreground/80" strokeWidth={2.25} />
             </div>
             <div className="min-w-0 flex-1">
@@ -152,8 +153,8 @@ export function GlobalAdminPanel({
           </p>
         </section>
 
-        <section className="mb-5">
-          <div className="mb-2.5 flex items-center justify-between px-1">
+        <section className="space-y-3">
+          <div className="flex items-center justify-between px-1">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
               Registered users
             </h2>

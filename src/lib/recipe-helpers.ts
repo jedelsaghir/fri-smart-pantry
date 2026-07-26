@@ -5,6 +5,7 @@
 import type { PantryItemsByStorage, Recipe, RecipeFilter, StorageKey } from "@/types/pantry";
 import { namesMatchLoose } from "@/lib/pantry-ops";
 import { namesLookSimilar } from "@/lib/catalog";
+import { EXPIRING_SOON_DAYS } from "@/lib/item-status";
 
 /** M-08: loose match — exact loose name, core similarity, or shared significant token */
 export function ingredientMatchesPantry(pantryName: string, ingredientName: string): boolean {
@@ -64,9 +65,12 @@ export function filterAndSortRecipes(
   if (recipeFilter === "canMake") {
     filtered = filtered.filter((r) => canMakeRecipeFully(items, r));
   } else if (recipeFilter === "expiring") {
+    // L-24: same urgency window as ItemCard / Alerts (EXPIRING_SOON_DAYS)
     const expiringNames = new Set(
       (["fridge", "freezer", "pantry"] as StorageKey[]).flatMap((s) =>
-        items[s].filter((i) => i.daysLeft <= 3).map((i) => i.name.toLowerCase())
+        items[s]
+          .filter((i) => i.daysLeft <= EXPIRING_SOON_DAYS)
+          .map((i) => i.name.toLowerCase())
       )
     );
     filtered = filtered.filter((r) =>

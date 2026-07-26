@@ -18,10 +18,29 @@ import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { clearSyncCreds } from "@/lib/sync-session";
 
 /**
- * Designated app-admin email (case-insensitive).
- * H-05/H-07: panel is still localStorage-only — not multi-tenant. Production builds
+ * Designated app-admin email (L-22: not hardcoded only — prefer env).
+ * Panel is still localStorage-only — not multi-tenant. Production builds
  * require VITE_ENABLE_GLOBAL_ADMIN=1 so the panel is not ambient theater.
  */
+export function getGlobalAdminEmail(): string {
+  try {
+    const fromEnv = String(import.meta.env?.VITE_GLOBAL_ADMIN_EMAIL || "")
+      .trim()
+      .toLowerCase();
+    if (fromEnv) return fromEnv;
+  } catch {
+    /* ignore */
+  }
+  // Dev fallback only — production should set VITE_GLOBAL_ADMIN_EMAIL
+  try {
+    if (import.meta.env?.DEV) return "jed.el.saghir@hotmail.com";
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+/** @deprecated Use getGlobalAdminEmail() */
 export const GLOBAL_APP_ADMIN_EMAIL = "jed.el.saghir@hotmail.com";
 
 const FORCED_LOGOUT_KEY = STORAGE_KEYS.FORCED_LOGOUT_IDS;
@@ -32,11 +51,11 @@ export function normalizeAdminEmail(email: string | null | undefined): string {
 
 /** True when email matches admin AND the panel is explicitly enabled for this build. */
 export function isGlobalAppAdmin(email: string | null | undefined): boolean {
-  if (normalizeAdminEmail(email) !== GLOBAL_APP_ADMIN_EMAIL) return false;
+  const admin = getGlobalAdminEmail();
+  if (!admin || normalizeAdminEmail(email) !== admin) return false;
   try {
     const flag = String(import.meta.env?.VITE_ENABLE_GLOBAL_ADMIN || "").toLowerCase();
     if (flag === "1" || flag === "true" || flag === "yes") return true;
-    // Local dev may open the panel without the flag for operator convenience
     if (import.meta.env?.DEV) return true;
   } catch {
     /* ignore */

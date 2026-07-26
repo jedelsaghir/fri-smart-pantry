@@ -20,6 +20,7 @@ import {
   readFileAsDataUrl,
 } from "@/lib/receipts";
 import { analyzeMonthStores } from "@/lib/store-insights";
+import { formatMoney, moneySymbol } from "@/lib/money";
 import {
   Drawer,
   DrawerClose,
@@ -29,6 +30,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
+import { SafeImage } from "@/components/frigg/SafeImage";
 
 interface CategoryData {
   name: string;
@@ -43,19 +45,6 @@ const CATEGORY_COLORS = [
   "#6b7f6b",
   "#7a8a9a",
 ];
-
-function moneySymbol(currency?: string): string {
-  const c = (currency || "EUR").toUpperCase();
-  if (c === "USD" || c === "US$") return "$";
-  if (c === "GBP") return "£";
-  if (c === "EUR") return "€";
-  return c + " ";
-}
-
-function formatMoney(amount: number, currency?: string): string {
-  const sym = moneySymbol(currency);
-  return `${sym}${amount.toFixed(2)}`;
-}
 
 /** Dominant currency among receipts (M-11); falls back to EUR */
 function dominantCurrency(receipts: StoredReceipt[]): string {
@@ -212,27 +201,33 @@ function FinancialsScreenInner({
           )}
         </div>
         {logOpen && (
-          <div className="mt-4 space-y-2 border-t border-border/40 pt-4">
+          <div className="mt-4 space-y-3 rounded-2xl border border-border/50 bg-secondary/25 p-3.5">
+            <div className="text-[12px] font-semibold text-muted-foreground">
+              Log purchase manually
+            </div>
             <Input
               value={logStore}
               onChange={(e) => setLogStore(e.target.value)}
               placeholder="Store"
-              className="h-11 rounded-2xl"
+              className="h-11 rounded-2xl border-border/50 bg-card"
+              aria-label="Store name"
             />
             <Input
               value={logTotal}
               onChange={(e) => setLogTotal(e.target.value)}
               placeholder={`Total (${displayCurrency})`}
               inputMode="decimal"
-              className="h-11 rounded-2xl"
+              className="h-11 rounded-2xl border-border/50 bg-card"
+              aria-label="Purchase total"
             />
             <Input
               value={logNote}
               onChange={(e) => setLogNote(e.target.value)}
               placeholder="Note (optional)"
-              className="h-11 rounded-2xl"
+              className="h-11 rounded-2xl border-border/50 bg-card"
+              aria-label="Purchase note"
             />
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-border/60 py-3 text-xs font-semibold active:bg-secondary/50">
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-border/60 bg-card/60 py-3 text-xs font-semibold active:bg-secondary/50">
               <input
                 type="file"
                 accept="image/*"
@@ -250,21 +245,21 @@ function FinancialsScreenInner({
               />
               {logPhoto ? "Photo attached ✓" : "Attach photo (optional)"}
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={() => {
                   setLogOpen(false);
                   setLogPhoto(null);
                 }}
-                className="flex-1 rounded-2xl border py-2.5 text-sm font-semibold"
+                className="flex-1 rounded-2xl border border-border/60 bg-card py-2.5 text-sm font-semibold active:bg-secondary/50"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={submitLogPurchase}
-                className="flex-1 rounded-2xl bg-brand py-2.5 text-sm font-semibold text-brand-foreground"
+                className="flex-1 rounded-2xl bg-brand py-2.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition"
               >
                 Save
               </button>
@@ -505,8 +500,7 @@ function FinancialsScreenInner({
                 >
                   <div className="relative size-14 shrink-0 overflow-hidden rounded-2xl bg-secondary ring-1 ring-border/40">
                     {r.imageDataUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <SafeImage
                         src={r.imageDataUrl}
                         alt=""
                         className="size-full object-cover"
@@ -577,8 +571,7 @@ function FinancialsScreenInner({
                         onClick={() => setPhotoFullscreen(true)}
                         className="block w-full overflow-hidden rounded-3xl border border-border/50 bg-secondary/40 active:opacity-95"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <SafeImage
                           src={selected.imageDataUrl}
                           alt={`Receipt from ${selected.store}`}
                           className="mx-auto max-h-64 w-full object-contain"
@@ -687,8 +680,7 @@ function FinancialsScreenInner({
             </button>
           </div>
           <div className="flex flex-1 items-center justify-center p-4 overflow-auto overscroll-contain">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <SafeImage
               src={selected.imageDataUrl}
               alt={`Receipt from ${selected.store}`}
               className="max-h-full max-w-full object-contain rounded-lg"

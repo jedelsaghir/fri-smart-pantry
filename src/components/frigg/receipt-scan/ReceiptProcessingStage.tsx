@@ -2,6 +2,7 @@
 
 import { Loader2, Check, Aperture, ScanText, GitMerge } from "lucide-react";
 import type { CapturedPhoto } from "./types";
+import { SafeImage } from "@/components/frigg/SafeImage";
 
 export type PhotoProcessState = "pending" | "enhancing" | "reading" | "done" | "error";
 
@@ -141,8 +142,7 @@ export function ReceiptProcessingStage({
                         : "ring-border/40 opacity-75")
                   }
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.dataUrl} alt="" className="size-full object-cover" />
+                  <SafeImage src={p.dataUrl} alt="" className="size-full object-cover" />
                   {done && (
                     <div className="absolute inset-0 grid place-items-center bg-black/30">
                       <Check className="size-4 text-white" strokeWidth={2.5} />

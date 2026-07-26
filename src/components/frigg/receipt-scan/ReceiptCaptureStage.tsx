@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 import { Image as ImageIcon, X, Sparkles, RotateCcw, ChevronDown } from "lucide-react";
 import type { CaptureQuality } from "@/lib/capture-quality";
+import { SafeImage } from "@/components/frigg/SafeImage";
 import type { CapturedPhoto } from "./types";
 
 export function ReceiptCaptureStage({
@@ -134,12 +135,14 @@ export function ReceiptCaptureStage({
           </div>
         )}
 
+        {/* L-12: strong visual shutter pulse (iOS has no navigator.vibrate) */}
         {shutterFlash && (
           <>
-            <div className="pointer-events-none absolute inset-0 z-20 bg-white animate-[fadeOut_0.22s_ease-out_forwards]" />
+            <div className="pointer-events-none absolute inset-0 z-20 bg-white/95 animate-[fadeOut_0.28s_ease-out_forwards]" />
             <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
-              <div className="size-28 rounded-full border-[3px] border-white/95 shadow-[0_0_40px_rgba(255,255,255,0.45)] animate-[shutterRing_0.4s_ease-out_forwards]" />
-              <div className="absolute size-16 rounded-full border border-white/50 animate-[shutterRing_0.45s_ease-out_0.05s_forwards]" />
+              <div className="size-32 rounded-full border-[3px] border-white shadow-[0_0_48px_rgba(255,255,255,0.7)] animate-[shutterRing_0.42s_ease-out_forwards]" />
+              <div className="absolute size-20 rounded-full border-2 border-white/70 animate-[shutterRing_0.48s_ease-out_0.04s_forwards]" />
+              <div className="absolute size-10 rounded-full bg-white/35 animate-[shutterRing_0.35s_ease-out_forwards]" />
             </div>
           </>
         )}
@@ -165,7 +168,7 @@ export function ReceiptCaptureStage({
                 {captureQuality.issueLabel}
               </span>
             )}
-            <div className="max-w-[min(100%,320px)] rounded-full border border-white/10 bg-black/65 px-3.5 py-1.5 text-center text-[12px] font-medium leading-snug text-white/95 shadow-lg backdrop-blur-md">
+            <div className="max-w-[min(100%,320px)] rounded-full border border-white/20 bg-black/80 px-3.5 py-1.5 text-center text-[12px] font-semibold leading-snug text-white shadow-lg backdrop-blur-md">
               {captureQuality.message}
             </div>
           </div>
@@ -178,10 +181,13 @@ export function ReceiptCaptureStage({
           </div>
         )}
 
-        {/* Long-receipt gentle hint after first capture */}
-        {cameraOn && photoCount >= 1 && (
+        {/* N-13: long-receipt hint only when frame is well filled (likely multi-section) */}
+        {cameraOn &&
+          photoCount >= 1 &&
+          (captureQuality?.fillRatio ?? 0) >= 0.35 &&
+          !captureQuality?.issues.includes("too_far") && (
           <div className="absolute bottom-3 left-3 right-3 z-10 flex justify-center pointer-events-none">
-            <div className="flex items-center gap-1.5 rounded-full border border-white/12 bg-black/55 px-3 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur-md">
+            <div className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/80 px-3 py-1.5 text-[11px] font-semibold text-white shadow-lg backdrop-blur-md">
               <ChevronDown className="size-3.5 opacity-80 animate-bounce" />
               Move down for the next section
             </div>
@@ -219,8 +225,7 @@ export function ReceiptCaptureStage({
                   (index === photoCount - 1 ? "ring-brand/50" : "ring-border/50")
                 }
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <SafeImage
                   src={photo.dataUrl}
                   alt={`Receipt photo ${index + 1}`}
                   className="size-full object-cover"

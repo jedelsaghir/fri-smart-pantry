@@ -1,4 +1,6 @@
-// Friġġ PWA Service Worker — offline shell + static icons only.
+// Friġġ PWA Service Worker — static icons + manifest only (L-20).
+// Does NOT precache app JS/CSS/HTML bundles: network is required for a fresh shell.
+// Offline = already-loaded app + localStorage data; OCR and cloud sync still need network.
 // Bump CACHE_NAME on every intentional deploy that must drop old shells.
 const CACHE_NAME = "friggg-v4-no-banner-2026-07-20";
 const ASSETS = [

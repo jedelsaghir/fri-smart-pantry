@@ -22,7 +22,7 @@ const base = (over: Partial<PantryItem> = {}): PantryItem => ({
 describe("sameProduct", () => {
   it("matches name+unit ignoring case", () => {
     expect(sameProduct(base(), base({ name: "whole milk", id: "2" }))).toBe(true);
-    expect(sameProduct(base(), base({ unit: "ml" }))).toBe(false);
+    expect(sameProduct(base(), base({ unit: "pcs" }))).toBe(false);
   });
   it("matches unit aliases and size-stripped names", () => {
     expect(
@@ -34,6 +34,20 @@ describe("sameProduct", () => {
     expect(
       sameProduct({ name: "Free-range eggs", unit: "pcs" }, { name: "Free range eggs", unit: "pieces" })
     ).toBe(true);
+  });
+  it("treats g and kg as same product (convertible)", () => {
+    expect(sameProduct({ name: "Flour", unit: "g" }, { name: "Flour", unit: "kg" })).toBe(true);
+    expect(sameProduct({ name: "Milk", unit: "ml" }, { name: "Milk", unit: "L" })).toBe(true);
+  });
+});
+
+describe("upsertPantryItem conversion", () => {
+  it("merges 500g into 1kg stock as 1.5kg", () => {
+    const list = [base({ name: "Flour", unit: "kg", qty: 1 })];
+    const next = upsertPantryItem(list, base({ id: "x", name: "Flour", unit: "g", qty: 500 }));
+    expect(next).toHaveLength(1);
+    expect(next[0].qty).toBe(1.5);
+    expect(next[0].unit).toBe("kg");
   });
 });
 

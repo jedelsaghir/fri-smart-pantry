@@ -6,6 +6,7 @@ import { BarcodeAssistButton } from "@/components/frigg/BarcodeAssistButton";
 import { confidenceBand, type ConfidenceBand } from "@/lib/ocr-parse";
 import { AUTO_ADD_CONFIDENCE } from "@/lib/ocr-merge";
 import { formatMoney } from "@/lib/money";
+import { convertQty, mergeQuantities } from "@/lib/units";
 import { formatStorageLabel } from "./types";
 
 function ConfidenceChip({ confidence }: { confidence: number }) {
@@ -115,12 +116,22 @@ export function ReceiptReviewStage({
           const disposition: ReviewDisposition =
             item.disposition ?? (match ? "merge" : "add_new");
           const isNonFoodSuspect = !!item.possiblyNonFood;
-          const resultQtyPreview =
+          const mergePreview =
             match && disposition === "merge"
+              ? mergeQuantities(match.qty, match.unit, item.qty, item.unit)
+              : null;
+          const resultQtyPreview =
+            mergePreview?.qty ??
+            (match && disposition === "merge"
               ? match.qty + item.qty
               : disposition === "update"
                 ? item.qty
-                : item.qty;
+                : item.qty);
+          const resultUnitPreview = mergePreview?.unit ?? match?.unit ?? item.unit;
+          const addedInMatchUnit =
+            match && disposition === "merge"
+              ? convertQty(item.qty, item.unit, match.unit) ?? item.qty
+              : item.qty;
 
           return (
             <div
@@ -227,7 +238,8 @@ export function ReceiptReviewStage({
                       </p>
                       {disposition === "merge" && (
                         <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-                          Update → {resultQtyPreview} {match.unit} (+{item.qty})
+                          Update → {resultQtyPreview} {resultUnitPreview} (+
+                          {addedInMatchUnit} {match.unit})
                         </p>
                       )}
 

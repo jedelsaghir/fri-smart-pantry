@@ -1,34 +1,38 @@
 import type { PantryItem, PantryItemsByStorage, StorageKey } from "@/types/pantry";
 import { coreItemName, normalizeItemName } from "@/lib/catalog";
-import { normalizeUnit } from "@/lib/ocr-parse";
+import { mergeQuantities, normalizeUnit, unitsCompatible } from "@/lib/units";
 
 /** Canonical unit for comparisons (L / litre / liter → L, pcs / pieces → pcs, …) */
 export function canonicalUnit(unit: string, qty = 1): string {
   return normalizeUnit(unit || "pcs", qty);
 }
 
-/** True when units are the same after normalization */
+/** True when units are the same or convertible (g↔kg, ml↔L) */
 export function unitsMatch(a: string, b: string, qtyA = 1, qtyB = 1): boolean {
-  return canonicalUnit(a, qtyA) === canonicalUnit(b, qtyB);
+  return unitsCompatible(a, b, qtyA, qtyB);
 }
 
 /**
- * Same product identity: core name (sizes stripped) + normalized unit.
+ * Same product identity: core name (sizes stripped) + compatible unit.
  * "Whole milk 1L" + L  ≈  "Whole Milk" + litre
+ * "Flour 500g" ≈ "Flour 0.5kg"
  */
-export function sameProduct(a: { name: string; unit: string }, b: { name: string; unit: string }): boolean {
+export function sameProduct(
+  a: { name: string; unit: string; qty?: number },
+  b: { name: string; unit: string; qty?: number }
+): boolean {
   const nameA = coreItemName(a.name) || normalizeItemName(a.name);
   const nameB = coreItemName(b.name) || normalizeItemName(b.name);
   if (!nameA || !nameB) return false;
   if (nameA !== nameB && normalizeItemName(a.name) !== normalizeItemName(b.name)) {
     return false;
   }
-  return unitsMatch(a.unit, b.unit);
+  return unitsMatch(a.unit, b.unit, a.qty ?? 1, b.qty ?? 1);
 }
 
 /**
  * Add or merge qty into a storage bucket (P1-1).
- * Merges when name+unit match; optionally applies price fields.
+ * Merges when name+unit match (including g↔kg / ml↔L with conversion).
  */
 export function upsertPantryItem(
   list: PantryItem[],
@@ -38,10 +42,12 @@ export function upsertPantryItem(
   const idx = list.findIndex((i) => sameProduct(i, incoming));
   if (idx < 0) return [...list, incoming];
   const existing = list[idx];
+  const merged = mergeQuantities(existing.qty, existing.unit, incoming.qty, incoming.unit);
   const next = [...list];
   next[idx] = {
     ...existing,
-    qty: existing.qty + incoming.qty,
+    qty: merged ? merged.qty : existing.qty + incoming.qty,
+    unit: merged ? merged.unit : existing.unit,
     emoji: existing.emoji || incoming.emoji,
     daysLeft: Math.min(existing.daysLeft, incoming.daysLeft),
     minStock: existing.minStock ?? incoming.minStock,

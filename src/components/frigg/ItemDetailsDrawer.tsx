@@ -13,6 +13,13 @@ import {
 import { getStatus } from "./ItemCard";
 import { defaultPriceUnit, getFreezerExtensionDays } from "@/hooks/usePantry";
 import { moneySymbol } from "@/lib/money";
+import {
+  canToggleUnit,
+  priceAfterUnitToggle,
+  toggleMassUnit,
+  toggleVolumeUnit,
+} from "@/lib/units";
+import { hapticLight } from "@/lib/haptics";
 import type { DetailsItemState, PantryItem, StorageKey } from "@/types/pantry";
 
 /** N-09: display currency for price fields (EUR default until multi-currency prefs) */
@@ -494,9 +501,38 @@ function DetailsBody({
             ariaLabel="quantity"
             valueClassName="text-2xl"
           />
+          {canToggleUnit(item.unit, item.qty) && (
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const mass = toggleMassUnit(item.qty, item.unit);
+                  const vol = toggleVolumeUnit(item.qty, item.unit);
+                  const next = mass || vol;
+                  if (!next) return;
+                  hapticLight();
+                  onPatch(item.id, {
+                    qty: next.qty,
+                    unit: next.unit,
+                    latestPrice: priceAfterUnitToggle(item.latestPrice),
+                  });
+                }}
+                className="min-h-11 flex-1 rounded-2xl border border-border/50 bg-secondary/50 px-3 text-sm font-semibold active:bg-secondary"
+              >
+                {(() => {
+                  const mass = toggleMassUnit(item.qty, item.unit);
+                  const vol = toggleVolumeUnit(item.qty, item.unit);
+                  const next = mass || vol;
+                  return next
+                    ? `Convert to ${next.qty} ${next.unit}`
+                    : "Convert unit";
+                })()}
+              </button>
+            </div>
+          )}
           <p className="mt-1 px-0.5 text-[11px] text-muted-foreground">
             Tap the number to type. Setting quantity to 0 asks to remove the item (not leave a blank
-            row).
+            row). Unit toggle converts g↔kg and ml↔L.
           </p>
           {onRequestDelete && (
             <button

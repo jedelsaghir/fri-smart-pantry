@@ -4,6 +4,7 @@
  */
 
 import type { PantryMatchInfo, PantryMatchKind, StorageKey } from "@/types/pantry";
+import { normalizeUnit, unitsCompatible as unitsAreCompatible } from "@/lib/units";
 
 // ---------------------------------------------------------------------------
 // Thresholds
@@ -19,74 +20,16 @@ export const EXACT_MATCH_THRESHOLD = 0.93;
 export const AUTO_UPDATE_OCR_CONFIDENCE = 0.8;
 
 // ---------------------------------------------------------------------------
-// Units
+// Units — shared with pantry merge (g↔kg, ml↔L compatible)
 // ---------------------------------------------------------------------------
-
-const UNIT_MAP: Record<string, string> = {
-  l: "L",
-  lt: "L",
-  ltr: "L",
-  liter: "L",
-  litre: "L",
-  liters: "L",
-  litres: "L",
-  ml: "ml",
-  milliliter: "ml",
-  millilitre: "ml",
-  milliliters: "ml",
-  millilitres: "ml",
-  g: "g",
-  gr: "g",
-  gram: "g",
-  grams: "g",
-  kg: "kg",
-  kilo: "kg",
-  kilogram: "kg",
-  kilograms: "kg",
-  pc: "pcs",
-  pcs: "pcs",
-  piece: "pcs",
-  pieces: "pcs",
-  ea: "pcs",
-  each: "pcs",
-  x: "pcs",
-  pack: "pack",
-  packs: "pack",
-  pk: "pack",
-  bag: "bag",
-  bags: "bag",
-  bottle: "bottle",
-  bottles: "bottle",
-  btl: "bottle",
-  tub: "tub",
-  tubs: "tub",
-  loaf: "loaf",
-  loaves: "loaf",
-  bunch: "bunch",
-  bunches: "bunch",
-  can: "can",
-  cans: "can",
-  jar: "jar",
-  jars: "jar",
-  box: "box",
-  boxes: "box",
-};
 
 /** Normalize unit aliases → canonical form (L, pcs, g, …) */
 export function normalizeMatchUnit(unit: string, qty = 1): string {
-  const u = String(unit ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\./g, "");
-  if (!u) {
-    if (qty >= 50) return "g";
-    return "pcs";
-  }
-  return UNIT_MAP[u] ?? u.slice(0, 12);
+  return normalizeUnit(unit, qty);
 }
 
 export function unitsCompatible(a: string, b: string, qtyA = 1, qtyB = 1): boolean {
-  return normalizeMatchUnit(a, qtyA) === normalizeMatchUnit(b, qtyB);
+  return unitsAreCompatible(a, b, qtyA, qtyB);
 }
 
 // ---------------------------------------------------------------------------

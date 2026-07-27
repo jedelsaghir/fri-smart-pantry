@@ -10,6 +10,7 @@ import type {
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { applyIncomingToStorage, sameProduct } from "@/lib/pantry-ops";
 import { upsertShoppingListItem } from "@/lib/shopping";
+import { mergeQuantities } from "@/lib/units";
 import {
   getDefaultDaysLeft,
   getDefaultMinStock,
@@ -113,6 +114,14 @@ export function useShoppingList({
   }, [computeSuggestedItems, onGenerated, setAddedBanner]);
 
   const toggleShoppingItem = useCallback((id: string) => {
+    try {
+      // light tick when checking off items
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        navigator.vibrate(6);
+      }
+    } catch {
+      /* ignore */
+    }
     setShoppingList((prev) =>
       prev.map((item) => (item.id === id ? { ...item, checked: !item.checked } : item))
     );
@@ -137,6 +146,13 @@ export function useShoppingList({
   const markPurchased = useCallback(() => {
     const purchased = shoppingList.filter((i) => i.checked);
     if (purchased.length === 0) return;
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        navigator.vibrate([10, 40, 14]);
+      }
+    } catch {
+      /* ignore */
+    }
 
     setItems((prev) => {
       let next = { ...prev };
@@ -147,9 +163,14 @@ export function useShoppingList({
           if (has) {
             next = {
               ...next,
-              [storage]: next[storage].map((item) =>
-                sameProduct(item, p) ? { ...item, qty: item.qty + p.qty } : item
-              ),
+              [storage]: next[storage].map((item) => {
+                if (!sameProduct(item, p)) return item;
+                // Convert convertible units (g↔kg, ml↔L) when restocking
+                const m = mergeQuantities(item.qty, item.unit, p.qty, p.unit);
+                return m
+                  ? { ...item, qty: m.qty, unit: m.unit }
+                  : { ...item, qty: item.qty + p.qty };
+              }),
             };
             merged = true;
           }
@@ -230,6 +251,7 @@ export function useShoppingList({
       }
     }
   }, [shoppingList]);
+
 
   const addFromCatalog = useCallback(
     (c: { id: string; name: string; unit: string; emoji: string }) => {

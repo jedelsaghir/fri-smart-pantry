@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { GlassHeader } from "./GlassHeader";
 import { StorageTabs } from "./StorageTabs";
-import { ItemCard } from "./ItemCard";
 import { ItemDetailsDrawer } from "./ItemDetailsDrawer";
 import { BottomNav } from "./BottomNav";
 import { ScanFab } from "./ScanFab";
@@ -14,7 +13,7 @@ import { ShoppingListView } from "./ShoppingListView";
 import { RecipesView } from "./RecipesView";
 import { applyIncomingToStorage } from "@/lib/pantry-ops";
 import { getPlatform } from "@/platform";
-import { Plus, ScanLine } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { StorageKey, ActiveView } from "@/types/pantry";
 import {
   usePantry,
@@ -34,6 +33,8 @@ import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
 import { PantryAddSheet } from "./PantryAddSheet";
 import { PantryEmptyState as EmptyState } from "./PantryEmptyState";
 import { PantryItemList } from "./PantryItemList";
+import { PantryListControls } from "./PantryListControls";
+import { PantryBulkBar } from "./PantryBulkBar";
 import { AlertsDrawer } from "./AlertsDrawer";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { FamilyDrawer } from "./FamilyDrawer";
@@ -43,6 +44,14 @@ import { isGlobalAppAdmin } from "@/lib/global-admin";
 import { personalGreeting } from "@/lib/greeting";
 import { scheduleHouseholdPush } from "@/lib/run-household-sync";
 import { loadFamilyMembers } from "@/lib/family";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+import {
+  flattenPantryItems,
+  preparePantryList,
+  type PantryFilterMode,
+  type PantrySortMode,
+} from "@/lib/pantry-list";
+import { hapticSuccess, hapticWarning, hapticMedium } from "@/lib/haptics";
 
 const FinancialsScreen = lazy(() =>
   import("./FinancialsScreen").then((m) => ({ default: m.FinancialsScreen }))
@@ -56,6 +65,37 @@ export function PantryScreen() {
   const [showGlobalAdmin, setShowGlobalAdmin] = useState(false);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+
+  // Pantry search / sort / filter / bulk select
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [pantrySort, setPantrySort] = useState<PantrySortMode>(() => {
+    if (typeof window === "undefined") return "name";
+    try {
+      const v = localStorage.getItem(STORAGE_KEYS.PANTRY_SORT);
+      if (v === "expiry" || v === "qty" || v === "name") return v;
+    } catch {
+      /* ignore */
+    }
+    return "name";
+  });
+  const [pantryFilter, setPantryFilter] = useState<PantryFilterMode>("all");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [showMoveSheet, setShowMoveSheet] = useState(false);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQuery(searchQuery), 160);
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PANTRY_SORT, pantrySort);
+    } catch {
+      /* ignore */
+    }
+  }, [pantrySort]);
 
   const requestConfirm = useCallback((req: ConfirmRequest) => {
     setConfirmRequest(req);
@@ -205,6 +245,16 @@ export function PantryScreen() {
     setShowGlobalAdmin(true);
   }, [prefs.userEmail, family]);
 
+  const findItemStorage = useCallback(
+    (id: string): StorageKey | null => {
+      for (const storage of ["fridge", "freezer", "pantry"] as StorageKey[]) {
+        if (items[storage].some((i) => i.id === id)) return storage;
+      }
+      return null;
+    },
+    [items]
+  );
+
   const handleDeleteItem = useCallback(
     (id: string) => {
       let found: { item: (typeof current)[0]; storage: StorageKey } | null = null;
@@ -225,6 +275,7 @@ export function PantryScreen() {
         onConfirm: () => {
           const snapshot = removeItem(id);
           if (!snapshot) return;
+          hapticWarning();
           rememberPantryItem(snapshot.item, "pantry_delete");
           toast(`${snapshot.item.emoji} ${snapshot.item.name} removed`, {
             action: {
@@ -238,6 +289,99 @@ export function PantryScreen() {
     },
     [items, current, removeItem, restoreItem, rememberPantryItem, requestConfirm]
   );
+
+  const searchingAll = debouncedQuery.trim().length > 0;
+
+  const preparedRows = useMemo(() => {
+    const flat = searchingAll
+      ? flattenPantryItems(items)
+      : (items[active] || []).map((i) => ({ ...i, storage: active as StorageKey }));
+    return preparePantryList(flat, {
+      query: debouncedQuery,
+      filter: pantryFilter,
+      sort: pantrySort,
+    });
+  }, [items, active, debouncedQuery, searchingAll, pantryFilter, pantrySort]);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setShowMoveSheet(false);
+  }, []);
+
+  const toggleSelectId = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const enterSelectWith = useCallback((id: string) => {
+    setSelectMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const handleBulkMove = useCallback(
+    (to: StorageKey) => {
+      const ids = [...selectedIds];
+      if (!ids.length) return;
+      let n = 0;
+      for (const id of ids) {
+        const from = findItemStorage(id);
+        if (!from || from === to) continue;
+        moveItem(id, from, to);
+        n += 1;
+      }
+      hapticSuccess();
+      family.addActivity("You", `moved ${n} item${n === 1 ? "" : "s"} to ${to}`);
+      toast.success(`Moved ${n} item${n === 1 ? "" : "s"}`);
+      exitSelectMode();
+    },
+    [selectedIds, findItemStorage, moveItem, family, exitSelectMode]
+  );
+
+  const handleBulkDelete = useCallback(() => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    requestConfirm({
+      title: `Delete ${ids.length} item${ids.length === 1 ? "" : "s"}?`,
+      description: "They will stay in the Shopping List Database for future use.",
+      confirmLabel: "Delete all",
+      destructive: true,
+      onConfirm: () => {
+        const snapshots: Array<NonNullable<ReturnType<typeof removeItem>>> = [];
+        for (const id of ids) {
+          const snap = removeItem(id);
+          if (snap) {
+            snapshots.push(snap);
+            rememberPantryItem(snap.item, "pantry_delete");
+          }
+        }
+        hapticWarning();
+        family.addActivity("You", `deleted ${snapshots.length} items`);
+        toast(`${snapshots.length} removed`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              for (const s of snapshots) restoreItem(s.item, s.storage);
+            },
+          },
+          duration: 5000,
+        });
+        exitSelectMode();
+      },
+    });
+  }, [
+    selectedIds,
+    requestConfirm,
+    removeItem,
+    rememberPantryItem,
+    family,
+    restoreItem,
+    exitSelectMode,
+  ]);
 
   const handleDeleteReceipt = useCallback(
     (id: string) => {
@@ -276,6 +420,7 @@ export function PantryScreen() {
       setItems((prev) => applyIncomingToStorage(prev, active, newItem));
       rememberPantryItem(newItem, "pantry_add");
       family.addActivity("You", `added ${input.qty} ${input.unit} ${input.name}`);
+      hapticSuccess();
       toast.success("Added to pantry", { description: newItem.name });
     },
     [active, setItems, rememberPantryItem, family]
@@ -612,17 +757,51 @@ export function PantryScreen() {
           </Suspense>
         ) : (
           <>
-            <div
-              className="mb-3.5"
-              style={{ width: "100%", maxWidth: "100%", display: "block" }}
-            >
-              <StorageTabs active={active} onChange={setActive} />
-            </div>
-            {current.length > 0 && (
+            {!searchingAll && (
+              <div
+                className="mb-3.5"
+                style={{ width: "100%", maxWidth: "100%", display: "block" }}
+              >
+                <StorageTabs active={active} onChange={setActive} />
+              </div>
+            )}
+            {searchingAll && (
+              <div className="mb-3 flex items-center justify-between px-0.5">
+                <p className="text-sm font-semibold text-foreground">All storage</p>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="min-h-9 rounded-full bg-secondary/70 px-3 text-xs font-semibold active:bg-secondary"
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+
+            <PantryListControls
+              query={searchQuery}
+              onQueryChange={setSearchQuery}
+              sort={pantrySort}
+              onSortChange={setPantrySort}
+              filter={pantryFilter}
+              onFilterChange={setPantryFilter}
+              selectMode={selectMode}
+              onToggleSelectMode={() => {
+                if (selectMode) exitSelectMode();
+                else {
+                  setSelectMode(true);
+                  hapticMedium();
+                }
+              }}
+              resultCount={preparedRows.length}
+              searchingAll={searchingAll}
+            />
+
+            {!searchingAll && current.length > 0 && !selectMode && (
               <button
                 type="button"
                 onClick={() => setAddSheetOpen(true)}
-                className="group relative mb-1 flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-border/45 bg-card py-3.5 text-[15px] font-semibold tracking-[-0.015em] text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.75)_inset,0_10px_28px_-14px_oklch(0.2_0.02_150/0.14)] active:scale-[0.985] transition duration-200 dark:shadow-[0_1px_0_0_oklch(1_0_0/0.06)_inset,0_10px_28px_-14px_oklch(0_0_0/0.4)]"
+                className="group relative mb-1 flex min-h-12 w-full items-center justify-center gap-2.5 overflow-hidden rounded-3xl border border-border/45 bg-card py-3.5 text-[15px] font-semibold tracking-[-0.015em] text-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.75)_inset,0_10px_28px_-14px_oklch(0.2_0.02_150/0.14)] active:scale-[0.985] transition duration-200 dark:shadow-[0_1px_0_0_oklch(1_0_0/0.06)_inset,0_10px_28px_-14px_oklch(0_0_0/0.4)]"
               >
                 <span
                   className="pointer-events-none absolute inset-0 opacity-60 transition-opacity duration-300 group-hover:opacity-100"
@@ -692,16 +871,37 @@ export function PantryScreen() {
               </div>
             )}
 
-            {current.length === 0 ? (
+            {!searchingAll && current.length === 0 && pantryFilter === "all" ? (
               <EmptyState
                 label={active}
                 onAdd={() => setAddSheetOpen(true)}
                 onScan={() => setScanOpen(true)}
               />
+            ) : preparedRows.length === 0 ? (
+              <div className="elevated-card mt-6 rounded-3xl px-5 py-10 text-center">
+                <p className="text-sm font-semibold text-foreground">No matches</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try another name, clear filters, or switch storage.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setPantryFilter("all");
+                  }}
+                  className="mt-4 min-h-11 rounded-2xl bg-secondary px-4 text-sm font-semibold active:bg-secondary/80"
+                >
+                  Reset search
+                </button>
+              </div>
             ) : (
               <PantryItemList
-                items={current}
-                storage={active}
+                rows={preparedRows}
+                showStoragePill={searchingAll}
+                selectMode={selectMode}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelectId}
+                onLongPressSelect={enterSelectWith}
                 onOpenDetails={openItemDetails}
                 onDelete={handleDeleteItem}
               />
@@ -710,10 +910,29 @@ export function PantryScreen() {
         )}
       </main>
 
+      {selectMode &&
+        !isListView &&
+        !isRecipesView &&
+        !isFinancesView && (
+          <PantryBulkBar
+            count={selectedIds.size}
+            total={preparedRows.length}
+            onSelectAll={() => setSelectedIds(new Set(preparedRows.map((r) => r.id)))}
+            onClear={() => setSelectedIds(new Set())}
+            onMove={handleBulkMove}
+            onDelete={handleBulkDelete}
+            onDone={exitSelectMode}
+            showMoveSheet={showMoveSheet}
+            onToggleMoveSheet={() => setShowMoveSheet((v) => !v)}
+          />
+        )}
+
       {!isListView &&
         !isRecipesView &&
         !isFinancesView &&
-        current.length > 0 && <ScanFab onClick={() => setScanOpen(true)} />}
+        !selectMode &&
+        current.length > 0 &&
+        !searchingAll && <ScanFab onClick={() => setScanOpen(true)} />}
 
       <BottomNav
         active={

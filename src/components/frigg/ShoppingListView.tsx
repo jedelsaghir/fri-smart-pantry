@@ -6,6 +6,9 @@ import type { CatalogMergeGroup } from "@/types/pantry";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { buildShoppingListShareText, whatsAppShareUrl } from "@/lib/shopping-share";
+import { hapticLight } from "@/lib/haptics";
 
 export function ShoppingListView({
   shoppingList,
@@ -60,6 +63,23 @@ export function ShoppingListView({
     c.name.toLowerCase().includes(pickQuery.trim().toLowerCase())
   );
 
+  const shareOnWhatsApp = () => {
+    if (shoppingList.length === 0) {
+      toast.message("List is empty");
+      return;
+    }
+    try {
+      hapticLight();
+      const text = buildShoppingListShareText(shoppingList, "unchecked");
+      const url = whatsAppShareUrl(text);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("Couldn't open WhatsApp", {
+        description: "Try Export to copy the list instead.",
+      });
+    }
+  };
+
   return (
     <>
       <div className="flex items-center justify-between mb-4">
@@ -72,15 +92,23 @@ export function ShoppingListView({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onExport}
-            className="rounded-2xl border px-3.5 py-2 text-sm font-semibold active:bg-secondary/60 transition"
+            onClick={shareOnWhatsApp}
+            className="min-h-11 rounded-2xl border border-border/60 px-3.5 py-2 text-sm font-semibold active:bg-secondary/60 transition"
+            aria-label="Share list on WhatsApp"
           >
-            Share
+            WhatsApp
+          </button>
+          <button
+            type="button"
+            onClick={onExport}
+            className="min-h-11 rounded-2xl border px-3.5 py-2 text-sm font-semibold active:bg-secondary/60 transition"
+          >
+            Export
           </button>
           <button
             type="button"
             onClick={onRegenerate}
-            className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition"
+            className="min-h-11 rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground active:scale-[0.985] transition"
           >
             Regenerate
           </button>
@@ -265,29 +293,32 @@ export function ShoppingListView({
             ))}
           </ul>
 
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={onMarkPurchased}
+              onClick={() => {
+                hapticLight();
+                onMarkPurchased();
+              }}
               disabled={checkedCount === 0}
-              className="flex-1 rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] disabled:opacity-50 transition"
+              className="min-h-12 flex-1 rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] disabled:opacity-50 transition"
             >
               Mark {checkedCount || ""} as purchased
             </button>
             <button
               type="button"
               onClick={onClear}
-              className="rounded-3xl border px-4 py-3.5 text-sm font-medium active:bg-secondary/60"
+              className="min-h-12 rounded-3xl border px-4 py-3.5 text-sm font-medium active:bg-secondary/60"
             >
               Clear
             </button>
             <button
               type="button"
-              onClick={onExport}
-              className="rounded-3xl border px-4 py-3.5 text-sm font-medium active:bg-secondary/60"
-              aria-label="Share shopping list"
+              onClick={shareOnWhatsApp}
+              className="min-h-12 rounded-3xl border px-4 py-3.5 text-sm font-medium active:bg-secondary/60"
+              aria-label="Share shopping list on WhatsApp"
             >
-              Share
+              WhatsApp
             </button>
           </div>
         </>

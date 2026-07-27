@@ -222,33 +222,10 @@ export function analyzeCaptureQuality(
   };
 }
 
-function vibrateSafe(pattern: number | number[]): void {
-  try {
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(pattern);
-    }
-  } catch {
-    /* ignore — iOS Safari has no vibrate */
-  }
-}
-
-/** Stronger shutter feedback (Android vibrate; visual handled in UI) */
-export function hapticShutter(): void {
-  // Triple pulse feels more like a mechanical shutter than a single buzz
-  vibrateSafe([12, 30, 18, 28, 10]);
-}
-
-/** Soft success tick after a photo is queued */
-export function hapticPhotoQueued(): void {
-  vibrateSafe([6, 40, 12]);
-}
-
-/** Light tick for retake / discard */
-export function hapticLight(): void {
-  vibrateSafe(6);
-}
-
-/** Gentle success when processing finishes cleanly */
-export function hapticSuccess(): void {
-  vibrateSafe([10, 50, 16]);
-}
+/** Re-export central haptics (capture flow keeps existing import paths). */
+export {
+  hapticLight,
+  hapticPhotoQueued,
+  hapticShutter,
+  hapticSuccess,
+} from "@/lib/haptics";

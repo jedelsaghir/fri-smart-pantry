@@ -46,6 +46,7 @@ import {
 } from "./receipt-scan/ReceiptReviewStage";
 import { ReceiptExpiryAssistStage } from "./receipt-scan/ReceiptExpiryAssistStage";
 import type { ExpiryAssistSignal } from "./receipt-scan/types";
+import { ScanOnboarding } from "./ScanOnboarding";
 
 export type { DetectedItem };
 export type { ReceiptScanFlowProps } from "./receipt-scan/types";
@@ -991,26 +992,29 @@ export function ReceiptScanFlow({
           }
         >
           {step === "capture" && (
-            <ReceiptCaptureStage
-              ocrConfigured={ocrConfigured}
-              ocrHealth={ocrHealth}
-              ocrStatusMessage={ocrStatusMessage}
-              cameraOn={cameraOn}
-              cameraError={cameraError}
-              videoRef={videoRef}
-              fileInputRef={fileInputRef}
-              photos={photos}
-              captureQuality={captureQuality}
-              shutterFlash={shutterFlash}
-              shutterPulse={shutterPulse}
-              capturing={capturing}
-              onStartCamera={startCamera}
-              onShutter={handleShutter}
-              onProcess={() => void startProcessing(photos)}
-              onUpload={(e) => void handleUpload(e)}
-              onRemovePhoto={removePhoto}
-              onRetakeLast={retakeLastPhoto}
-            />
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <ReceiptCaptureStage
+                ocrConfigured={ocrConfigured}
+                ocrHealth={ocrHealth}
+                ocrStatusMessage={ocrStatusMessage}
+                cameraOn={cameraOn}
+                cameraError={cameraError}
+                videoRef={videoRef}
+                fileInputRef={fileInputRef}
+                photos={photos}
+                captureQuality={captureQuality}
+                shutterFlash={shutterFlash}
+                shutterPulse={shutterPulse}
+                capturing={capturing}
+                onStartCamera={startCamera}
+                onShutter={handleShutter}
+                onProcess={() => void startProcessing(photos)}
+                onUpload={(e) => void handleUpload(e)}
+                onRemovePhoto={removePhoto}
+                onRetakeLast={retakeLastPhoto}
+              />
+              <ScanOnboarding open={open && step === "capture"} />
+            </div>
           )}
 
           {step === "processing" && (

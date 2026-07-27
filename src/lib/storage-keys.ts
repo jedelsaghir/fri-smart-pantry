@@ -27,6 +27,10 @@ export const STORAGE_KEYS = {
   CAMERA_DENIED: "friggg-camera-denied",
   /** Sync meta (last pull/push clocks) */
   SYNC_META: "friggg-sync-meta",
+  /** Pantry list sort preference: name | expiry | qty */
+  PANTRY_SORT: "friggg-pantry-sort",
+  /** First-scan coach marks dismissed */
+  SCAN_TIPS_SEEN: "friggg-scan-tips-seen",
 } as const;
 
 export type StorageKeyName = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

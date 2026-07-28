@@ -5,6 +5,7 @@
 
 import type { StorageKey } from "@/types/pantry";
 import type { OcrLineItem } from "@/platform/types";
+import { simplifyProductName } from "@/lib/product-name";
 
 const EMOJI_BY_KEYWORD: Array<[RegExp, string]> = [
   [/milk|lait|milch/i, "🥛"],
@@ -335,9 +336,10 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
     let unit = normalizeUnit(r.unit ?? r.uom, qty);
 
     const multipack = applyMultipackQtyUnit(name, qty, unit);
-    name = multipack.name;
+    name = simplifyProductName(multipack.name);
     qty = multipack.qty;
     unit = multipack.unit;
+    if (!name || name.length < 2) continue;
 
     let price: number | undefined;
     const priceRaw = r.price ?? r.line_total ?? r.amount ?? r.total;
@@ -361,7 +363,7 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
     }
 
     items.push({
-      name: name.slice(0, 80),
+      name: name.slice(0, 40),
       qty,
       unit,
       emoji: emojiForItemName(name),
@@ -398,13 +400,14 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
 export function enrichOcrItems(items: OcrLineItem[]): OcrLineItem[] {
   return items.map((item) => {
     const multi = applyMultipackQtyUnit(item.name, item.qty, item.unit || "pcs");
+    const name = simplifyProductName(multi.name) || multi.name;
     return {
       ...item,
-      name: multi.name,
+      name: name.slice(0, 40),
       qty: multi.qty,
       unit: multi.unit,
-      emoji: item.emoji || emojiForItemName(multi.name),
-      storage: item.storage || guessStorage(multi.name),
+      emoji: item.emoji || emojiForItemName(name),
+      storage: item.storage || guessStorage(name),
       confidence:
         typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : 0.75,
     };
@@ -476,5 +479,18 @@ Rules:
 - price is the line total for that product (not unit price) when available; omit if unknown.
 - confidence is 0..1 for how sure you are of the line.
 - storage is a best guess for home storage after purchase.
-- Prefer short clear product names (e.g. "Whole milk" not "MILK UHT 2L 3.5%").
+
+NAME RULES (critical for pantry merge):
+- name = short generic food type only (prefer 2–4 words max).
+- Strip brand names, manufacturer, store private-label brands, and SKUs from the name.
+- Strip size/weight from the name (put size into qty/unit instead).
+- Prefer category-style labels: "Pesto", "Mozzarella", "Parmigiano", "Whole milk", "Eggs", "Cherry tomatoes", "Olive oil", "Strawberry yogurt".
+- Do NOT keep brands like Granarolo, Barilla, Müller, Danone, Galbani, Philadelphia, Knorr, Maggi, Coop, Esselunga, Lidl, Aldi, etc. in the name.
+- Examples:
+  - "GRANAROLO MOZZARELLA 125G" → name "Mozzarella" (qty/unit from line, e.g. 125 g)
+  - "BARILLA PESTO GENOVESE 190G" → "Pesto"
+  - "PARMIGIANO REGGIANO GRATTUGIATO" → "Grated parmigiano" or "Parmigiano"
+  - "MÜLLER STRAWBERRY YOGURT 150G" → "Strawberry yogurt" or "Yogurt"
+  - "WHOLE MILK UHT 2L 3.5%" → "Whole milk" (not "MILK UHT 2L 3.5%")
+
 - If the image is not a receipt or unreadable, return {"store":null,"total":null,"currency":"EUR","items":[]}.`;

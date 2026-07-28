@@ -23,6 +23,7 @@ import {
   shouldAutoExcludeNonPantry,
 } from "@/lib/non-pantry";
 import { applyMultipackQtyUnit, applyTotalLineSanity } from "@/lib/ocr-parse";
+import { simplifyProductName } from "@/lib/product-name";
 import type { OcrDetectResult, OcrLineItem } from "@/platform/types";
 import type {
   DetectedItem,
@@ -172,7 +173,8 @@ export function mergeOcrResults(results: OcrDetectResult[]): OcrDetectResult {
     okResults.map((r) =>
       r.items.map((row) => {
         const multi = applyMultipackQtyUnit(row.name, row.qty, row.unit || "pcs");
-        return { ...row, name: multi.name, qty: multi.qty, unit: multi.unit };
+        const name = simplifyProductName(multi.name) || multi.name;
+        return { ...row, name, qty: multi.qty, unit: multi.unit };
       })
     )
   );

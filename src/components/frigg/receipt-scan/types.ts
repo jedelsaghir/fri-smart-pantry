@@ -10,6 +10,8 @@ export type { DetectedItem };
 export type CapturedPhoto = {
   id: string;
   dataUrl: string;
+  /** 0-based vertical section in capture order (Top=0, Mid=1, Bottom=2, …) */
+  sectionIndex?: number;
 };
 
 export type ScanStep =
@@ -67,6 +69,11 @@ export function formatStorageLabel(storage: StorageKey) {
 
 export function createPhotoId() {
   return `photo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Re-index photos top→bottom after add/remove so coverage strip stays consistent. */
+export function withSectionIndices(photos: CapturedPhoto[]): CapturedPhoto[] {
+  return photos.map((p, i) => ({ ...p, sectionIndex: i }));
 }
 
 export function scanHeaderTitle(step: ScanStep, resultOk: boolean): string {

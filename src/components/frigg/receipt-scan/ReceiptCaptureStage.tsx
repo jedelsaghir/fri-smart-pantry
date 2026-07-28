@@ -1,10 +1,18 @@
 "use client";
 
 import type { RefObject } from "react";
-import { Image as ImageIcon, X, Sparkles, RotateCcw, ChevronDown } from "lucide-react";
+import { Image as ImageIcon, X, Sparkles, RotateCcw, ChevronDown, Check } from "lucide-react";
 import type { CaptureQuality } from "@/lib/capture-quality";
 import { SafeImage } from "@/components/frigg/SafeImage";
 import type { CapturedPhoto } from "./types";
+import {
+  coverageCoachMessage,
+  coverageOverlapTip,
+  coverageSegmentCount,
+  coverageSegmentState,
+  sectionLabel,
+  shutterCaptureLabel,
+} from "@/lib/receipt-coverage";
 
 export function ReceiptCaptureStage({
   ocrConfigured,
@@ -58,6 +66,9 @@ export function ReceiptCaptureStage({
   const photoCount = photos.length;
   const qualityOk = captureQuality?.ok;
   const qualityWarn = captureQuality && !captureQuality.ok;
+  const segmentCount = coverageSegmentCount(photoCount);
+  const coach = coverageCoachMessage(photoCount);
+  const overlapTip = coverageOverlapTip(photoCount);
 
   const showOcrBanner =
     ocrHealth != null &&
@@ -123,12 +134,12 @@ export function ReceiptCaptureStage({
             </div>
             <p className="text-base font-medium text-foreground">Point at the receipt</p>
             <p className="mt-1.5 text-sm text-muted-foreground max-w-[260px]">
-              Take multiple photos for long receipts — no pause between shots
+              Start at the top · slide down with a slight overlap · Process once
             </p>
             <button
               type="button"
               onClick={() => void onStartCamera()}
-              className="mt-5 rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-brand-foreground active:scale-[0.98]"
+              className="mt-5 min-h-11 rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-brand-foreground active:scale-[0.98]"
             >
               Open camera
             </button>
@@ -160,42 +171,91 @@ export function ReceiptCaptureStage({
           />
         )}
 
+        {/* Receipt coverage silhouette — vertical sections top → bottom */}
+        {cameraOn && (
+          <div
+            className="pointer-events-none absolute right-2 top-1/2 z-10 flex w-11 -translate-y-1/2 flex-col items-center gap-1.5 sm:right-3"
+            aria-label={`Coverage ${photoCount} of ${segmentCount} sections`}
+          >
+            <div className="rounded-2xl border border-white/20 bg-black/75 px-1.5 py-2 shadow-lg backdrop-blur-md">
+              <div
+                className="flex w-7 flex-col gap-1"
+                style={{ minHeight: `${Math.max(96, segmentCount * 28)}px` }}
+              >
+                {Array.from({ length: segmentCount }, (_, i) => {
+                  const state = coverageSegmentState(i, photoCount);
+                  return (
+                    <div
+                      key={i}
+                      className={
+                        "relative flex min-h-[1.65rem] flex-1 items-center justify-center rounded-md border transition-all duration-300 " +
+                        (state === "filled"
+                          ? "border-[color-mix(in_oklab,var(--color-brand)_70%,white)] bg-brand shadow-[0_0_10px_-2px_color-mix(in_oklab,var(--color-brand)_55%,transparent)]"
+                          : state === "next"
+                            ? "border-brand bg-brand/20 ring-2 ring-brand/60 motion-safe:animate-pulse motion-reduce:animate-none"
+                            : "border-white/30 bg-white/5")
+                      }
+                      title={sectionLabel(i)}
+                    >
+                      {state === "filled" && (
+                        <Check className="size-3 text-brand-foreground" strokeWidth={3} />
+                      )}
+                      {state === "next" && (
+                        <span className="text-[8px] font-bold uppercase tracking-wide text-white/95">
+                          {sectionLabel(i).slice(0, 3)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-center text-[9px] font-semibold tabular-nums text-white/85">
+                {photoCount} of {segmentCount}+
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Live quality guidance */}
         {cameraOn && captureQuality?.message && (
-          <div className="absolute left-3 right-3 top-3 z-10 flex flex-col items-center gap-1.5 px-1">
+          <div className="absolute left-3 right-14 top-3 z-10 flex flex-col items-center gap-1.5 px-1">
             {captureQuality.issueLabel && (
               <span className="rounded-full border border-amber-300/35 bg-amber-500/25 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-50 backdrop-blur-md">
                 {captureQuality.issueLabel}
               </span>
             )}
-            <div className="max-w-[min(100%,320px)] rounded-full border border-white/20 bg-black/80 px-3.5 py-1.5 text-center text-[12px] font-semibold leading-snug text-white shadow-lg backdrop-blur-md">
+            <div className="max-w-[min(100%,300px)] rounded-full border border-white/20 bg-black/80 px-3.5 py-1.5 text-center text-[12px] font-semibold leading-snug text-white shadow-lg backdrop-blur-md">
               {captureQuality.message}
             </div>
           </div>
         )}
         {cameraOn && captureQuality?.ok && !captureQuality.message && (
-          <div className="absolute left-3 right-3 top-3 z-10 flex justify-center">
+          <div className="absolute left-3 right-14 top-3 z-10 flex justify-center">
             <div className="rounded-full border border-emerald-400/30 bg-black/50 px-3 py-1 text-[11px] font-medium text-emerald-100/95 backdrop-blur-md">
               Looking good — snap when ready
             </div>
           </div>
         )}
 
-        {/* N-13: long-receipt hint only when frame is well filled (likely multi-section) */}
-        {cameraOn &&
-          photoCount >= 1 &&
-          (captureQuality?.fillRatio ?? 0) >= 0.35 &&
-          !captureQuality?.issues.includes("too_far") && (
-          <div className="absolute bottom-3 left-3 right-3 z-10 flex justify-center pointer-events-none">
-            <div className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/80 px-3 py-1.5 text-[11px] font-semibold text-white shadow-lg backdrop-blur-md">
-              <ChevronDown className="size-3.5 opacity-80 animate-bounce" />
-              Move down for the next section
+        {/* State-aware section coaching (strong scrim) */}
+        {cameraOn && (
+          <div className="pointer-events-none absolute bottom-3 left-3 right-14 z-10 flex flex-col items-center gap-1.5">
+            <div className="flex max-w-[min(100%,320px)] items-start gap-1.5 rounded-2xl border border-white/20 bg-black/80 px-3 py-2 text-left text-[11px] font-semibold leading-snug text-white shadow-lg backdrop-blur-md">
+              {photoCount >= 1 && photoCount < 3 && (
+                <ChevronDown className="mt-0.5 size-3.5 shrink-0 opacity-90 motion-safe:animate-bounce motion-reduce:animate-none" />
+              )}
+              <span>{coach}</span>
             </div>
+            {overlapTip && (
+              <div className="max-w-[min(100%,300px)] rounded-full border border-brand/40 bg-black/70 px-3 py-1 text-center text-[10px] font-medium text-teal-100/95 backdrop-blur-md">
+                {overlapTip}
+              </div>
+            )}
           </div>
         )}
 
         {cameraError && (
-          <p className="absolute bottom-2 left-3 right-3 text-center text-[11px] text-amber-200 drop-shadow">
+          <p className="absolute bottom-2 left-3 right-3 z-10 text-center text-[11px] text-amber-200 drop-shadow">
             {cameraError}
           </p>
         )}
@@ -205,44 +265,48 @@ export function ReceiptCaptureStage({
         <div className="border-t border-border/50 bg-background/95 px-3 py-2.5">
           <div className="mb-1.5 flex items-center justify-between px-0.5 gap-2">
             <span className="text-[11px] font-semibold text-muted-foreground">
-              {photoCount} photo{photoCount === 1 ? "" : "s"} ready
+              {photoCount} section{photoCount === 1 ? "" : "s"} ready
             </span>
             <button
               type="button"
               onClick={onRetakeLast}
-              className="inline-flex items-center gap-1 rounded-full bg-secondary/80 px-2.5 py-1 text-[11px] font-semibold text-foreground active:bg-secondary"
+              className="inline-flex min-h-9 items-center gap-1 rounded-full bg-secondary/80 px-2.5 py-1 text-[11px] font-semibold text-foreground active:bg-secondary"
             >
               <RotateCcw className="size-3" />
               Retake last
             </button>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none">
-            {photos.map((photo, index) => (
-              <div
-                key={photo.id}
-                className={
-                  "relative shrink-0 size-16 overflow-hidden rounded-xl ring-1 bg-secondary animate-[thumbPop_0.28s_ease-out] " +
-                  (index === photoCount - 1 ? "ring-brand/50" : "ring-border/50")
-                }
-              >
-                <SafeImage
-                  src={photo.dataUrl}
-                  alt={`Receipt photo ${index + 1}`}
-                  className="size-full object-cover"
-                />
-                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/55 px-1 text-[9px] font-semibold text-white">
-                  {index + 1}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onRemovePhoto(photo.id)}
-                  className="absolute -right-0.5 -top-0.5 grid size-6 place-items-center rounded-full bg-black/70 text-white active:scale-95"
-                  aria-label={`Delete photo ${index + 1}`}
+            {photos.map((photo, index) => {
+              const label = sectionLabel(photo.sectionIndex ?? index);
+              const isLast = index === photoCount - 1;
+              return (
+                <div
+                  key={photo.id}
+                  className={
+                    "relative shrink-0 size-16 overflow-hidden rounded-xl ring-1 bg-secondary animate-[thumbPop_0.28s_ease-out] " +
+                    (isLast ? "ring-brand/55 ring-2" : "ring-border/50")
+                  }
                 >
-                  <X className="size-3.5" strokeWidth={2.5} />
-                </button>
-              </div>
-            ))}
+                  <SafeImage
+                    src={photo.dataUrl}
+                    alt={`Receipt ${label}`}
+                    className="size-full object-cover"
+                  />
+                  <span className="absolute bottom-0.5 left-0.5 rounded bg-black/65 px-1 text-[9px] font-semibold text-white">
+                    {label}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onRemovePhoto(photo.id)}
+                    className="absolute -right-0.5 -top-0.5 grid size-7 place-items-center rounded-full bg-black/70 text-white active:scale-95"
+                    aria-label={`Delete ${label} photo`}
+                  >
+                    <X className="size-3.5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -254,7 +318,7 @@ export function ReceiptCaptureStage({
             onClick={onShutter}
             disabled={capturing}
             className={
-              "relative w-full flex items-center justify-center gap-3 rounded-3xl bg-brand py-4 text-lg font-semibold text-brand-foreground shadow-[0_10px_28px_-12px_color-mix(in_oklab,var(--color-brand)_55%,transparent)] active:scale-[0.96] active:brightness-110 transition touch-manipulation disabled:opacity-80 " +
+              "relative flex min-h-12 w-full items-center justify-center gap-3 rounded-3xl bg-brand py-4 text-lg font-semibold text-brand-foreground shadow-[0_10px_28px_-12px_color-mix(in_oklab,var(--color-brand)_55%,transparent)] active:scale-[0.96] active:brightness-110 transition touch-manipulation disabled:opacity-80 " +
               (shutterPulse ? "scale-[0.96] brightness-110" : "")
             }
           >
@@ -276,7 +340,7 @@ export function ReceiptCaptureStage({
                 />
               </span>
             </span>
-            {capturing ? "Capturing…" : photoCount === 0 ? "Capture" : "Capture next"}
+            {shutterCaptureLabel(photoCount, capturing)}
           </button>
         )}
 
@@ -284,7 +348,7 @@ export function ReceiptCaptureStage({
           type="button"
           disabled={photoCount === 0}
           onClick={onProcess}
-          className="w-full flex items-center justify-center gap-2 rounded-3xl bg-foreground py-3.5 text-base font-semibold text-background active:scale-[0.985] transition touch-manipulation disabled:opacity-40 disabled:active:scale-100"
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-3xl bg-foreground py-3.5 text-base font-semibold text-background active:scale-[0.985] transition touch-manipulation disabled:opacity-40 disabled:active:scale-100"
         >
           <Sparkles className="size-5" strokeWidth={2.25} />
           Process Receipt
@@ -307,15 +371,15 @@ export function ReceiptCaptureStage({
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
             }}
-            className="w-full flex items-center justify-center gap-2 rounded-3xl border border-border bg-card py-3 text-sm font-semibold active:bg-secondary/60 active:scale-[0.985] transition cursor-pointer touch-manipulation"
+            className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-3xl border border-border bg-card py-3 text-sm font-semibold active:bg-secondary/60 active:scale-[0.985] transition touch-manipulation"
           >
             <ImageIcon className="size-4.5" />
             Add from Library
           </div>
         </label>
 
-        <p className="text-center text-[11px] text-muted-foreground pb-1">
-          Snap freely · enhance · merge · works on iOS &amp; Android
+        <p className="pb-1 text-center text-[11px] text-muted-foreground">
+          Sections · slight overlap · Process once when ready
         </p>
       </div>
     </div>

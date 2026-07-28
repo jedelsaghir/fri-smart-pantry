@@ -26,6 +26,7 @@ import {
 import {
   createPhotoId,
   scanHeaderTitle,
+  withSectionIndices,
   type CapturedPhoto,
   type OcrMeta,
   type ReceiptScanFlowProps,
@@ -763,7 +764,10 @@ export function ReceiptScanFlow({
           return;
         }
         setPhotos((prev) => {
-          const next = [...prev, { id: createPhotoId(), dataUrl: prepared }];
+          const next = withSectionIndices([
+            ...prev,
+            { id: createPhotoId(), dataUrl: prepared, sectionIndex: prev.length },
+          ]);
           photosRef.current = next;
           return next;
         });
@@ -779,7 +783,7 @@ export function ReceiptScanFlow({
   const removePhoto = (id: string) => {
     hapticLight();
     setPhotos((prev) => {
-      const next = prev.filter((p) => p.id !== id);
+      const next = withSectionIndices(prev.filter((p) => p.id !== id));
       photosRef.current = next;
       return next;
     });
@@ -789,7 +793,7 @@ export function ReceiptScanFlow({
     hapticLight();
     setPhotos((prev) => {
       if (prev.length === 0) return prev;
-      const next = prev.slice(0, -1);
+      const next = withSectionIndices(prev.slice(0, -1));
       photosRef.current = next;
       return next;
     });
@@ -816,7 +820,7 @@ export function ReceiptScanFlow({
         toast.error("No images selected");
       } else {
         setPhotos((prev) => {
-          const merged = [...prev, ...next];
+          const merged = withSectionIndices([...prev, ...next]);
           photosRef.current = merged;
           return merged;
         });

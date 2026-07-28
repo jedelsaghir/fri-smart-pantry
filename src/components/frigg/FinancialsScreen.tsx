@@ -609,6 +609,12 @@ function FinancialsScreenInner({
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[14px] font-semibold tracking-[-0.01em]">
                             {item.name}
+                            {item.brand?.trim() ? (
+                              <span className="font-medium text-muted-foreground">
+                                {" "}
+                                · {item.brand.trim()}
+                              </span>
+                            ) : null}
                           </p>
                           <p className="text-[11px] text-muted-foreground">
                             {item.qty} {item.unit}

@@ -252,3 +252,43 @@ export function simplifyProductName(raw: string): string {
 export function sameSimplifiedName(a: string, b: string): boolean {
   return simplifyProductName(a).toLowerCase() === simplifyProductName(b).toLowerCase();
 }
+
+/**
+ * Extract a known brand token from a raw OCR line (before/alongside simplify).
+ * Prefers a leading match; returns title-cased brand or undefined.
+ * Does not invent brands — only tokens from BRAND_TOKENS.
+ */
+export function extractBrand(raw: string): string | undefined {
+  const original = String(raw ?? "").trim();
+  if (!original) return undefined;
+
+  const normalized = original.replace(/[_/|]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalized) return undefined;
+
+  // Reset lastIndex for global regex
+  BRAND_RE.lastIndex = 0;
+  const matches: Array<{ token: string; index: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = BRAND_RE.exec(normalized)) !== null) {
+    matches.push({ token: m[0], index: m.index });
+  }
+  if (!matches.length) return undefined;
+
+  // Prefer earliest (leading) brand on the line
+  matches.sort((a, b) => a.index - b.index || b.token.length - a.token.length);
+  const chosen = matches[0].token.trim();
+  if (!chosen) return undefined;
+
+  // Don't treat pure food words as brands (safety — brands list shouldn't include them)
+  const foodBlock = /^(milk|eggs?|bread|cheese|yogurt|yoghurt|pasta|rice|oil|water|butter|flour)$/i;
+  if (foodBlock.test(chosen)) return undefined;
+
+  return titleCaseName(chosen.toLowerCase());
+}
+
+/** Simplify name + extract brand in one pass (raw OCR line). */
+export function parseProductLabel(raw: string): { name: string; brand?: string } {
+  const brand = extractBrand(raw);
+  const name = simplifyProductName(raw);
+  return brand ? { name, brand } : { name };
+}

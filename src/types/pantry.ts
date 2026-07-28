@@ -26,6 +26,12 @@ export interface PantryItem {
   labelPhotoAt?: string;
   /** Optional barcode / GTIN if known (from barcode assist) */
   barcode?: string;
+  /**
+   * Optional brand from last known purchase / OCR (e.g. "Granarolo").
+   * Not shown on pantry cards; used for price context in details / finances.
+   * Does not affect sameProduct merge identity.
+   */
+  brand?: string;
 }
 
 export type ItemStatus = {
@@ -61,6 +67,8 @@ export interface DetectedItem {
   emoji: string;
   storage: StorageKey;
   confidence: number;
+  /** Brand if OCR line contained a known brand (separate from simplified name) */
+  brand?: string;
   /** Line total from OCR when known */
   price?: number;
   /** Existing pantry item this line likely refers to */
@@ -95,6 +103,8 @@ export type ReceiptLineItem = {
   price: number;
   category?: string;
   storage?: StorageKey;
+  /** Optional brand for price comparison in Finances */
+  brand?: string;
 };
 
 /** Persisted receipt with original photo (data URL) + parsed breakdown */
@@ -133,6 +143,8 @@ export type CatalogItem = {
   emoji: string;
   defaultMinStock?: number;
   lastPrice?: number;
+  /** Last known brand from a scan (optional) */
+  brand?: string;
   /** ISO timestamp */
   updatedAt: string;
   /** How this entry last entered the catalog */

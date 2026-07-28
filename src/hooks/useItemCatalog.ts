@@ -21,7 +21,7 @@ export function useItemCatalog() {
 
   const rememberPantryItem = useCallback(
     (
-      item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice">,
+      item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice" | "brand">,
       source: CatalogItem["source"] = "pantry_add"
     ) => {
       setCatalog((prev) => upsertCatalogFromPantryItem(prev, item, source));

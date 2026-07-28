@@ -325,13 +325,14 @@ export function ReceiptScanFlow({
     if (receiptSavedRef.current || allItems.length === 0) return;
     receiptSavedRef.current = true;
     const receipt = buildReceiptFromScan({
-      items: allItems.map(({ name, qty, unit, emoji, storage, price }) => ({
+      items: allItems.map(({ name, qty, unit, emoji, storage, price, brand }) => ({
         name,
         qty,
         unit,
         emoji,
         storage,
         price,
+        brand,
       })),
       imageDataUrl,
       store: ocrMetaRef.current.store,

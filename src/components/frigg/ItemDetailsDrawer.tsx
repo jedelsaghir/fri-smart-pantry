@@ -401,6 +401,12 @@ function DetailsBody({
               inputClassName="w-full min-w-0 rounded-xl bg-background/80 px-2 py-1 text-[20px] font-semibold tracking-[-0.015em] leading-tight outline-none ring-1 ring-brand/30"
             />
 
+            {item.brand?.trim() && (
+              <p className="mt-1 px-0.5 text-[12px] font-medium text-muted-foreground">
+                Last bought: {item.brand.trim()}
+              </p>
+            )}
+
             {/* Weight / unit • latest price */}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-muted-foreground px-0.5">
               <span className="font-medium text-foreground/80 tabular-nums">

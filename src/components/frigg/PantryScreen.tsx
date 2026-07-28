@@ -439,6 +439,7 @@ export function PantryScreen() {
             unit: s.unit,
             emoji: s.emoji,
             minStock: getDefaultMinStock(s.name),
+            ...(s.brand?.trim() ? { brand: s.brand.trim() } : {}),
           },
           "scan"
         );

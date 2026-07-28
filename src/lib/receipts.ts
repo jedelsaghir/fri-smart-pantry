@@ -168,6 +168,7 @@ export function buildReceiptFromScan(opts: {
     storage?: StorageKey;
     /** Line total if known; otherwise 0 (no invented prices) */
     price?: number;
+    brand?: string;
   }>;
   imageDataUrl?: string | null;
   store?: string | null;
@@ -189,6 +190,7 @@ export function buildReceiptFromScan(opts: {
         : 0,
     category: categoryForName(item.name),
     storage: item.storage,
+    ...(item.brand?.trim() ? { brand: item.brand.trim() } : {}),
   }));
   const sumLines = Math.round(lineItems.reduce((s, i) => s + i.price, 0) * 100) / 100;
   const total =

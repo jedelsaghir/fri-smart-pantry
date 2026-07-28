@@ -5,7 +5,7 @@
 
 import type { StorageKey } from "@/types/pantry";
 import type { OcrLineItem } from "@/platform/types";
-import { simplifyProductName } from "@/lib/product-name";
+import { extractBrand, simplifyProductName } from "@/lib/product-name";
 
 const EMOJI_BY_KEYWORD: Array<[RegExp, string]> = [
   [/milk|lait|milch/i, "🥛"],
@@ -336,6 +336,11 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
     let unit = normalizeUnit(r.unit ?? r.uom, qty);
 
     const multipack = applyMultipackQtyUnit(name, qty, unit);
+    // Brand from raw multipack name (before simplify strips it)
+    const brandFromRaw =
+      extractBrand(name) ||
+      extractBrand(multipack.name) ||
+      (typeof r.brand === "string" ? extractBrand(r.brand) || r.brand.trim() : undefined);
     name = simplifyProductName(multipack.name);
     qty = multipack.qty;
     unit = multipack.unit;
@@ -362,6 +367,8 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
       storage = guessStorage(name);
     }
 
+    const brand = brandFromRaw?.trim() || undefined;
+
     items.push({
       name: name.slice(0, 40),
       qty,
@@ -371,6 +378,7 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
       confidence,
       price,
       category: typeof r.category === "string" ? r.category : undefined,
+      ...(brand ? { brand } : {}),
     });
   }
 
@@ -400,6 +408,11 @@ export function parseReceiptOcrPayload(raw: unknown): ParsedReceiptOcr {
 export function enrichOcrItems(items: OcrLineItem[]): OcrLineItem[] {
   return items.map((item) => {
     const multi = applyMultipackQtyUnit(item.name, item.qty, item.unit || "pcs");
+    const brand =
+      item.brand?.trim() ||
+      extractBrand(item.name) ||
+      extractBrand(multi.name) ||
+      undefined;
     const name = simplifyProductName(multi.name) || multi.name;
     return {
       ...item,
@@ -410,6 +423,7 @@ export function enrichOcrItems(items: OcrLineItem[]): OcrLineItem[] {
       storage: item.storage || guessStorage(name),
       confidence:
         typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : 0.75,
+      ...(brand ? { brand } : {}),
     };
   });
 }

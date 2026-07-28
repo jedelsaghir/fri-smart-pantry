@@ -46,6 +46,8 @@ export type OcrLineItem = {
   confidence?: number;
   price?: number;
   category?: string;
+  /** Known brand extracted from raw line (name stays generic food type) */
+  brand?: string;
 };
 
 export type OcrDetectResult = {

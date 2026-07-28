@@ -44,6 +44,12 @@ export function upsertPantryItem(
   const existing = list[idx];
   const merged = mergeQuantities(existing.qty, existing.unit, incoming.qty, incoming.unit);
   const next = [...list];
+  // Prefer latest purchase brand when scan has one; else keep existing
+  const brand =
+    (incoming.brand && incoming.brand.trim()) ||
+    (existing.brand && existing.brand.trim()) ||
+    undefined;
+
   next[idx] = {
     ...existing,
     qty: merged ? merged.qty : existing.qty + incoming.qty,
@@ -59,6 +65,7 @@ export function upsertPantryItem(
       opts?.mergePrice && incoming.priceUnit
         ? incoming.priceUnit
         : existing.priceUnit ?? incoming.priceUnit,
+    ...(brand ? { brand } : existing.brand ? { brand: existing.brand } : {}),
   };
   return next;
 }

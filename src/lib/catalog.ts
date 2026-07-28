@@ -53,12 +53,13 @@ export function saveCatalog(items: CatalogItem[]): void {
 
 export function upsertCatalogFromPantryItem(
   catalog: CatalogItem[],
-  item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice">,
+  item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice" | "brand">,
   source: CatalogItem["source"]
 ): CatalogItem[] {
   const key = normalizeItemName(item.name);
   if (!key) return catalog;
   const now = new Date().toISOString();
+  const brand = item.brand?.trim() || undefined;
   const idx = catalog.findIndex((c) => normalizeItemName(c.name) === key);
   if (idx >= 0) {
     const next = [...catalog];
@@ -69,6 +70,7 @@ export function upsertCatalogFromPantryItem(
       emoji: item.emoji || next[idx].emoji,
       defaultMinStock: item.minStock ?? next[idx].defaultMinStock,
       lastPrice: item.latestPrice ?? next[idx].lastPrice,
+      brand: brand || next[idx].brand,
       updatedAt: now,
       source,
     };
@@ -82,6 +84,7 @@ export function upsertCatalogFromPantryItem(
       emoji: item.emoji || "🛒",
       defaultMinStock: item.minStock,
       lastPrice: item.latestPrice,
+      ...(brand ? { brand } : {}),
       updatedAt: now,
       source,
     },

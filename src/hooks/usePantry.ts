@@ -439,6 +439,10 @@ export function usePantry(options: UsePantryOptions = {}) {
                   ? Math.max(0, s.qty)
                   : foundItem.qty + s.qty;
 
+              const brand =
+                (s.brand && s.brand.trim()) ||
+                (foundItem.brand && foundItem.brand.trim()) ||
+                undefined;
               const updated: PantryItem = {
                 ...foundItem,
                 qty: newQty,
@@ -448,6 +452,7 @@ export function usePantry(options: UsePantryOptions = {}) {
                 // Keep pantry name; scanned name may be noisier OCR text
                 name: foundItem.name,
                 unit: foundItem.unit,
+                ...(brand ? { brand } : {}),
               };
 
               // Move to target storage if user changed it in review
@@ -495,6 +500,7 @@ export function usePantry(options: UsePantryOptions = {}) {
             minStock: getDefaultMinStock(s.name),
             latestPrice,
             priceUnit,
+            ...(s.brand?.trim() ? { brand: s.brand.trim() } : {}),
           };
 
           if (disposition === "add_new") {

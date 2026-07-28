@@ -23,7 +23,7 @@ import {
   shouldAutoExcludeNonPantry,
 } from "@/lib/non-pantry";
 import { applyMultipackQtyUnit, applyTotalLineSanity } from "@/lib/ocr-parse";
-import { simplifyProductName } from "@/lib/product-name";
+import { extractBrand, simplifyProductName } from "@/lib/product-name";
 import type { OcrDetectResult, OcrLineItem } from "@/platform/types";
 import type {
   DetectedItem,
@@ -111,6 +111,8 @@ export function mergeOcrLineItems(batches: OcrLineItem[][]): OcrLineItem[] {
         emoji: winner.emoji || loser.emoji,
         storage: winner.storage || loser.storage,
         category: winner.category || loser.category,
+        // Prefer brand from higher-confidence (winner), else keep any known brand
+        brand: winner.brand || loser.brand,
         confidence: Math.max(confA, confB),
       });
     }
@@ -173,8 +175,16 @@ export function mergeOcrResults(results: OcrDetectResult[]): OcrDetectResult {
     okResults.map((r) =>
       r.items.map((row) => {
         const multi = applyMultipackQtyUnit(row.name, row.qty, row.unit || "pcs");
+        const brand =
+          row.brand?.trim() || extractBrand(row.name) || extractBrand(multi.name) || undefined;
         const name = simplifyProductName(multi.name) || multi.name;
-        return { ...row, name, qty: multi.qty, unit: multi.unit };
+        return {
+          ...row,
+          name,
+          qty: multi.qty,
+          unit: multi.unit,
+          ...(brand ? { brand } : {}),
+        };
       })
     )
   );
@@ -375,6 +385,7 @@ export function ocrLinesToDetected(items: OcrLineItem[], idPrefix = "det"): Dete
     storage: (row.storage as StorageKey) || "fridge",
     confidence: typeof row.confidence === "number" ? row.confidence : 0.75,
     price: row.price,
+    ...(row.brand ? { brand: row.brand } : {}),
   }));
 }
 

@@ -52,6 +52,7 @@ import {
   type PantrySortMode,
 } from "@/lib/pantry-list";
 import { hapticSuccess, hapticWarning, hapticMedium } from "@/lib/haptics";
+import { recordWasteEvent, undoLastWasteEvent } from "@/lib/waste-stats";
 
 const FinancialsScreen = lazy(() =>
   import("./FinancialsScreen").then((m) => ({ default: m.FinancialsScreen }))
@@ -268,19 +269,50 @@ export function PantryScreen() {
       if (!found) return;
 
       requestConfirm({
-        title: `Delete ${found.item.name}?`,
-        description: `Remove ${found.item.emoji} ${found.item.name} from your ${found.storage}. It will stay in the Shopping List Database for future use.`,
-        confirmLabel: "Delete",
-        destructive: true,
+        title: `Remove ${found.item.name}?`,
+        description: `Was ${found.item.emoji} ${found.item.name} used or expired? It stays in your Shopping List Database either way.`,
+        confirmLabel: "Used",
+        secondaryLabel: "Expired",
+        secondaryDestructive: true,
+        destructive: false,
         onConfirm: () => {
           const snapshot = removeItem(id);
           if (!snapshot) return;
           hapticWarning();
           rememberPantryItem(snapshot.item, "pantry_delete");
-          toast(`${snapshot.item.emoji} ${snapshot.item.name} removed`, {
+          recordWasteEvent("used", {
+            name: snapshot.item.name,
+            qty: snapshot.item.qty,
+            unit: snapshot.item.unit,
+          });
+          toast(`${snapshot.item.emoji} ${snapshot.item.name} used`, {
             action: {
               label: "Undo",
-              onClick: () => restoreItem(snapshot.item, snapshot.storage),
+              onClick: () => {
+                restoreItem(snapshot.item, snapshot.storage);
+                undoLastWasteEvent({ name: snapshot.item.name });
+              },
+            },
+            duration: 4500,
+          });
+        },
+        onSecondary: () => {
+          const snapshot = removeItem(id);
+          if (!snapshot) return;
+          hapticWarning();
+          rememberPantryItem(snapshot.item, "pantry_delete");
+          recordWasteEvent("expired", {
+            name: snapshot.item.name,
+            qty: snapshot.item.qty,
+            unit: snapshot.item.unit,
+          });
+          toast(`${snapshot.item.emoji} ${snapshot.item.name} marked expired`, {
+            action: {
+              label: "Undo",
+              onClick: () => {
+                restoreItem(snapshot.item, snapshot.storage);
+                undoLastWasteEvent({ name: snapshot.item.name });
+              },
             },
             duration: 4500,
           });

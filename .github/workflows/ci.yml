@@ -1,4 +1,4 @@
-# N-12: basic CI — typecheck + unit tests on push/PR to main
+# N-12: typecheck + unit tests + optional Playwright smoke on push/PR to main
 name: CI
 
 on:
@@ -19,3 +19,21 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Playwright smoke
+        env:
+          VITE_AUTH_MODE: demo
+          CI: "true"
+        run: npm run test:e2e
+        # Camera / XAI not required; demo auth only

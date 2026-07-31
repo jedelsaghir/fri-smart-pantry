@@ -72,8 +72,15 @@ Login / onboarding UI (welcome → household → profile) is unchanged. Hardenin
 
 ## Recommended deploy checklist
 
-- [ ] `VITE_AUTH_MODE=production`
+- [ ] `VITE_AUTH_MODE=production` (or leave unset on prod builds — defaults to production)
 - [ ] Upstash (or durable store) for multi-device
 - [ ] HTTPS only
 - [ ] Do not log passwords or sync creds
 - [ ] Plan email verification + better KDF before “public SaaS” launch
+
+## Follow-ups (not in current pass)
+
+- Argon2/bcrypt server KDF with per-user salt  
+- Email verification / magic link  
+- OAuth / passkeys  
+- Full server session cookies (replace sessionStorage password for push)

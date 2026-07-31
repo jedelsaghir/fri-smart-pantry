@@ -18,6 +18,10 @@ export type ConfirmRequest = {
   cancelLabel?: string;
   destructive?: boolean;
   onConfirm: () => void;
+  /** Optional second primary action (e.g. Used vs Expired) */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  secondaryDestructive?: boolean;
 };
 
 export function ConfirmDialog({
@@ -38,23 +42,40 @@ export function ConfirmDialog({
             {request?.description}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="gap-2 sm:gap-2">
-          <AlertDialogCancel className="rounded-2xl">
-            {request?.cancelLabel ?? "Cancel"}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            className={
-              request?.destructive
-                ? "rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                : "rounded-2xl bg-brand text-brand-foreground hover:bg-brand/90"
-            }
-            onClick={() => {
-              request?.onConfirm();
-              onDismiss();
-            }}
-          >
-            {request?.confirmLabel ?? "Confirm"}
-          </AlertDialogAction>
+        <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel className="min-h-11 rounded-2xl">
+              {request?.cancelLabel ?? "Cancel"}
+            </AlertDialogCancel>
+            {request?.secondaryLabel && request.onSecondary && (
+              <AlertDialogAction
+                className={
+                  request.secondaryDestructive
+                    ? "min-h-11 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    : "min-h-11 rounded-2xl bg-secondary text-foreground hover:bg-secondary/80"
+                }
+                onClick={() => {
+                  request.onSecondary?.();
+                  onDismiss();
+                }}
+              >
+                {request.secondaryLabel}
+              </AlertDialogAction>
+            )}
+            <AlertDialogAction
+              className={
+                request?.destructive
+                  ? "min-h-11 rounded-2xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : "min-h-11 rounded-2xl bg-brand text-brand-foreground hover:bg-brand/90"
+              }
+              onClick={() => {
+                request?.onConfirm();
+                onDismiss();
+              }}
+            >
+              {request?.confirmLabel ?? "Confirm"}
+            </AlertDialogAction>
+          </div>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

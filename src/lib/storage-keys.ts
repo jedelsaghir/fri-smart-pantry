@@ -31,6 +31,8 @@ export const STORAGE_KEYS = {
   PANTRY_SORT: "friggg-pantry-sort",
   /** First-scan coach marks dismissed */
   SCAN_TIPS_SEEN: "friggg-scan-tips-seen",
+  /** Used vs expired waste events */
+  WASTE_STATS: "friggg-waste-stats",
 } as const;
 
 export type StorageKeyName = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

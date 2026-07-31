@@ -21,6 +21,8 @@ import {
 } from "@/lib/receipts";
 import { analyzeMonthStores } from "@/lib/store-insights";
 import { formatMoney, moneySymbol } from "@/lib/money";
+import { buildPriceByBrand } from "@/lib/brand-price";
+import { loadWasteStore, summarizeWasteMonth } from "@/lib/waste-stats";
 import {
   Drawer,
   DrawerClose,
@@ -137,6 +139,12 @@ function FinancialsScreenInner({
       })),
     [monthInsight]
   );
+
+  const brandGroups = useMemo(() => buildPriceByBrand(receipts, { minBrands: 1, limit: 8 }), [
+    receipts,
+  ]);
+
+  const wasteMonth = useMemo(() => summarizeWasteMonth(loadWasteStore()), [receipts]);
 
   const submitLogPurchase = () => {
     const total = Math.max(0, parseFloat(logTotal.replace(",", ".")) || 0);
@@ -267,6 +275,67 @@ function FinancialsScreenInner({
           </div>
         )}
       </div>
+
+      {/* Waste summary this month */}
+      {(wasteMonth.usedCount > 0 || wasteMonth.expiredCount > 0) && (
+        <div className="elevated-card rounded-3xl p-4">
+          <div className="text-sm font-semibold tracking-[-0.01em]">This month</div>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            From items you removed (Used vs Expired).
+          </p>
+          <div className="mt-3 flex gap-2">
+            <div className="flex-1 rounded-2xl bg-secondary/50 px-3 py-2.5 text-center">
+              <div className="text-[11px] font-medium text-muted-foreground">Used</div>
+              <div className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+                {wasteMonth.usedCount}
+              </div>
+            </div>
+            <div className="flex-1 rounded-2xl bg-secondary/50 px-3 py-2.5 text-center">
+              <div className="text-[11px] font-medium text-muted-foreground">Expired</div>
+              <div className="mt-0.5 text-lg font-semibold tabular-nums text-[var(--color-expiring)]">
+                {wasteMonth.expiredCount}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Price by brand (when brand captured on scan lines) */}
+      {brandGroups.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center justify-between px-1">
+            <div className="text-sm font-semibold tracking-[0.005em] text-foreground/90">
+              By brand
+            </div>
+            <div className="text-[11px] text-muted-foreground">price compare</div>
+          </div>
+          <div className="space-y-2">
+            {brandGroups.map((g) => (
+              <div key={g.productName} className="elevated-card rounded-3xl px-4 py-3">
+                <div className="text-[14px] font-semibold tracking-[-0.01em]">{g.productName}</div>
+                <ul className="mt-2 space-y-1.5">
+                  {g.brands.map((b) => (
+                    <li
+                      key={b.brand}
+                      className="flex items-center justify-between gap-2 text-[12px]"
+                    >
+                      <span className="truncate font-medium text-muted-foreground">{b.brand}</span>
+                      <span className="shrink-0 tabular-nums font-semibold text-foreground">
+                        {formatMoney(b.avgPrice, displayCurrency)}
+                        {b.count > 1 ? (
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            avg · {b.count}×
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Category breakdown from real receipts */}
       {categories.length > 0 && (

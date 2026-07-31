@@ -422,9 +422,11 @@ export function SettingsDrawer({
             {/* H-02: re-enter password after tab restart (sessionStorage cleared) */}
             {needsSyncPassword() && (
               <p className="text-[11px] leading-snug rounded-xl bg-amber-500/10 px-2.5 py-2 text-amber-900 dark:text-amber-200">
-                You&apos;re signed in on this device, but cloud sync needs your password again for
-                this browser tab. Use <span className="font-semibold">Sync now</span> after signing
-                out and back in, or open Login once more with the same account.
+                You&apos;re signed in locally, but <span className="font-semibold">cloud sync</span>{" "}
+                needs your password again in this browser tab (session password is not kept after
+                restart). Sign out and sign back in with the same email &amp; password, then use{" "}
+                <span className="font-semibold">Sync now</span>. No plain password is stored in
+                localStorage.
               </p>
             )}
             <div className="rounded-2xl bg-secondary/50 px-3 py-2.5 text-[12px] space-y-1">

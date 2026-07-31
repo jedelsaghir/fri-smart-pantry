@@ -10,6 +10,7 @@ import {
   coverageOverlapTip,
   coverageSegmentCount,
   coverageSegmentState,
+  OVERLAP_WARNING_COPY,
   sectionLabel,
   shutterCaptureLabel,
 } from "@/lib/receipt-coverage";
@@ -33,6 +34,11 @@ export function ReceiptCaptureStage({
   onUpload,
   onRemovePhoto,
   onRetakeLast,
+  /** Index of segment that just filled (premium pulse + chip) */
+  justFilledIndex = null,
+  lockedChip = null,
+  /** Client-only: last capture too similar to previous */
+  overlapWarning = false,
 }: {
   ocrConfigured: boolean | null;
   /** missing | ok | auth_failed | network | model | error | unknown */
@@ -62,6 +68,9 @@ export function ReceiptCaptureStage({
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemovePhoto: (id: string) => void;
   onRetakeLast: () => void;
+  justFilledIndex?: number | null;
+  lockedChip?: string | null;
+  overlapWarning?: boolean;
 }) {
   const photoCount = photos.length;
   const qualityOk = captureQuality?.ok;
@@ -184,6 +193,7 @@ export function ReceiptCaptureStage({
               >
                 {Array.from({ length: segmentCount }, (_, i) => {
                   const state = coverageSegmentState(i, photoCount);
+                  const justFilled = justFilledIndex === i;
                   return (
                     <div
                       key={i}
@@ -193,7 +203,10 @@ export function ReceiptCaptureStage({
                           ? "border-[color-mix(in_oklab,var(--color-brand)_70%,white)] bg-brand shadow-[0_0_10px_-2px_color-mix(in_oklab,var(--color-brand)_55%,transparent)]"
                           : state === "next"
                             ? "border-brand bg-brand/20 ring-2 ring-brand/60 motion-safe:animate-pulse motion-reduce:animate-none"
-                            : "border-white/30 bg-white/5")
+                            : "border-white/30 bg-white/5") +
+                        (justFilled
+                          ? " motion-safe:scale-110 motion-safe:ring-2 motion-safe:ring-white/70 motion-reduce:scale-100"
+                          : "")
                       }
                       title={sectionLabel(i)}
                     >
@@ -237,16 +250,31 @@ export function ReceiptCaptureStage({
           </div>
         )}
 
+        {/* Locked segment micro-chip (non-blocking, ~1s) */}
+        {cameraOn && lockedChip && (
+          <div className="pointer-events-none absolute left-3 right-14 top-1/2 z-20 flex -translate-y-1/2 justify-center">
+            <div className="rounded-full border border-brand/50 bg-black/80 px-3.5 py-1.5 text-[12px] font-semibold text-teal-50 shadow-lg backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-reduce:animate-none">
+              {lockedChip}
+            </div>
+          </div>
+        )}
+
         {/* State-aware section coaching (strong scrim) */}
         {cameraOn && (
           <div className="pointer-events-none absolute bottom-3 left-3 right-14 z-10 flex flex-col items-center gap-1.5">
-            <div className="flex max-w-[min(100%,320px)] items-start gap-1.5 rounded-2xl border border-white/20 bg-black/80 px-3 py-2 text-left text-[11px] font-semibold leading-snug text-white shadow-lg backdrop-blur-md">
-              {photoCount >= 1 && photoCount < 3 && (
-                <ChevronDown className="mt-0.5 size-3.5 shrink-0 opacity-90 motion-safe:animate-bounce motion-reduce:animate-none" />
-              )}
-              <span>{coach}</span>
-            </div>
-            {overlapTip && (
+            {overlapWarning ? (
+              <div className="flex max-w-[min(100%,320px)] items-start gap-1.5 rounded-2xl border border-amber-400/40 bg-black/85 px-3 py-2 text-left text-[11px] font-semibold leading-snug text-amber-50 shadow-lg backdrop-blur-md">
+                <span>{OVERLAP_WARNING_COPY}</span>
+              </div>
+            ) : (
+              <div className="flex max-w-[min(100%,320px)] items-start gap-1.5 rounded-2xl border border-white/20 bg-black/80 px-3 py-2 text-left text-[11px] font-semibold leading-snug text-white shadow-lg backdrop-blur-md">
+                {photoCount >= 1 && photoCount < 3 && (
+                  <ChevronDown className="mt-0.5 size-3.5 shrink-0 opacity-90 motion-safe:animate-bounce motion-reduce:animate-none" />
+                )}
+                <span>{coach}</span>
+              </div>
+            )}
+            {!overlapWarning && overlapTip && (
               <div className="max-w-[min(100%,300px)] rounded-full border border-brand/40 bg-black/70 px-3 py-1 text-center text-[10px] font-medium text-teal-100/95 backdrop-blur-md">
                 {overlapTip}
               </div>

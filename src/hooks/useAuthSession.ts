@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { clearAuthSession, isSessionAuthenticated } from "@/lib/auth";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
-import { loadSyncCreds } from "@/lib/sync-session";
+import { loadSyncCreds, markSyncNeedsPassword } from "@/lib/sync-session";
 import { flushHouseholdPush, logoutSyncSession } from "@/lib/run-household-sync";
 
 /**
@@ -46,6 +46,9 @@ export function useAuthSession(options?: {
       try {
         if (!isSessionAuthenticated()) {
           setIsAuthenticated(false);
+        } else if (!loadSyncCreds()) {
+          // Signed in but no session password after browser restart
+          markSyncNeedsPassword();
         }
       } catch {
         /* ignore */
@@ -53,6 +56,17 @@ export function useAuthSession(options?: {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  // On mount: flag missing sync password for Settings banner
+  useEffect(() => {
+    try {
+      if (isSessionAuthenticated() && !loadSyncCreds()) {
+        markSyncNeedsPassword();
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const doLogin = useCallback(() => {

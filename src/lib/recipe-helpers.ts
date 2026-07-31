@@ -4,35 +4,69 @@
 
 import type { PantryItemsByStorage, Recipe, RecipeFilter, StorageKey } from "@/types/pantry";
 import { namesMatchLoose } from "@/lib/pantry-ops";
-import { namesLookSimilar } from "@/lib/catalog";
+import { coreItemName, namesLookSimilar, normalizeItemName } from "@/lib/catalog";
 import { EXPIRING_SOON_DAYS } from "@/lib/item-status";
+import { simplifyProductName } from "@/lib/product-name";
+import { unitsCompatible } from "@/lib/units";
 
-/** M-08: loose match — exact loose name, core similarity, or shared significant token */
+/**
+ * Loose match so recipe ingredients hit simplified pantry OCR names.
+ * e.g. pantry "Pesto" matches ingredient "pesto"; "Whole milk" matches "milk".
+ */
 export function ingredientMatchesPantry(pantryName: string, ingredientName: string): boolean {
-  if (namesMatchLoose(pantryName, ingredientName)) return true;
-  if (namesLookSimilar(pantryName, ingredientName)) return true;
-  const a = pantryName.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length > 2);
-  const b = ingredientName
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((t) => t.length > 2);
+  const p = (pantryName || "").trim();
+  const i = (ingredientName || "").trim();
+  if (!p || !i) return false;
+
+  if (namesMatchLoose(p, i)) return true;
+  if (namesLookSimilar(p, i)) return true;
+
+  const pCore = coreItemName(p) || normalizeItemName(p);
+  const iCore = coreItemName(i) || normalizeItemName(i);
+  if (pCore && iCore && (pCore === iCore || pCore.includes(iCore) || iCore.includes(pCore))) {
+    return true;
+  }
+
+  const pSimp = simplifyProductName(p).toLowerCase();
+  const iSimp = simplifyProductName(i).toLowerCase();
+  if (pSimp && iSimp && (pSimp === iSimp || pSimp.includes(iSimp) || iSimp.includes(pSimp))) {
+    return true;
+  }
+
+  const a = pSimp.split(/\s+/).filter((t) => t.length > 2);
+  const b = iSimp.split(/\s+/).filter((t) => t.length > 2);
   if (!a.length || !b.length) return false;
-  // Shared token of length ≥ 4 (milk, eggs, spinach, chicken…)
-  return a.some((t) => t.length >= 4 && b.some((u) => u === t || u.includes(t) || t.includes(u)));
+  // Shared token length ≥ 3 (eggs, oil, rice) or ≥ 4 for safety
+  return a.some((t) =>
+    b.some((u) => u === t || (t.length >= 3 && u.length >= 3 && (u.includes(t) || t.includes(u))))
+  );
+}
+
+/** Optional unit-aware stock check (convertible mass/volume still counts). */
+export function pantryHasIngredientQty(
+  items: PantryItemsByStorage,
+  ing: { name: string; qty: number; unit?: string }
+): boolean {
+  let have = 0;
+  for (const storage of ["fridge", "freezer", "pantry"] as StorageKey[]) {
+    for (const n of items[storage]) {
+      if (!ingredientMatchesPantry(n.name, ing.name)) continue;
+      if (ing.unit && n.unit && !unitsCompatible(n.unit, ing.unit, n.qty, ing.qty)) {
+        // still allow name-only coverage for loose recipe units (tbsp, bag…)
+        have += n.qty;
+        continue;
+      }
+      have += n.qty;
+    }
+  }
+  return have >= Math.min(ing.qty, 0.01);
 }
 
 export function countRecipeAvailability(
   items: PantryItemsByStorage,
   recipe: Recipe
 ): number {
-  return recipe.ingredients.filter((ing) => {
-    return (["fridge", "freezer", "pantry"] as StorageKey[]).some((storage) =>
-      items[storage].some(
-        (n) => ingredientMatchesPantry(n.name, ing.name) && n.qty >= Math.min(ing.qty, 0.01)
-      )
-    );
-  }).length;
+  return recipe.ingredients.filter((ing) => pantryHasIngredientQty(items, ing)).length;
 }
 
 export function canMakeRecipeFully(items: PantryItemsByStorage, recipe: Recipe): boolean {

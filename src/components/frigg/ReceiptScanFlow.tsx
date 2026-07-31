@@ -14,6 +14,9 @@ import {
   hapticSuccess,
   type CaptureQuality,
 } from "@/lib/capture-quality";
+import { hapticWarning } from "@/lib/haptics";
+import { dataUrlsTooSimilar } from "@/lib/frame-similarity";
+import { sectionLockedLabel } from "@/lib/receipt-coverage";
 import { getPlatform } from "@/platform";
 import type { OcrDetectResult } from "@/platform/types";
 import {
@@ -38,6 +41,7 @@ import {
   ReceiptProcessingStage,
   ReceiptResultStage,
   type PhotoProcessState,
+  type ProcessPipelinePhase,
   type ScanOutcomeSummary,
 } from "./receipt-scan/ReceiptProcessingStage";
 import {
@@ -87,8 +91,14 @@ export function ReceiptScanFlow({
   const [capturing, setCapturing] = useState(false);
   const [captureQuality, setCaptureQuality] = useState<CaptureQuality | null>(null);
   const [photoStates, setPhotoStates] = useState<PhotoProcessState[]>([]);
-  const [processPhase, setProcessPhase] = useState<"enhance" | "read" | "merge">("enhance");
+  const [processPhase, setProcessPhase] = useState<ProcessPipelinePhase>("enhance");
   const [outcomeSummary, setOutcomeSummary] = useState<ScanOutcomeSummary | null>(null);
+  /** Premium capture feedback */
+  const [justFilledIndex, setJustFilledIndex] = useState<number | null>(null);
+  const [lockedChip, setLockedChip] = useState<string | null>(null);
+  const [overlapWarning, setOverlapWarning] = useState(false);
+  const fillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** H-11: sticky camera-denied — stop re-prompt loops in installed PWAs */
   const [cameraDeniedSticky, setCameraDeniedSticky] = useState(() => {
     try {
@@ -307,6 +317,11 @@ export function ReceiptScanFlow({
     setCaptureQuality(null);
     setPhotoStates([]);
     setProcessPhase("enhance");
+    setJustFilledIndex(null);
+    setLockedChip(null);
+    setOverlapWarning(false);
+    if (fillTimerRef.current) clearTimeout(fillTimerRef.current);
+    if (overlapTimerRef.current) clearTimeout(overlapTimerRef.current);
     setOutcomeSummary(null);
     receiptSavedRef.current = false;
     pantryToastShownRef.current = false;
@@ -451,11 +466,11 @@ export function ReceiptScanFlow({
     setProcessProgress(0);
     setProcessPhase("enhance");
     setPhotoStates(photoList.map(() => "pending"));
-    setProcessLabel("Enhancing…");
+    setProcessLabel("Enhancing photos");
     setProcessSub(
       photoList.length === 1
         ? "Crop · contrast · sharpen for clearer text"
-        : `Pipeline on ${photoList.length} photos — enhance, then read`
+        : `Enhancing ${photoList.length} sections`
     );
 
     try {
@@ -469,19 +484,19 @@ export function ReceiptScanFlow({
       for (let i = 0; i < total; i++) {
         if (!stillLive()) return;
         setProcessPhase("enhance");
-        setProcessLabel(total === 1 ? "Enhancing photo…" : "Enhancing…");
+        setProcessLabel("Enhancing photos");
         setProcessSub(
           total === 1
             ? "Crop · contrast · sharpen for clearer text"
-            : `Photo ${i + 1} of ${total} · enhance then read`
+            : `Photo ${i + 1} of ${total}`
         );
         setPhotoStates((prev) => {
           const next = [...prev];
           next[i] = "enhancing";
           return next;
         });
-        // 0–35% for enhance wave
-        setProcessProgress(Math.round(((i + 0.35) / total) * 35));
+        // 0–32% for enhance wave
+        setProcessProgress(Math.round(((i + 0.35) / total) * 32));
 
         let enhanced = photoList[i].dataUrl;
         try {
@@ -501,7 +516,7 @@ export function ReceiptScanFlow({
           return next;
         });
         setProcessPhase("read");
-        setProcessLabel(total === 1 ? "Reading receipt…" : "Reading photos…");
+        setProcessLabel("Reading lines");
         setProcessSub(
           total === 1
             ? "Vision OCR on your photo"
@@ -518,7 +533,7 @@ export function ReceiptScanFlow({
             next[idx] = result.ok ? "done" : "error";
             return next;
           });
-          setProcessProgress(35 + Math.round((readDone / total) * 50));
+          setProcessProgress(32 + Math.round((readDone / total) * 48));
           setProcessSub(
             total === 1
               ? "Vision OCR on your photo"
@@ -531,11 +546,12 @@ export function ReceiptScanFlow({
       await Promise.all(ocrJobs);
       if (!stillLive()) return;
 
+      // Real merge step
       setProcessPhase("merge");
-      setProcessLabel("Merging & matching…");
-      setProcessSub("Overlap merge · fuzzy match · non-pantry filter");
-      setProcessProgress(92);
-      await new Promise((r) => setTimeout(r, 280));
+      setProcessLabel("Merging sections");
+      setProcessSub("Overlap merge · de-duplicate lines");
+      setProcessProgress(86);
+      await new Promise((r) => setTimeout(r, 120));
       if (!stillLive()) return;
 
       const settledList = settled.filter(Boolean) as OcrDetectResult[];
@@ -560,6 +576,12 @@ export function ReceiptScanFlow({
         total: merged.total,
         currency: merged.currency,
       };
+
+      // Real pantry match step
+      setProcessPhase("match");
+      setProcessLabel("Matching pantry");
+      setProcessSub("Fuzzy match · non-pantry filter");
+      setProcessProgress(94);
 
       const results = ocrLinesToDetected(merged.items);
       setDetected(results);
@@ -589,6 +611,12 @@ export function ReceiptScanFlow({
       }
 
       setProcessProgress(100);
+      setProcessLabel("Receipt complete");
+      setProcessSub(
+        results.length === 1
+          ? "1 item ready"
+          : `${results.length} items ready`
+      );
 
       const skippedNonFood = excludedItems.length;
       if (skippedNonFood > 0) {
@@ -763,6 +791,20 @@ export function ReceiptScanFlow({
           toast.error("Could not capture frame");
           return;
         }
+        const prevPhotos = photosRef.current;
+        const sectionIdx = prevPhotos.length;
+        const last = prevPhotos[prevPhotos.length - 1];
+
+        // Client-only overlap check vs last section (cheap aHash + histogram)
+        let tooSimilar: boolean | null = null;
+        if (last?.dataUrl) {
+          try {
+            tooSimilar = await dataUrlsTooSimilar(last.dataUrl, prepared);
+          } catch {
+            tooSimilar = null;
+          }
+        }
+
         setPhotos((prev) => {
           const next = withSectionIndices([
             ...prev,
@@ -771,7 +813,26 @@ export function ReceiptScanFlow({
           photosRef.current = next;
           return next;
         });
+
+        // Segment-fill feedback: pulse + locked chip + success haptic
+        if (fillTimerRef.current) clearTimeout(fillTimerRef.current);
+        setJustFilledIndex(sectionIdx);
+        setLockedChip(sectionLockedLabel(sectionIdx));
+        hapticSuccess();
         hapticPhotoQueued();
+        fillTimerRef.current = setTimeout(() => {
+          setJustFilledIndex(null);
+          setLockedChip(null);
+        }, 1100);
+
+        if (tooSimilar === true) {
+          if (overlapTimerRef.current) clearTimeout(overlapTimerRef.current);
+          setOverlapWarning(true);
+          hapticWarning();
+          overlapTimerRef.current = setTimeout(() => setOverlapWarning(false), 3200);
+        } else {
+          setOverlapWarning(false);
+        }
       } catch {
         toast.error("Could not capture frame");
       } finally {
@@ -1017,6 +1078,9 @@ export function ReceiptScanFlow({
                 onUpload={(e) => void handleUpload(e)}
                 onRemovePhoto={removePhoto}
                 onRetakeLast={retakeLastPhoto}
+                justFilledIndex={justFilledIndex}
+                lockedChip={lockedChip}
+                overlapWarning={overlapWarning}
               />
               <ScanOnboarding open={open && step === "capture"} />
             </div>

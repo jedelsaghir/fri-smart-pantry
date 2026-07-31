@@ -68,6 +68,18 @@ export function coverageOverlapTip(photoCount: number): string | null {
   return "Overlap the previous bottom edge slightly";
 }
 
+/** Micro-copy when a section just filled (premium feedback). */
+export function sectionLockedLabel(sectionIndex: number): string {
+  if (sectionIndex <= 0) return "Top locked";
+  if (sectionIndex === 1) return "Middle locked";
+  if (sectionIndex === 2) return "Bottom locked";
+  return `Section ${sectionIndex + 1} locked`;
+}
+
+/** Overlap warning coach copy. */
+export const OVERLAP_WARNING_COPY =
+  "Slide further down — this overlaps the last shot";
+
 export type CoverageSegmentState = "empty" | "filled" | "next";
 
 export function coverageSegmentState(

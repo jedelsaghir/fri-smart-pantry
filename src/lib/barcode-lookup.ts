@@ -1,7 +1,10 @@
 /**
  * Optional barcode assist — BarcodeDetector when available + Open Food Facts lookup.
  * Fails gracefully when camera/API unavailable.
+ * Product names are simplified to generic food types (same rules as receipt OCR).
  */
+
+import { parseProductLabel } from "@/lib/product-name";
 
 export type BarcodeLookupResult = {
   barcode: string;
@@ -99,6 +102,7 @@ export function guessEmojiFromProduct(name: string, categories?: string): string
 /**
  * Lookup product metadata by GTIN/EAN/UPC via Open Food Facts (public API).
  * Returns null when product unknown or network fails — never throws.
+ * Names are simplified to generic food types for cleaner pantry merges.
  */
 export async function lookupBarcodeProduct(
   barcode: string,
@@ -127,16 +131,21 @@ export async function lookupBarcodeProduct(
     };
     if (data.status !== 1 || !data.product) return null;
     const p = data.product;
-    const name =
+    const rawName =
       (p.product_name || p.product_name_en || p.generic_name || "").trim() ||
       (p.brands ? `${p.brands} product` : "");
-    if (!name) return null;
+    if (!rawName) return null;
+    // Generic food type for pantry merge ("Barilla Pesto Genovese" → "Pesto")
+    const parsed = parseProductLabel(rawName);
+    const name = (parsed.name || rawName).slice(0, 40);
+    const brandFromOff = p.brands?.split(",")[0]?.trim();
+    const brand = parsed.brand || (brandFromOff ? brandFromOff.split(" ")[0] : undefined);
     return {
       barcode: code,
-      name: name.slice(0, 80),
+      name,
       unit: guessUnitFromQuantity(p.quantity) || "pcs",
       emoji: guessEmojiFromProduct(name, p.categories),
-      brand: p.brands?.split(",")[0]?.trim(),
+      brand: brand?.trim() || undefined,
       source: "openfoodfacts",
     };
   } catch {

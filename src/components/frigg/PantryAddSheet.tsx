@@ -12,6 +12,22 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { BarcodeAssistButton } from "./BarcodeAssistButton";
+import { parseProductLabel } from "@/lib/product-name";
+import {
+  EXACT_MATCH_THRESHOLD,
+  MATCH_THRESHOLD,
+  findBestItemMatch,
+  type MatchablePantryItem,
+} from "@/lib/item-matching";
+import type { BarcodeLookupResult } from "@/lib/barcode-lookup";
+
+function normalizeUnitChip(unit: string | undefined): string {
+  const u = (unit || "pcs").trim().toLowerCase();
+  if (u === "pcs" || u === "g" || u === "ml") return u;
+  if (u === "kg") return "g";
+  if (u === "l" || u === "lt" || u === "ltr") return "ml";
+  return "pcs";
+}
 
 export function PantryAddSheet({
   open,
@@ -19,6 +35,7 @@ export function PantryAddSheet({
   storage,
   suggest,
   onAdd,
+  pantryItems = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -31,13 +48,23 @@ export function PantryAddSheet({
     qty: number;
     minStock: number;
     barcode?: string;
+    brand?: string;
   }) => void;
+  /** Flat pantry rows for merge detection after barcode / name entry */
+  pantryItems?: MatchablePantryItem[];
 }) {
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("pcs");
   const [emoji, setEmoji] = useState("🛒");
   const [qty, setQty] = useState("1");
   const [barcode, setBarcode] = useState<string | undefined>();
+  const [brand, setBrand] = useState<string | undefined>();
+  /** When set, user is deciding merge vs create-new for a similar pantry row */
+  const [pendingMatch, setPendingMatch] = useState<{
+    candidateName: string;
+    match: NonNullable<ReturnType<typeof findBestItemMatch>>;
+  } | null>(null);
+  const [mergeHint, setMergeHint] = useState<string | null>(null);
 
   const matches = useMemo(() => suggest(name), [name, suggest]);
 
@@ -47,12 +74,85 @@ export function PantryAddSheet({
     setEmoji("🛒");
     setQty("1");
     setBarcode(undefined);
+    setBrand(undefined);
+    setPendingMatch(null);
+    setMergeHint(null);
   };
 
   const pick = (item: CatalogItem) => {
     setName(item.name);
-    setUnit(item.unit);
+    setUnit(normalizeUnitChip(item.unit));
     setEmoji(item.emoji);
+    setPendingMatch(null);
+    setMergeHint(null);
+  };
+
+  const applyBarcodeResult = (r: BarcodeLookupResult) => {
+    const raw = (r.name || "").trim();
+    const parsed = parseProductLabel(raw);
+    const simplified = parsed.name || raw;
+    const nextUnit = normalizeUnitChip(r.unit);
+    const nextEmoji = r.emoji || "🛒";
+    const nextBrand = r.brand || parsed.brand;
+    setBarcode(r.barcode);
+    setBrand(nextBrand);
+    setUnit(nextUnit);
+    setEmoji(nextEmoji);
+
+    if (!simplified) {
+      setName(raw);
+      setPendingMatch(null);
+      setMergeHint(null);
+      return;
+    }
+
+    const match = findBestItemMatch(
+      { name: simplified, unit: nextUnit, qty: 1 },
+      pantryItems
+    );
+
+    // Strong / exact → adopt existing pantry name so upsert merges qty
+    if (match && match.score >= EXACT_MATCH_THRESHOLD) {
+      setName(match.name);
+      setUnit(normalizeUnitChip(match.unit) || nextUnit);
+      setEmoji(match.emoji || nextEmoji);
+      setPendingMatch(null);
+      setMergeHint(
+        `Found ${match.emoji} ${match.name} (${match.qty} ${match.unit} in ${match.storage}) — qty will be added`
+      );
+      return;
+    }
+
+    // Similar but not exact (e.g. "Pesto Sauce" vs "Pesto") → ask
+    if (match && match.score >= MATCH_THRESHOLD) {
+      setName(simplified);
+      setPendingMatch({ candidateName: simplified, match });
+      setMergeHint(null);
+      return;
+    }
+
+    setName(simplified);
+    setPendingMatch(null);
+    setMergeHint(null);
+  };
+
+  const chooseMerge = () => {
+    if (!pendingMatch) return;
+    const m = pendingMatch.match;
+    setName(m.name);
+    setUnit(normalizeUnitChip(m.unit));
+    setEmoji(m.emoji || emoji);
+    setPendingMatch(null);
+    setMergeHint(
+      `Adding to ${m.emoji} ${m.name} (${m.qty} ${m.unit} in ${m.storage})`
+    );
+  };
+
+  const chooseNew = () => {
+    if (!pendingMatch) return;
+    setName(pendingMatch.candidateName);
+    setPendingMatch(null);
+    setMergeHint(null);
   };
 
   const submit = () => {
@@ -69,6 +169,7 @@ export function PantryAddSheet({
       qty: q,
       minStock: 1,
       barcode,
+      ...(brand?.trim() ? { brand: brand.trim() } : {}),
     });
     reset();
     onOpenChange(false);
@@ -88,7 +189,7 @@ export function PantryAddSheet({
             Add to {storage === "fridge" ? "Fridge" : storage === "freezer" ? "Freezer" : "Pantry"}
           </DrawerTitle>
           <p className="text-sm text-muted-foreground">
-            Name the item, pick a unit (pcs / g / ml), optional barcode.
+            Scan a barcode or type a name. Matching items merge automatically.
           </p>
         </DrawerHeader>
 
@@ -96,18 +197,7 @@ export function PantryAddSheet({
           <div className="flex flex-wrap items-center gap-2">
             <BarcodeAssistButton
               label="Scan or type barcode"
-              onPrefill={(r) => {
-                if (r.name) setName(r.name);
-                if (r.unit) {
-                  const u = r.unit.trim().toLowerCase();
-                  if (u === "pcs" || u === "g" || u === "ml") setUnit(u);
-                  else if (u === "kg") setUnit("g");
-                  else if (u === "l") setUnit("ml");
-                  else setUnit(r.unit);
-                }
-                if (r.emoji) setEmoji(r.emoji);
-                setBarcode(r.barcode);
-              }}
+              onPrefill={applyBarcodeResult}
             />
             {barcode && (
               <span className="rounded-full bg-secondary/80 px-2.5 py-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
@@ -116,8 +206,47 @@ export function PantryAddSheet({
             )}
           </div>
           <p className="text-[11px] text-muted-foreground leading-snug">
-            Camera scan when supported — or type a GTIN inside the scanner.
+            Names simplify to food types (e.g. Pesto). If something similar is already in stock, we ask before merging.
           </p>
+
+          {pendingMatch && (
+            <div className="rounded-3xl border border-brand/25 bg-[color-mix(in_oklab,var(--color-brand)_8%,var(--color-card))] px-3.5 py-3 space-y-2.5">
+              <p className="text-[13px] font-semibold text-foreground leading-snug">
+                Similar item in stock
+              </p>
+              <p className="text-[12px] text-muted-foreground leading-snug">
+                Scanned as <span className="font-semibold text-foreground">{pendingMatch.candidateName}</span>
+                {" · "}
+                you already have{" "}
+                <span className="font-semibold text-foreground">
+                  {pendingMatch.match.emoji} {pendingMatch.match.name}
+                </span>{" "}
+                ({pendingMatch.match.qty} {pendingMatch.match.unit}).
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={chooseMerge}
+                  className="min-h-11 w-full rounded-2xl bg-brand px-3 text-sm font-semibold text-brand-foreground active:scale-[0.98]"
+                >
+                  Add to {pendingMatch.match.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={chooseNew}
+                  className="min-h-11 w-full rounded-2xl border border-border/60 bg-secondary/50 px-3 text-sm font-semibold active:bg-secondary"
+                >
+                  Create new “{pendingMatch.candidateName}”
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mergeHint && !pendingMatch && (
+            <div className="rounded-2xl border border-[color-mix(in_oklab,var(--color-fresh)_28%,transparent)] bg-[color-mix(in_oklab,var(--color-fresh)_8%,var(--color-card))] px-3 py-2 text-[12px] font-medium text-foreground/90 leading-snug">
+              {mergeHint}
+            </div>
+          )}
 
           <div className="flex gap-2">
             <Input
@@ -129,7 +258,11 @@ export function PantryAddSheet({
             />
             <Input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setPendingMatch(null);
+                setMergeHint(null);
+              }}
               placeholder="Item name"
               autoFocus
               className="h-12 flex-1 rounded-2xl text-[15px]"
@@ -137,7 +270,7 @@ export function PantryAddSheet({
             />
           </div>
 
-          {name.trim().length > 0 && matches.length > 0 && (
+          {name.trim().length > 0 && matches.length > 0 && !pendingMatch && (
             <ul className="max-h-40 overflow-y-auto rounded-2xl border border-border/50 bg-secondary/40">
               {matches.map((m) => (
                 <li key={m.id}>
@@ -192,10 +325,10 @@ export function PantryAddSheet({
           <button
             type="button"
             onClick={submit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || !!pendingMatch}
             className="w-full rounded-3xl bg-brand py-3.5 text-sm font-semibold text-brand-foreground active:scale-[0.985] disabled:opacity-50 transition"
           >
-            Add item
+            {mergeHint ? "Add to existing" : "Add item"}
           </button>
           <DrawerClose asChild>
             <button

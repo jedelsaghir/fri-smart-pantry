@@ -438,6 +438,7 @@ export function PantryScreen() {
       qty: number;
       minStock: number;
       barcode?: string;
+      brand?: string;
     }) => {
       const newItem = {
         id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -448,6 +449,7 @@ export function PantryScreen() {
         daysLeft: getDefaultDaysLeft(input.name, active),
         minStock: input.minStock || getDefaultMinStock(input.name),
         ...(input.barcode ? { barcode: input.barcode } : {}),
+        ...(input.brand?.trim() ? { brand: input.brand.trim() } : {}),
       };
       setItems((prev) => applyIncomingToStorage(prev, active, newItem));
       rememberPantryItem(newItem, "pantry_add");
@@ -999,6 +1001,32 @@ export function PantryScreen() {
         storage={active}
         suggest={suggest}
         onAdd={handleAddToPantry}
+        pantryItems={[
+          ...items.fridge.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            qty: i.qty,
+            emoji: i.emoji,
+            storage: "fridge" as const,
+          })),
+          ...items.freezer.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            qty: i.qty,
+            emoji: i.emoji,
+            storage: "freezer" as const,
+          })),
+          ...items.pantry.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            qty: i.qty,
+            emoji: i.emoji,
+            storage: "pantry" as const,
+          })),
+        ]}
       />
 
       <ReceiptScanFlow

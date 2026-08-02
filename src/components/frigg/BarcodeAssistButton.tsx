@@ -59,10 +59,9 @@ export function BarcodeAssistButton({
 
     (async () => {
       if (!isBarcodeDetectorSupported()) {
-        toast.message("Barcode assist unavailable", {
-          description: barcodeErrorMessage("unsupported"),
-        });
-        setOpen(false);
+        // Keep panel open for manual GTIN entry (camera path unavailable)
+        setHint("Camera scan not supported here — type the barcode below");
+        setBusy(false);
         return;
       }
 
@@ -289,7 +288,7 @@ export function BarcodeAssistButton({
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Camera scan when supported. Names from Open Food Facts when online.
+                Camera scan when supported. Otherwise type the GTIN and tap Look up. Names from Open Food Facts when online.
               </p>
             </div>
           </div>

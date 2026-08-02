@@ -58,7 +58,10 @@ export function PantryAddSheet({
   const submit = () => {
     const n = name.trim();
     if (!n) return;
-    const q = Math.max(1, parseInt(qty, 10) || 1);
+    const raw = qty.replace(",", ".").trim();
+    const parsed =
+      unit === "g" || unit === "ml" ? parseFloat(raw) : parseInt(raw, 10);
+    const q = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
     onAdd({
       name: n,
       unit: unit.trim() || "pcs",
@@ -85,26 +88,36 @@ export function PantryAddSheet({
             Add to {storage === "fridge" ? "Fridge" : storage === "freezer" ? "Freezer" : "Pantry"}
           </DrawerTitle>
           <p className="text-sm text-muted-foreground">
-            Type a name — or scan a barcode when your browser supports it.
+            Name the item, pick a unit (pcs / g / ml), optional barcode.
           </p>
         </DrawerHeader>
 
         <div className="space-y-3 px-5 pb-2">
           <div className="flex flex-wrap items-center gap-2">
             <BarcodeAssistButton
+              label="Scan or type barcode"
               onPrefill={(r) => {
                 if (r.name) setName(r.name);
-                if (r.unit) setUnit(r.unit);
+                if (r.unit) {
+                  const u = r.unit.trim().toLowerCase();
+                  if (u === "pcs" || u === "g" || u === "ml") setUnit(u);
+                  else if (u === "kg") setUnit("g");
+                  else if (u === "l") setUnit("ml");
+                  else setUnit(r.unit);
+                }
                 if (r.emoji) setEmoji(r.emoji);
                 setBarcode(r.barcode);
               }}
             />
             {barcode && (
-              <span className="text-[10px] text-muted-foreground tabular-nums">
+              <span className="rounded-full bg-secondary/80 px-2.5 py-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
                 Code {barcode}
               </span>
             )}
           </div>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            Camera scan when supported — or type a GTIN inside the scanner.
+          </p>
 
           <div className="flex gap-2">
             <Input
@@ -148,17 +161,30 @@ export function PantryAddSheet({
             <Input
               value={qty}
               onChange={(e) => setQty(e.target.value)}
-              inputMode="numeric"
+              inputMode={unit === "g" || unit === "ml" ? "decimal" : "numeric"}
               className="h-11 w-20 rounded-2xl text-center"
               aria-label="Quantity"
             />
-            <Input
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              placeholder="Unit"
-              className="h-11 flex-1 rounded-2xl"
-              aria-label="Unit"
-            />
+            <div className="flex flex-1 gap-1.5" role="group" aria-label="Unit">
+              {(["pcs", "g", "ml"] as const).map((u) => {
+                const active = unit === u;
+                return (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setUnit(u)}
+                    className={
+                      "min-h-11 flex-1 rounded-2xl border text-sm font-semibold transition active:scale-[0.98] " +
+                      (active
+                        ? "border-brand/40 bg-brand text-brand-foreground"
+                        : "border-border/50 bg-secondary/50 text-foreground active:bg-secondary")
+                    }
+                  >
+                    {u}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

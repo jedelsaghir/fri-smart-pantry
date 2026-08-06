@@ -16,6 +16,7 @@ export type { PantryItem, ItemStatus };
 function shortStatusLabel(label: string): string {
   if (label === "Expiring soon") return "Soon";
   if (label === "Use today") return "Today";
+  if (label === "No expiry") return "No exp";
   return label;
 }
 
@@ -165,7 +166,6 @@ export function ItemCard({
         borderRadius: "1.15rem",
       }}
     >
-      {/* Swipe-left delete hint */}
       {!selectMode && onDelete && (
         <div
           aria-hidden
@@ -184,7 +184,7 @@ export function ItemCard({
       <div
         role="button"
         tabIndex={0}
-        aria-label={`${item.name}, ${item.qty} ${item.unit}, ${status.label}, ${item.daysLeft} days left.${
+        aria-label={`${item.name}, ${item.qty} ${item.unit}, ${status.label}${typeof item.daysLeft === "number" ? `, ${item.daysLeft} days left` : ""}.${
           selectMode ? (selected ? " Selected." : " Not selected.") : " Tap for details."
         }`}
         aria-pressed={selectMode ? selected : undefined}
@@ -239,7 +239,6 @@ export function ItemCard({
           </button>
         )}
 
-        {/* Emoji */}
         <div
           aria-hidden
           className="grid size-12 shrink-0 place-items-center rounded-xl bg-secondary text-[1.35rem] ring-1 ring-border/20"
@@ -247,7 +246,6 @@ export function ItemCard({
           {item.emoji}
         </div>
 
-        {/* Name + status + days */}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[0.95rem] font-semibold tracking-[-0.02em] text-foreground leading-snug">
             {item.name}
@@ -273,12 +271,11 @@ export function ItemCard({
               {shortStatusLabel(status.label)}
             </span>
             <span className="text-[0.72rem] font-medium tabular-nums text-muted-foreground">
-              {item.daysLeft}d left
+              {typeof item.daysLeft === "number" ? `${item.daysLeft}d left` : "—"}
             </span>
           </div>
         </div>
 
-        {/* Quantity only */}
         <div className="shrink-0 text-right pl-1 min-w-[2.25rem]">
           <span className="block text-[0.95rem] font-semibold tabular-nums tracking-[-0.02em] text-foreground leading-none">
             {item.qty}
@@ -305,7 +302,7 @@ export function ItemCard({
   );
 }
 
-function getStatus(daysLeft: number): ItemStatus {
+function getStatus(daysLeft: number | null | undefined): ItemStatus {
   return getItemStatus(daysLeft);
 }
 

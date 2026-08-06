@@ -50,7 +50,7 @@ export function useRecipes({
   requestConfirm,
   onCooked,
 }: UseRecipesOptions) {
-  const [recipeFilter, setRecipeFilter] = useState<RecipeFilter>("all");
+  const [recipeFilter, setRecipeFilter] = useState<RecipeFilter>("canMake");
   const allRecipes: Recipe[] = ALL_RECIPES;
 
   const getMatchingCount = useCallback(

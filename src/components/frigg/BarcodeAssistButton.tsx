@@ -20,10 +20,13 @@ export function BarcodeAssistButton({
   onPrefill,
   className = "",
   label = "Scan barcode",
+  startSignal = 0,
 }: {
   onPrefill: (result: BarcodeLookupResult) => void;
   className?: string;
   label?: string;
+  /** Increment to auto-open the barcode panel (e.g. from barcode FAB) */
+  startSignal?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -33,6 +36,12 @@ export function BarcodeAssistButton({
   const loopRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const foundRef = useRef(false);
+
+  useEffect(() => {
+    if (startSignal > 0) {
+      setOpen(true);
+    }
+  }, [startSignal]);
 
   const stop = () => {
     foundRef.current = false;

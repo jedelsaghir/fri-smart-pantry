@@ -21,7 +21,9 @@ export function useItemCatalog() {
 
   const rememberPantryItem = useCallback(
     (
-      item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice" | "brand">,
+      item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice" | "brand"> & {
+        defaultStorage?: CatalogItem["defaultStorage"];
+      },
       source: CatalogItem["source"] = "pantry_add"
     ) => {
       setCatalog((prev) => upsertCatalogFromPantryItem(prev, item, source));
@@ -30,7 +32,13 @@ export function useItemCatalog() {
   );
 
   const addCatalogItem = useCallback(
-    (input: { name: string; unit?: string; emoji?: string; defaultMinStock?: number }) => {
+    (input: {
+      name: string;
+      unit?: string;
+      emoji?: string;
+      defaultMinStock?: number;
+      defaultStorage?: CatalogItem["defaultStorage"];
+    }) => {
       const name = input.name.trim();
       if (!name) return null;
       const entry: CatalogItem = {
@@ -39,12 +47,12 @@ export function useItemCatalog() {
         unit: input.unit?.trim() || "pcs",
         emoji: input.emoji?.trim() || "🛒",
         defaultMinStock: input.defaultMinStock,
+        defaultStorage: input.defaultStorage,
         updatedAt: new Date().toISOString(),
         source: "manual",
       };
       setCatalog((prev) => {
-        // Prefer upsert if same name exists
-        return upsertCatalogFromPantryItem(
+        let next = upsertCatalogFromPantryItem(
           prev,
           {
             name: entry.name,
@@ -52,9 +60,18 @@ export function useItemCatalog() {
             emoji: entry.emoji,
             minStock: entry.defaultMinStock ?? 1,
             latestPrice: undefined,
+            defaultStorage: entry.defaultStorage,
           },
           "manual"
         );
+        if (entry.defaultStorage) {
+          next = next.map((c) =>
+            c.name.trim().toLowerCase() === entry.name.trim().toLowerCase()
+              ? { ...c, defaultStorage: entry.defaultStorage, updatedAt: entry.updatedAt }
+              : c
+          );
+        }
+        return next;
       });
       return entry;
     },

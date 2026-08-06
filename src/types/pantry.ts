@@ -10,7 +10,11 @@ export interface PantryItem {
   qty: number;
   unit: string;
   emoji: string;
-  daysLeft: number;
+  /**
+   * Days until expiry from today. null = no expiry tracked (default for manual add).
+   * Negative = already expired.
+   */
+  daysLeft: number | null;
   minStock: number;
   /** Latest purchase price in EUR (optional) */
   latestPrice?: number;

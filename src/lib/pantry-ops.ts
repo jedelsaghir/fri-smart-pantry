@@ -55,7 +55,14 @@ export function upsertPantryItem(
     qty: merged ? merged.qty : existing.qty + incoming.qty,
     unit: merged ? merged.unit : existing.unit,
     emoji: existing.emoji || incoming.emoji,
-    daysLeft: Math.min(existing.daysLeft, incoming.daysLeft),
+    daysLeft:
+      existing.daysLeft == null && incoming.daysLeft == null
+        ? null
+        : existing.daysLeft == null
+          ? incoming.daysLeft
+          : incoming.daysLeft == null
+            ? existing.daysLeft
+            : Math.min(existing.daysLeft, incoming.daysLeft),
     minStock: existing.minStock ?? incoming.minStock,
     latestPrice:
       opts?.mergePrice && incoming.latestPrice != null

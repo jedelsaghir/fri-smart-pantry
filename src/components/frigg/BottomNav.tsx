@@ -22,8 +22,8 @@ export function BottomNav({
 }) {
   return (
     <nav
-      className="pointer-events-none fixed bottom-0 left-0 right-0 z-[60] pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-2"
-      style={{ position: "fixed", transform: "translateZ(0)" }}
+      className="app-bottom-chrome pointer-events-none fixed bottom-0 left-0 right-0 z-[60] pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-2"
+      style={{ position: "fixed", transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}
       aria-label="Main"
     >
       <div className="pointer-events-auto mx-auto max-w-md px-4">

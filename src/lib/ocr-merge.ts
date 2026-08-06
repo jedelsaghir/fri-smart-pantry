@@ -4,7 +4,7 @@
  * Pantry matching delegated to src/lib/item-matching.ts (Levenshtein fuzzy).
  */
 
-import { coreItemName, namesLookSimilar, normalizeItemName } from "@/lib/catalog";
+import { catalogDefaultStorage, coreItemName, namesLookSimilar, normalizeItemName } from "@/lib/catalog";
 import {
   AUTO_UPDATE_OCR_CONFIDENCE,
   EXACT_MATCH_THRESHOLD,
@@ -376,17 +376,23 @@ export function splitAutoAndReview(
 
 export function ocrLinesToDetected(items: OcrLineItem[], idPrefix = "det"): DetectedItem[] {
   const stamp = Date.now();
-  return items.map((row, index) => ({
-    id: `${idPrefix}-${stamp}-${index}`,
-    name: row.name,
-    qty: row.qty,
-    unit: canonicalUnit(row.unit || "pcs", row.qty),
-    emoji: row.emoji || "🛒",
-    storage: (row.storage as StorageKey) || "fridge",
-    confidence: typeof row.confidence === "number" ? row.confidence : 0.75,
-    price: row.price,
-    ...(row.brand ? { brand: row.brand } : {}),
-  }));
+  return items.map((row, index) => {
+    const fromCatalog = catalogDefaultStorage(row.name);
+    const storage =
+      fromCatalog ||
+      ((row.storage as StorageKey) || "fridge");
+    return {
+      id: `${idPrefix}-${stamp}-${index}`,
+      name: row.name,
+      qty: row.qty,
+      unit: canonicalUnit(row.unit || "pcs", row.qty),
+      emoji: row.emoji || "🛒",
+      storage,
+      confidence: typeof row.confidence === "number" ? row.confidence : 0.75,
+      price: row.price,
+      ...(row.brand ? { brand: row.brand } : {}),
+    };
+  });
 }
 
 /** Human-friendly error when all photos fail quality / OCR */

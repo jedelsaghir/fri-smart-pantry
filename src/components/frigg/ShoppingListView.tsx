@@ -45,7 +45,7 @@ export function ShoppingListView({
   onClear: () => void;
   onAddFromCatalog: (item: CatalogItem) => void;
   onAddManualToList: (name: string, unit: string, emoji: string, qty: number) => void;
-  onCatalogAdd: (input: { name: string; unit: string; emoji: string }) => void;
+  onCatalogAdd: (input: { name: string; unit: string; emoji: string; defaultStorage?: import("@/types/pantry").StorageKey }) => void;
   onCatalogUpdate: (id: string, patch: Partial<CatalogItem>) => void;
   onCatalogMerge: (group: CatalogMergeGroup, primaryId: string) => void;
   onCatalogRequestDelete: (item: CatalogItem) => void;

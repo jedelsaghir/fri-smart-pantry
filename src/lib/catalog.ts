@@ -53,7 +53,9 @@ export function saveCatalog(items: CatalogItem[]): void {
 
 export function upsertCatalogFromPantryItem(
   catalog: CatalogItem[],
-  item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice" | "brand">,
+  item: Pick<PantryItem, "name" | "unit" | "emoji" | "minStock" | "latestPrice" | "brand"> & {
+    defaultStorage?: CatalogItem["defaultStorage"];
+  },
   source: CatalogItem["source"]
 ): CatalogItem[] {
   const key = normalizeItemName(item.name);
@@ -71,6 +73,7 @@ export function upsertCatalogFromPantryItem(
       defaultMinStock: item.minStock ?? next[idx].defaultMinStock,
       lastPrice: item.latestPrice ?? next[idx].lastPrice,
       brand: brand || next[idx].brand,
+      ...(item.defaultStorage ? { defaultStorage: item.defaultStorage } : {}),
       updatedAt: now,
       source,
     };
@@ -85,6 +88,7 @@ export function upsertCatalogFromPantryItem(
       defaultMinStock: item.minStock,
       lastPrice: item.latestPrice,
       ...(brand ? { brand } : {}),
+      ...(item.defaultStorage ? { defaultStorage: item.defaultStorage } : {}),
       updatedAt: now,
       source,
     },
@@ -218,4 +222,13 @@ export function searchCatalog(catalog: CatalogItem[], query: string, limit = 8):
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name));
   return scored.slice(0, limit).map((s) => s.item);
+}
+
+
+/** Preferred storage for a product name from the Database (if set). */
+export function catalogDefaultStorage(name: string): import("@/types/pantry").StorageKey | undefined {
+  const key = normalizeItemName(name);
+  if (!key) return undefined;
+  const hit = loadCatalog().find((c) => normalizeItemName(c.name) === key);
+  return hit?.defaultStorage;
 }

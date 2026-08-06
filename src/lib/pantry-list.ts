@@ -35,7 +35,9 @@ export function filterPantryRows(
 ): PantryListRow[] {
   if (filter === "all") return rows;
   if (filter === "expiring") {
-    return rows.filter((i) => i.daysLeft <= EXPIRING_SOON_DAYS);
+    return rows.filter(
+      (i) => typeof i.daysLeft === "number" && i.daysLeft <= EXPIRING_SOON_DAYS
+    );
   }
   // low stock
   return rows.filter((i) => i.qty <= (i.minStock ?? 0));
@@ -47,7 +49,11 @@ export function sortPantryRows(
 ): PantryListRow[] {
   const next = [...rows];
   if (sort === "expiry") {
-    next.sort((a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name, undefined, { numeric: true }));
+    next.sort((a, b) => {
+      const aN = typeof a.daysLeft === "number" ? a.daysLeft : Number.POSITIVE_INFINITY;
+      const bN = typeof b.daysLeft === "number" ? b.daysLeft : Number.POSITIVE_INFINITY;
+      return aN - bN || a.name.localeCompare(b.name, undefined, { numeric: true });
+    });
   } else if (sort === "qty") {
     next.sort((a, b) => a.qty - b.qty || a.name.localeCompare(b.name, undefined, { numeric: true }));
   } else {

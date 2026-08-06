@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CatalogItem, StorageKey } from "@/types/pantry";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,6 +29,30 @@ function normalizeUnitChip(unit: string | undefined): string {
   return "pcs";
 }
 
+function startOfTodayLocal(): Date {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
+function minDateInputValue(): string {
+  const d = startOfTodayLocal();
+  d.setFullYear(d.getFullYear() - 2);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function daysLeftFromDateInput(iso: string): number {
+  const parts = iso.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return 0;
+  const [y, m, day] = parts;
+  const target = new Date(y, m - 1, day, 12, 0, 0, 0);
+  const today = startOfTodayLocal();
+  return Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+}
+
 export function PantryAddSheet({
   open,
   onOpenChange,
@@ -36,6 +60,7 @@ export function PantryAddSheet({
   suggest,
   onAdd,
   pantryItems = [],
+  autoOpenBarcode = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,9 +74,12 @@ export function PantryAddSheet({
     minStock: number;
     barcode?: string;
     brand?: string;
+    daysLeft: number | null;
   }) => void;
   /** Flat pantry rows for merge detection after barcode / name entry */
   pantryItems?: MatchablePantryItem[];
+  /** When true, open barcode assist as soon as the sheet opens */
+  autoOpenBarcode?: boolean;
 }) {
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("pcs");
@@ -59,6 +87,9 @@ export function PantryAddSheet({
   const [qty, setQty] = useState("1");
   const [barcode, setBarcode] = useState<string | undefined>();
   const [brand, setBrand] = useState<string | undefined>();
+  const [trackExpiry, setTrackExpiry] = useState(false);
+  const [expiryDate, setExpiryDate] = useState("");
+  const [barcodeStartKey, setBarcodeStartKey] = useState(0);
   /** When set, user is deciding merge vs create-new for a similar pantry row */
   const [pendingMatch, setPendingMatch] = useState<{
     candidateName: string;
@@ -68,6 +99,12 @@ export function PantryAddSheet({
 
   const matches = useMemo(() => suggest(name), [name, suggest]);
 
+  useEffect(() => {
+    if (open && autoOpenBarcode) {
+      setBarcodeStartKey((k) => k + 1);
+    }
+  }, [open, autoOpenBarcode]);
+
   const reset = () => {
     setName("");
     setUnit("pcs");
@@ -75,6 +112,8 @@ export function PantryAddSheet({
     setQty("1");
     setBarcode(undefined);
     setBrand(undefined);
+    setTrackExpiry(false);
+    setExpiryDate("");
     setPendingMatch(null);
     setMergeHint(null);
   };
@@ -162,6 +201,10 @@ export function PantryAddSheet({
     const parsed =
       unit === "g" || unit === "ml" ? parseFloat(raw) : parseInt(raw, 10);
     const q = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    let daysLeft: number | null = null;
+    if (trackExpiry && expiryDate) {
+      daysLeft = daysLeftFromDateInput(expiryDate);
+    }
     onAdd({
       name: n,
       unit: unit.trim() || "pcs",
@@ -169,6 +212,7 @@ export function PantryAddSheet({
       qty: q,
       minStock: 1,
       barcode,
+      daysLeft,
       ...(brand?.trim() ? { brand: brand.trim() } : {}),
     });
     reset();
@@ -198,6 +242,7 @@ export function PantryAddSheet({
             <BarcodeAssistButton
               label="Scan or type barcode"
               onPrefill={applyBarcodeResult}
+              startSignal={barcodeStartKey}
             />
             {barcode && (
               <span className="rounded-full bg-secondary/80 px-2.5 py-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
@@ -318,6 +363,48 @@ export function PantryAddSheet({
                 );
               })}
             </div>
+          </div>
+
+          {/* Expiry — default none */}
+          <div className="rounded-3xl border border-border/45 bg-card/80 px-3.5 py-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Expiry</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Optional — off by default
+                </p>
+              </div>
+              {!trackExpiry ? (
+                <button
+                  type="button"
+                  onClick={() => setTrackExpiry(true)}
+                  className="min-h-11 shrink-0 rounded-2xl border border-border/50 bg-secondary/60 px-3.5 text-sm font-semibold active:bg-secondary"
+                >
+                  Add expiry
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrackExpiry(false);
+                    setExpiryDate("");
+                  }}
+                  className="min-h-11 shrink-0 rounded-2xl border border-border/50 bg-secondary/60 px-3.5 text-sm font-semibold active:bg-secondary"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {trackExpiry && (
+              <input
+                type="date"
+                value={expiryDate}
+                min={minDateInputValue()}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                aria-label="Expiration date"
+                className="min-h-11 w-full rounded-2xl border border-border/50 bg-secondary/50 px-3 text-[15px] font-semibold tabular-nums outline-none [color-scheme:light] dark:[color-scheme:dark]"
+              />
+            )}
           </div>
         </div>
 

@@ -27,7 +27,7 @@ type UseRecipesOptions = {
       unit: string;
       emoji: string;
       minStock: number;
-      daysLeft?: number;
+      daysLeft?: number | null;
       qty?: number;
       id?: string;
       latestPrice?: number;

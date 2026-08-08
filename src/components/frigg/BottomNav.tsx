@@ -10,6 +10,7 @@ const ITEMS = [
 /**
  * Locked to the viewport bottom. Uses fixed + high z-index and isolates
  * from ancestor transforms so it never scrolls away with page content.
+ * Stays under full-screen overlays (receipt scan uses z-[70]).
  */
 export function BottomNav({
   active,
@@ -22,7 +23,7 @@ export function BottomNav({
 }) {
   return (
     <nav
-      className="app-bottom-chrome pointer-events-none fixed bottom-0 left-0 right-0 z-[60] pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-2"
+      className="app-bottom-chrome pointer-events-none fixed bottom-0 left-0 right-0 z-40 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-2"
       style={{ position: "fixed", transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}
       aria-label="Main"
     >

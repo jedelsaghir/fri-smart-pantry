@@ -8,6 +8,12 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { buildLocalQrDataUrl } from "@/lib/local-qr";
+import {
+  loginServerAccount,
+  pullHouseholdSync,
+  registerServerAccount,
+} from "@/lib/household-sync.functions";
+import { applySnapshotToLocalStorage } from "@/lib/household-sync";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 export const FAMILY_MEMBERS_KEY = STORAGE_KEYS.FAMILY_MEMBERS;
@@ -504,6 +510,71 @@ export async function signInWithAccount(
     return { ok: false, error: "Email and password are required." };
   }
 
+  // Production / live: server is source of truth (works on any device)
+  if (!isDemoAuthMode()) {
+    try {
+      const server = await loginServerAccount({ data: { email: normalized, password } });
+      if (!server.ok) {
+        return { ok: false, error: server.reason };
+      }
+      const profile = server.profile;
+      const passwordHash = await hashPassword(normalized, password);
+      const account = saveAccountSecure({
+        id: profile.accountId,
+        memberId: profile.memberId,
+        email: profile.email,
+        passwordHash,
+        name: profile.name,
+        emoji: profile.emoji,
+      });
+      try {
+        localStorage.setItem(HOUSEHOLD_KEY, profile.householdName);
+        localStorage.setItem(
+          PROFILE_KEY,
+          JSON.stringify({
+            name: profile.name,
+            emoji: profile.emoji,
+            email: profile.email,
+            memberId: profile.memberId,
+            accountId: profile.accountId,
+          })
+        );
+        // Keep a local session password for subsequent household sync push/pull
+        sessionStorage.setItem("frigg-sync-pw", password);
+        if (server.hasSnapshot) {
+          const pulled = await pullHouseholdSync({
+            data: { email: normalized, password },
+          });
+          if (pulled.ok && pulled.snapshot) {
+            applySnapshotToLocalStorage(pulled.snapshot);
+          }
+        } else {
+          saveFamilyMembers([
+            normalizeFamilyMember({
+              id: profile.memberId,
+              name: profile.name.split(" ")[0] || "You",
+              emoji: profile.emoji,
+              email: profile.email,
+              status: "owner",
+              isYou: true,
+            }),
+          ]);
+        }
+      } catch {}
+      establishSession(account.id, account.email);
+      return { ok: true, account };
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          e instanceof Error
+            ? e.message
+            : "Could not reach the server. Check your connection and try again.",
+      };
+    }
+  }
+
+  // Demo / offline-local path
   let account = findAccountByEmail(normalized);
 
   if (!account) {
@@ -626,7 +697,71 @@ export async function registerOwnerAccount(
   const strength = validatePasswordStrength(password);
   if (!strength.ok) return { ok: false, error: strength.error };
   if (!normalized) return { ok: false, error: "Email is required." };
+  if (!displayName.trim()) return { ok: false, error: "Name is required." };
 
+  // Production / live: create server-owned account first (source of truth)
+  if (!isDemoAuthMode()) {
+    try {
+      const server = await registerServerAccount({
+        data: {
+          email: normalized,
+          password,
+          name: displayName.trim(),
+          emoji: emoji || "👤",
+          householdName: householdName.trim() || "Family pantry",
+        },
+      });
+      if (!server.ok) {
+        return { ok: false, error: server.reason };
+      }
+      const profile = server.profile;
+      const passwordHash = await hashPassword(normalized, password);
+      const account = saveAccountSecure({
+        id: profile.accountId,
+        memberId: profile.memberId,
+        email: profile.email,
+        passwordHash,
+        name: profile.name,
+        emoji: profile.emoji,
+      });
+      try {
+        localStorage.setItem(HOUSEHOLD_KEY, profile.householdName);
+        localStorage.setItem(
+          PROFILE_KEY,
+          JSON.stringify({
+            name: profile.name,
+            emoji: profile.emoji,
+            email: profile.email,
+            memberId: profile.memberId,
+            accountId: profile.accountId,
+          })
+        );
+        saveFamilyMembers([
+          normalizeFamilyMember({
+            id: profile.memberId,
+            name: profile.name.split(" ")[0] || "You",
+            emoji: profile.emoji,
+            email: profile.email,
+            status: "owner",
+            isYou: true,
+          }),
+        ]);
+        sessionStorage.setItem("frigg-sync-pw", password);
+      } catch {}
+      establishSession(account.id, account.email);
+      return { ok: true, account };
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          e instanceof Error
+            ? e.message
+            : "Could not reach the server. Check your connection and try again.",
+      };
+    }
+  }
+
+  // Demo mode: local-only account
   const existing = findAccountByEmail(normalized);
   if (existing) {
     return { ok: false, error: "An account with this email already exists. Sign in instead." };
@@ -705,4 +840,3 @@ export function memberStatusLabel(status: FamilyMemberStatus): string {
       return status;
   }
 }
-

@@ -9,23 +9,30 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   resolveHouseholdSyncStatus,
   runAcceptHouseholdInvite,
+  runLoginServerAccount,
   runPullHouseholdSync,
   runPushHouseholdSync,
   runRegisterHouseholdInvite,
+  runRegisterServerAccount,
   runResolveHouseholdInvite,
   runRevokeHouseholdInvite,
   validateAcceptInviteInput,
+  validateLoginServerAccountInput,
   validatePullInput,
   validatePushInput,
   validateRegisterInviteInput,
+  validateRegisterServerAccountInput,
   validateResolveInviteInput,
   validateRevokeInviteInput,
   type AcceptInviteInput,
+  type LoginServerAccountInput,
   type PullInput,
   type PushInput,
   type RegisterInviteInput,
+  type RegisterServerAccountInput,
   type ResolveInviteInput,
   type RevokeInviteInput,
+  type ServerAccountProfile,
   type SyncStatusResult,
 } from "@/lib/household-sync.server";
 import type { HouseholdSyncSnapshot } from "@/lib/household-sync";
@@ -39,6 +46,9 @@ export type {
   ResolveInviteInput,
   AcceptInviteInput,
   RevokeInviteInput,
+  RegisterServerAccountInput,
+  LoginServerAccountInput,
+  ServerAccountProfile,
 } from "@/lib/household-sync.server";
 
 export const getHouseholdSyncStatus = createServerFn({ method: "GET" }).handler(
@@ -88,4 +98,26 @@ export const revokeHouseholdInvite = createServerFn({ method: "POST" })
   .handler(
     async ({ data }): Promise<{ ok: true } | { ok: false; reason: string }> =>
       runRevokeHouseholdInvite(data)
+  );
+
+export const registerServerAccount = createServerFn({ method: "POST" })
+  .validator((data: RegisterServerAccountInput) => validateRegisterServerAccountInput(data))
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      | { ok: true; profile: ServerAccountProfile; backend: string }
+      | { ok: false; reason: string }
+    > => runRegisterServerAccount(data)
+  );
+
+export const loginServerAccount = createServerFn({ method: "POST" })
+  .validator((data: LoginServerAccountInput) => validateLoginServerAccountInput(data))
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      | { ok: true; profile: ServerAccountProfile; hasSnapshot: boolean }
+      | { ok: false; reason: string; code?: "not_found" | "bad_password" | "rate_limit" | "error" }
+    > => runLoginServerAccount(data)
   );

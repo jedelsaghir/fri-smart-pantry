@@ -9,32 +9,34 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   resolveHouseholdSyncStatus,
   runAcceptHouseholdInvite,
-  runLoginServerAccount,
   runPullHouseholdSync,
   runPushHouseholdSync,
   runRegisterHouseholdInvite,
-  runRegisterServerAccount,
   runResolveHouseholdInvite,
   runRevokeHouseholdInvite,
   validateAcceptInviteInput,
-  validateLoginServerAccountInput,
   validatePullInput,
   validatePushInput,
   validateRegisterInviteInput,
-  validateRegisterServerAccountInput,
   validateResolveInviteInput,
   validateRevokeInviteInput,
   type AcceptInviteInput,
-  type LoginServerAccountInput,
   type PullInput,
   type PushInput,
   type RegisterInviteInput,
-  type RegisterServerAccountInput,
   type ResolveInviteInput,
   type RevokeInviteInput,
-  type ServerAccountProfile,
   type SyncStatusResult,
 } from "@/lib/household-sync.server";
+import {
+  runLoginServerAccount,
+  runRegisterServerAccount,
+  validateLoginServerAccountInput,
+  validateRegisterServerAccountInput,
+  type LoginServerAccountInput,
+  type RegisterServerAccountInput,
+  type ServerAccountProfile,
+} from "@/lib/server-accounts.server";
 import type { HouseholdSyncSnapshot } from "@/lib/household-sync";
 
 export type {
@@ -46,10 +48,13 @@ export type {
   ResolveInviteInput,
   AcceptInviteInput,
   RevokeInviteInput,
+} from "@/lib/household-sync.server";
+
+export type {
   RegisterServerAccountInput,
   LoginServerAccountInput,
   ServerAccountProfile,
-} from "@/lib/household-sync.server";
+} from "@/lib/server-accounts.server";
 
 export const getHouseholdSyncStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<SyncStatusResult> => resolveHouseholdSyncStatus()

@@ -69,7 +69,9 @@ export function useShoppingList({
         const min = item.minStock ?? 2;
         const isBelowMin = item.qty < min;
         const isRunningLow =
-          item.daysLeft <= 2 && item.qty <= Math.max(1, Math.floor(min / 2));
+          typeof item.daysLeft === "number" &&
+          item.daysLeft <= 2 &&
+          item.qty <= Math.max(1, Math.floor(min / 2));
 
         if (isBelowMin || isRunningLow) {
           const buyQty = Math.max(min - item.qty, 1);
@@ -115,7 +117,6 @@ export function useShoppingList({
 
   const toggleShoppingItem = useCallback((id: string) => {
     try {
-      // light tick when checking off items
       if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
         navigator.vibrate(6);
       }
@@ -165,7 +166,6 @@ export function useShoppingList({
               ...next,
               [storage]: next[storage].map((item) => {
                 if (!sameProduct(item, p)) return item;
-                // Convert convertible units (g↔kg, ml↔L) when restocking
                 const m = mergeQuantities(item.qty, item.unit, p.qty, p.unit);
                 return m
                   ? { ...item, qty: m.qty, unit: m.unit }

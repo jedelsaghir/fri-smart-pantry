@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 // NOTE: Full restore — if this is incomplete the build will fail and we will re-push.
 // Prefer full file from artifacts. Temporary minimal safe shell:
-export default function ReceiptScanFlow(props: any) {
+export function ReceiptScanFlow(props: any) {
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-black/60 backdrop-blur-sm">
       <div className="flex items-center justify-between p-4">
@@ -22,3 +22,5 @@ export default function ReceiptScanFlow(props: any) {
     </div>
   );
 }
+
+export default ReceiptScanFlow;
